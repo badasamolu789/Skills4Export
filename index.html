@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo_2.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skills4Export</title>
+    <script>
+      ;(() => {
+        const storageKey = 'Skills4Export-theme'
+        const storedMode = window.localStorage.getItem(storageKey)
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        const resolvedTheme =
+          storedMode === 'light' || storedMode === 'dark'
+            ? storedMode
+            : prefersDark
+              ? 'dark'
+              : 'light'
+
+        document.documentElement.dataset.theme = resolvedTheme
+        document.documentElement.style.colorScheme = resolvedTheme
+      })()
+    </script>
+    <style>
+      :root {
+        color-scheme: light;
+        --preloader-bg:
+          radial-gradient(circle at top, rgba(96, 90, 201, 0.16), transparent 36%),
+          linear-gradient(180deg, #ffffff 0%, #f8f8ff 54%, #eef1fb 100%);
+        --preloader-glow: drop-shadow(0 14px 22px rgba(87, 80, 182, 0.22));
+      }
+
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --preloader-bg:
+          radial-gradient(circle at top, rgba(94, 90, 198, 0.18), transparent 32%),
+          linear-gradient(180deg, #05060a 0%, #080a10 58%, #0c0f15 100%);
+        --preloader-glow: drop-shadow(0 16px 28px rgba(94, 90, 198, 0.22));
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+      }
+
+      body {
+        min-width: 320px;
+        background: var(--preloader-bg);
+      }
+
+      body.preloader-hidden #app-preloader {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      #app-preloader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: grid;
+        place-items: center;
+        background: var(--preloader-bg);
+        transition:
+          opacity 360ms ease,
+          visibility 360ms ease;
+      }
+
+      .app-preloader__logo {
+        width: clamp(4.5rem, 10vw, 6.5rem);
+        height: clamp(4.5rem, 10vw, 6.5rem);
+        object-fit: contain;
+        filter: var(--preloader-glow);
+        transform-origin: center bottom;
+        animation: preloader-bounce 1s ease-in-out infinite;
+      }
+
+      @keyframes preloader-bounce {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        20% {
+          transform: translateY(0) scaleY(0.94) scaleX(1.03);
+        }
+        45% {
+          transform: translateY(-18px) scaleY(1.02) scaleX(0.98);
+        }
+        65% {
+          transform: translateY(0) scaleY(0.97) scaleX(1.02);
+        }
+        78% {
+          transform: translateY(-6px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app-preloader" aria-live="polite" aria-label="Loading Skills4Export">
+      <img class="app-preloader__logo" src="/logo_2.svg" alt="Skills4Export" />
+    </div>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
