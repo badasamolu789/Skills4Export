@@ -5,6 +5,17 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
+  const apiBaseUrl = env.VITE_API_BASE_URL?.trim()
+  const proxyTarget = apiBaseUrl
+    ? (() => {
+        try {
+          const parsed = new URL(apiBaseUrl)
+          return parsed.origin
+        } catch {
+          return apiBaseUrl
+        }
+      })()
+    : ''
 
   return {
     plugins: [vue(), tailwindcss()],
@@ -13,16 +24,16 @@ export default defineConfig(({ mode }) => {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
     },
-    server: env.VITE_API_BASE_URL
+    server: proxyTarget
       ? {
           proxy: {
-            '/auth': {
-              target: env.VITE_API_BASE_URL,
+            '/api': {
+              target: proxyTarget,
               changeOrigin: true,
               secure: true,
             },
             '/health': {
-              target: env.VITE_API_BASE_URL,
+              target: proxyTarget,
               changeOrigin: true,
               secure: true,
             },

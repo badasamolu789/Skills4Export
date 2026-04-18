@@ -44,6 +44,20 @@ export type AuthSuccessResponse = {
     tokenType?: string
     expiresIn?: number
     user?: Record<string, unknown>
+    session?: {
+      token?: string
+      accessToken?: string
+      tokenType?: string
+      expiresIn?: number
+      user?: Record<string, unknown>
+    }
+  }
+  session?: {
+    token?: string
+    accessToken?: string
+    tokenType?: string
+    expiresIn?: number
+    user?: Record<string, unknown>
   }
 }
 
@@ -66,14 +80,13 @@ export type AuthSession = {
   expiresIn?: number
   user?: Record<string, unknown>
 }
-
+// const BaseURL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 const AUTH_ROUTES = {
   signUp: '/auth/register',
   login: '/auth/login',
   verifyOtp: '/auth/verify-registration',
   requestOtp: '/auth/request-otp',
   verifyGeneralOtp: '/auth/verify-otp',
-  forgotPassword: '/auth/forgot-password',
   resetPassword: '/auth/reset-password',
   completeProfile: '/auth/complete-profile',
   me: '/auth/me',
@@ -88,7 +101,7 @@ export const extractUserId = (response?: AuthSuccessResponse | null): string => 
     return ''
   }
 
-  const user = response.data?.user || response.user
+  const user = response.data?.user || response.user || response.data?.session?.user || response.session?.user
 
   if (!user || typeof user !== 'object') {
     return ''
@@ -110,42 +123,78 @@ export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthS
     return null
   }
 
-  const token = response.data?.accessToken || response.accessToken || response.data?.token || response.token
+  const token =
+    response.data?.accessToken ||
+    response.accessToken ||
+    response.data?.token ||
+    response.token ||
+    response.data?.session?.accessToken ||
+    response.data?.session?.token ||
+    response.session?.accessToken ||
+    response.session?.token
 
   if (!token) {
     return null
   }
 
-  const user = response.data?.user || response.user
+  const user = response.data?.user || response.user || response.data?.session?.user || response.session?.user
   const userId = extractUserId(response) || undefined
 
   return {
     token,
     userId,
-    tokenType: response.data?.tokenType || response.tokenType,
-    expiresIn: response.data?.expiresIn || response.expiresIn,
+    tokenType:
+      response.data?.tokenType ||
+      response.tokenType ||
+      response.data?.session?.tokenType ||
+      response.session?.tokenType,
+    expiresIn:
+      response.data?.expiresIn ||
+      response.expiresIn ||
+      response.data?.session?.expiresIn ||
+      response.session?.expiresIn,
     user,
   }
 }
 
 export const authService = {
   signUp(payload: SignUpRequest) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.signUp, payload)
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.signUp, {
+      fullName: payload.fullName,
+      name: payload.fullName,
+      email: payload.email,
+      password: payload.password,
+    })
   },
   login(payload: LoginRequest) {
     return api.post<AuthSuccessResponse>(AUTH_ROUTES.login, payload)
   },
   verifyOtp(payload: VerifyOtpRequest) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyOtp, payload)
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyOtp, {
+      email: payload.email,
+      otpCode: payload.otpCode,
+      otp: payload.otpCode,
+      code: payload.otpCode,
+      purpose: payload.purpose,
+    })
   },
   requestOtp(email: string, purpose = 'registration') {
     return api.post<AuthSuccessResponse>(AUTH_ROUTES.requestOtp, { email, purpose })
   },
   verifyGeneralOtp(payload: VerifyOtpRequest) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyGeneralOtp, payload)
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyGeneralOtp, {
+      email: payload.email,
+      otpCode: payload.otpCode,
+      otp: payload.otpCode,
+      code: payload.otpCode,
+      purpose: payload.purpose,
+    })
   },
   forgotPassword(email: string) {
-    return api.post<AuthMessageResponse>(AUTH_ROUTES.forgotPassword, { email })
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.requestOtp, {
+      email,
+      purpose: 'password_reset',
+    })
   },
   resetPassword(payload: { email: string; otpCode: string; newPassword: string }) {
     return api.post<AuthMessageResponse>(AUTH_ROUTES.resetPassword, payload)

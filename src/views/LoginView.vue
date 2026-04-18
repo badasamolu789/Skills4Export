@@ -6,11 +6,13 @@ import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { usePasswordToggle } from '@/composables/usePasswordToggle'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const isSubmitting = ref(false)
 const isRedirectingToGoogle = ref(false)
+const passwordToggle = usePasswordToggle()
 const form = ref({
   email: '',
   password: '',
@@ -112,13 +114,30 @@ const continueWithGoogle = () => {
 
       <div class="space-y-2">
         <label class="text-sm font-semibold text-[var(--text-primary)] sm:text-base">Password</label>
-        <input
-          v-model="form.password"
-          type="password"
-          required
-          placeholder="Enter your password"
-          class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] sm:h-13 sm:text-base"
-        />
+        <div class="relative">
+          <input
+            v-model="form.password"
+            :type="passwordToggle.getInputType()"
+            required
+            placeholder="Enter your password"
+            class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 pr-12 text-sm outline-none transition focus:border-[var(--accent)] sm:h-13 sm:text-base"
+          />
+          <button
+            type="button"
+            @click="passwordToggle.togglePasswordVisibility()"
+            class="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition"
+            :aria-label="passwordToggle.showPassword.value ? 'Hide password' : 'Show password'"
+          >
+            <svg v-if="passwordToggle.showPassword.value" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <svg v-else class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+              <line x1="1" y1="1" x2="23" y2="23" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div class="flex flex-col gap-3 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between sm:text-base">

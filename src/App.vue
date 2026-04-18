@@ -35,6 +35,7 @@ const showApiDebugModal =
 
 const profileName = computed(() => authStore.signUpDraft.name || 'Samuel Bada')
 const profileRole = computed(() => authStore.signUpDraft.headline || 'Founder account')
+const profileImage = computed(() => authStore.signUpDraft.avatar || authStore.userProfile?.avatar || '')
 const profileInitials = computed(() =>
   profileName.value
     .split(' ')
@@ -65,7 +66,12 @@ const toasterOptions = {
   cancelButtonClass: 'skills-toast__cancel',
 }
 const showHeader = computed(() => !route.path.startsWith('/auth'))
-const usesWorkspaceShell = computed(() => showHeader.value)
+const usesWorkspaceShell = computed(
+  () =>
+    showHeader.value &&
+    !route.path.startsWith('/profile') &&
+    !route.path.startsWith('/pages/create'),
+)
 const mainClasses = computed(() =>
   showHeader.value
     ? [
@@ -135,6 +141,7 @@ const handleMenuAction = async (action: 'logout') => {
       :user-name="profileName"
       :user-role="profileRole"
       :user-initials="profileInitials"
+      :user-image-src="profileImage"
       :user-menu="userMenu"
     />
 
@@ -144,10 +151,11 @@ const handleMenuAction = async (action: 'logout') => {
         :class="[
           usesWorkspaceShell
             ? 'flex flex-col gap-6 lg:h-[calc(100vh-theme(spacing.16))] lg:min-h-0 lg:overflow-hidden lg:grid lg:grid-cols-[20rem_minmax(0,1fr)_20rem] lg:gap-5 xl:gap-6'
-            : 'flex flex-col gap-6 lg:grid lg:grid-cols-[18.5rem_minmax(0,1fr)_18rem] lg:items-start lg:gap-5 xl:grid-cols-[19.5rem_minmax(0,1fr)_19rem] xl:gap-6',
+            : 'flex flex-col gap-6 lg:items-start lg:gap-5',
         ]"
       >
         <div
+          v-if="usesWorkspaceShell"
           :class="
             usesWorkspaceShell
               ? 'app-scroll hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
@@ -162,7 +170,7 @@ const handleMenuAction = async (action: 'logout') => {
           :class="
             usesWorkspaceShell
               ? 'min-w-0 lg:app-scroll lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
-              : 'min-w-0'
+              : 'min-w-0 w-full'
           "
         >
           <div :class="usesWorkspaceShell ? 'lg:pt-4' : ''">

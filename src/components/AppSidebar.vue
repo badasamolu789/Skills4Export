@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BriefcaseBusiness,
-  ChevronDown,
   Compass,
   Flame,
   Laugh,
@@ -16,16 +15,10 @@ import {
 } from 'lucide-vue-next'
 import { usePagesStore } from '@/stores/pages'
 
-type SidebarMenuChild = {
-  label: string
-  to: string
-}
-
 type SidebarMenuGroup = {
   label: string
   icon: unknown
-  children?: SidebarMenuChild[]
-  to?: string
+  to: string
 }
 
 const props = withDefaults(
@@ -52,25 +45,17 @@ const menuGroups: SidebarMenuGroup[] = [
   {
     label: 'Jobs',
     icon: BriefcaseBusiness,
-    children: [
-      { label: 'Jobs Feed', to: '/jobs/feed' },
-      { label: 'Manage Jobs', to: '/jobs' },
-      { label: 'Create Alert', to: '/jobs/alerts' },
-    ],
+    to: '/jobs/feed',
   },
   {
     label: 'Answer',
     icon: MessageSquareMore,
-    children: [{ label: 'Question', to: '/answer/question' }],
+    to: '/answer/question',
   },
   {
     label: 'Contests',
     icon: Trophy,
-    children: [
-      { label: 'Active Contests', to: '/' },
-      { label: 'Past Winners', to: '/' },
-      { label: 'Submit Entry', to: '/' },
-    ],
+    to: '/contests',
   },
   {
     label: 'Explore Communities',
@@ -80,27 +65,17 @@ const menuGroups: SidebarMenuGroup[] = [
   {
     label: 'Freelancers',
     icon: Sparkles,
-    children: [
-      { label: 'Browse Talent', to: '/' },
-      { label: 'Top Rated', to: '/' },
-      { label: 'Hire Fast', to: '/' },
-    ],
+    to: '/freelancers',
   },
   {
     label: 'Jokes',
     icon: Laugh,
-    children: [
-      { label: 'Today’s Laughs', to: '/' },
-      { label: 'Community Picks', to: '/' },
-      { label: 'Share a Joke', to: '/' },
-    ],
+    to: '/jokes',
   },
   {
     label: 'Create Page',
     icon: PlusSquare,
-    children: [
-      { label: 'Create New Page', to: '/pages/create' },
-    ],
+    to: '/pages/create',
   },
 ]
 
@@ -133,9 +108,9 @@ const getCurrentQueryValue = (key: string) => {
   return Array.isArray(value) ? value[0] ?? '' : value ?? ''
 }
 
-const isPlaceholderTarget = (target: SidebarMenuChild['to']) => target === '/'
+const isPlaceholderTarget = (target: string) => target === '/'
 
-const isRouteActive = (target: SidebarMenuChild['to']) => {
+const isRouteActive = (target: string) => {
   if (isPlaceholderTarget(target)) {
     return false
   }
@@ -144,11 +119,7 @@ const isRouteActive = (target: SidebarMenuChild['to']) => {
 }
 
 const isGroupActive = (group: SidebarMenuGroup) => {
-  if (group.to) {
-    return isRouteActive(group.to)
-  }
-
-  return group.children?.some((child) => isRouteActive(child.to)) ?? false
+  return group.to ? isRouteActive(group.to) : false
 }
 
 const isFeedLinkActive = (label: string) => {
@@ -169,32 +140,6 @@ const getTopLevelIconClasses = (isActive: boolean) =>
 
 const getTopLevelLabelClasses = (isActive: boolean) =>
   isActive ? 'text-white' : 'text-inherit'
-
-const getDropdownClasses = (isActive: boolean) =>
-  isActive
-    ? 'bg-[var(--accent)] text-white shadow-[var(--shadow-soft)]'
-    : 'bg-[var(--surface-secondary)]'
-
-const getDropdownSummaryClasses = (isActive: boolean) =>
-  isActive ? 'text-white' : 'text-[var(--text-primary)]'
-
-const getDropdownChevronClasses = (isActive: boolean) =>
-  isActive ? 'text-white' : 'text-[var(--text-tertiary)]'
-
-const getDropdownChildrenWrapClasses = (isActive: boolean) =>
-  isActive ? 'space-y-1 px-3 pb-3 text-white/90' : 'space-y-1 px-3 pb-3'
-
-const getDropdownChildClasses = (isActive: boolean, isGroupCurrentlyActive: boolean) => {
-  if (isActive) {
-    return 'bg-white/16 font-semibold text-white ring-1 ring-white/16'
-  }
-
-  if (isGroupCurrentlyActive) {
-    return 'text-white/82 hover:bg-white/10 hover:text-white'
-  }
-
-  return 'text-[var(--text-secondary)] hover:bg-[var(--surface-primary)] hover:text-[var(--accent-strong)]'
-}
 
 const closeSidebar = () => {
   emit('close')
@@ -271,59 +216,21 @@ const handleNavigation = () => {
               Browse
             </p>
             <div class="space-y-2">
-              <template v-for="group in menuGroups" :key="group.label">
-                <RouterLink
-                  v-if="group.to"
-                  :to="group.to"
-                  :class="getTopLevelLinkClasses(isGroupActive(group))"
-                  class="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-medium transition"
-                  @click="handleNavigation"
-                >
-                  <component
-                    :is="group.icon"
-                    :class="getTopLevelIconClasses(isGroupActive(group))"
-                    class="h-4 w-4"
-                  />
-                  <span :class="getTopLevelLabelClasses(isGroupActive(group))">{{ group.label }}</span>
-                </RouterLink>
-
-                <details
-                  v-else
-                  :class="getDropdownClasses(isGroupActive(group))"
-                  class="group rounded-xl"
-                >
-                  <summary
-                    :class="getDropdownSummaryClasses(isGroupActive(group))"
-                    class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-base font-medium"
-                  >
-                    <span class="flex items-center gap-3">
-                      <component
-                        :is="group.icon"
-                        :class="getTopLevelIconClasses(isGroupActive(group))"
-                        class="h-4 w-4"
-                      />
-                      <span>{{ group.label }}</span>
-                    </span>
-                    <ChevronDown
-                      :class="getDropdownChevronClasses(isGroupActive(group))"
-                      class="h-4 w-4 transition group-open:rotate-180"
-                    />
-                  </summary>
-
-                  <div :class="getDropdownChildrenWrapClasses(isGroupActive(group))">
-                    <RouterLink
-                      v-for="item in group.children"
-                      :key="item.label"
-                      :to="item.to"
-                      :class="getDropdownChildClasses(isRouteActive(item.to), isGroupActive(group))"
-                      class="flex rounded-lg px-3 py-2 text-sm transition"
-                      @click="handleNavigation"
-                    >
-                      {{ item.label }}
-                    </RouterLink>
-                  </div>
-                </details>
-              </template>
+              <RouterLink
+                v-for="group in menuGroups"
+                :key="group.label"
+                :to="group.to"
+                :class="getTopLevelLinkClasses(isGroupActive(group))"
+                class="flex items-center gap-3 rounded-xl px-4 py-3 text-base font-medium transition"
+                @click="handleNavigation"
+              >
+                <component
+                  :is="group.icon"
+                  :class="getTopLevelIconClasses(isGroupActive(group))"
+                  class="h-4 w-4"
+                />
+                <span :class="getTopLevelLabelClasses(isGroupActive(group))">{{ group.label }}</span>
+              </RouterLink>
             </div>
           </section>
 

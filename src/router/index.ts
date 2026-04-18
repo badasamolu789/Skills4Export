@@ -14,8 +14,11 @@ import MobileNotificationsView from '@/views/MobileNotificationsView.vue'
 import MobileSearchView from '@/views/MobileSearchView.vue'
 import PageDetailView from '@/views/PageDetailView.vue'
 import PostDetailView from '@/views/PostDetailView.vue'
+import NotFoundView from '@/views/NotFoundView.vue'
 import EditProfileView from '@/views/EditProfileView.vue'
 import ProfileView from '@/views/ProfileView.vue'
+import FollowersView from '@/views/FollowersView.vue'
+import LoginHistoryView from '@/views/LoginHistoryView.vue'
 import QuestionAnswerView from '@/views/QuestionAnswerView.vue'
 import ReferralsView from '@/views/ReferralsView.vue'
 import SignUpSuccessView from '@/views/SignUpSuccessView.vue'
@@ -101,6 +104,16 @@ const router = createRouter({
       component: EditProfileView,
     },
     {
+      path: '/profile/followers/:id',
+      name: 'followers',
+      component: FollowersView,
+    },
+    {
+      path: '/profile/login-history',
+      name: 'login-history',
+      component: LoginHistoryView,
+    },
+    {
       path: '/referrals',
       name: 'referrals',
       component: ReferralsView,
@@ -139,6 +152,11 @@ const router = createRouter({
       path: '/auth/reset-password',
       name: 'reset-password',
       component: ForgotPasswordView,
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFoundView,
     },
   ],
 })

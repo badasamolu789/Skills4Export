@@ -40,6 +40,11 @@ export const useAuthStore = defineStore('auth', () => {
     location: '',
     headline: '',
     interests: [] as string[],
+    avatar: '' as string | null,
+    banner: '' as string | null,
+    website: '',
+    linkedin: '',
+    github: '',
   })
 
   const authMenuLabel = computed(() => (isAuthenticated.value ? 'Log out' : 'Log in'))
@@ -100,6 +105,26 @@ export const useAuthStore = defineStore('auth', () => {
     if (profile?.location) {
       signUpDraft.value.location = profile.location
     }
+
+    if (profile?.avatar) {
+      signUpDraft.value.avatar = profile.avatar
+    }
+
+    if (profile?.banner) {
+      signUpDraft.value.banner = profile.banner
+    }
+
+    if (profile?.website) {
+      signUpDraft.value.website = profile.website
+    }
+
+    if (profile?.linkedin) {
+      signUpDraft.value.linkedin = profile.linkedin
+    }
+
+    if (profile?.github) {
+      signUpDraft.value.github = profile.github
+    }
   }
 
   const toggleAuth = () => {
@@ -126,6 +151,11 @@ export const useAuthStore = defineStore('auth', () => {
       location: '',
       headline: '',
       interests: [],
+      avatar: null,
+      banner: null,
+      website: '',
+      linkedin: '',
+      github: '',
     }
   }
 
