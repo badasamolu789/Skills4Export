@@ -499,7 +499,7 @@ export const apiRequest = async <T>(
         description: 'The request could not reach the backend service.',
       })
 
-      throw new ApiError('Unable to reach the server. Check your network or ngrok URL and try again.', 0)
+      throw new ApiError('Unable to reach the server. Check your network connection and try again.', 0)
     } finally {
       cleanup()
     }

@@ -20,7 +20,7 @@ export const communities: CommunityCard[] = [
   {
     name: 'Design Community',
     slug: 'design-community',
-    members: '12.4k members',
+    members: '0 members',
     visibility: 'Open community',
     description:
       'A place for UI, UX, product, and brand designers sharing case studies, hiring leads, and honest feedback.',
@@ -30,7 +30,7 @@ export const communities: CommunityCard[] = [
   {
     name: 'Tech Careers',
     slug: 'tech-careers',
-    members: '9.1k members',
+    members: '0 members',
     visibility: 'Open community',
     description:
       'Career conversations for developers, analysts, and builders navigating interviews, growth, and remote work.',
@@ -40,7 +40,7 @@ export const communities: CommunityCard[] = [
   {
     name: 'Opportunities Hub',
     slug: 'opportunities-hub',
-    members: '15.8k members',
+    members: '0 members',
     visibility: 'Open community',
     description:
       'Scholarships, grants, competitions, and job opportunities curated for ambitious members across Africa.',
@@ -50,7 +50,7 @@ export const communities: CommunityCard[] = [
   {
     name: 'Freelance Circle',
     slug: 'freelance-circle',
-    members: '6.7k members',
+    members: '0 members',
     visibility: 'Private community',
     description:
       'Independent talent exchanging project tips, pricing advice, client lessons, and collaboration leads.',
@@ -60,7 +60,7 @@ export const communities: CommunityCard[] = [
   {
     name: 'Founder Network',
     slug: 'founder-network',
-    members: '4.2k members',
+    members: '0 members',
     visibility: 'Private community',
     description:
       'Startup-minded operators discussing growth, fundraising, product bets, and founder support systems.',
@@ -70,7 +70,7 @@ export const communities: CommunityCard[] = [
   {
     name: 'Community Builders',
     slug: 'community-builders',
-    members: '8.5k members',
+    members: '0 members',
     visibility: 'Open community',
     description:
       'For community managers, moderators, and organizers building strong spaces that people genuinely return to.',

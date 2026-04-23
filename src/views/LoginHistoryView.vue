@@ -94,7 +94,7 @@ onMounted(() => {
   <section class="space-y-6">
     <div class="space-y-3 px-1">
       <div class="flex flex-wrap items-center gap-2 text-sm text-(--text-secondary)">
-        <RouterLink to="/" class="transition hover:text-(--accent-strong)">Home</RouterLink>
+        <RouterLink to="/feed" class="transition hover:text-(--accent-strong)">Home</RouterLink>
         <span>/</span>
         <RouterLink to="/profile" class="transition hover:text-(--accent-strong)">Profile</RouterLink>
         <span>/</span>

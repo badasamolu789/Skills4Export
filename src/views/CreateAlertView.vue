@@ -84,7 +84,7 @@ const removeJobSearchTag = (tag: string) => {
   <section class="space-y-5">
     <div class="space-y-3 px-1">
       <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-        <RouterLink to="/" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
+        <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>
         <RouterLink to="/jobs/feed" class="transition hover:text-[var(--accent-strong)]">Jobs</RouterLink>
         <span>/</span>

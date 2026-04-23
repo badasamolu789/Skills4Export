@@ -104,7 +104,7 @@ const trendingQuestions = [
                 Reach founders, freelancers, and communities across Skills4export with targeted page visibility.
               </p>
               <RouterLink
-                to="/"
+                to="/feed"
                 class="mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
               >
                 Start campaign

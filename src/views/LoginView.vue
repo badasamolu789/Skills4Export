@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 const isSubmitting = ref(false)
 const isRedirectingToGoogle = ref(false)
@@ -29,6 +30,11 @@ const submitLogin = async () => {
     description: 'Please wait while we validate your credentials.',
   })
 
+  const redirectTarget =
+    typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+      ? route.query.redirect
+      : '/feed'
+
   try {
     const response = await authService.login({
       email: form.value.email,
@@ -48,7 +54,7 @@ const submitLogin = async () => {
       description: 'Your account session is now active. Redirecting you now.',
     })
 
-    router.push('/')
+    router.push(redirectTarget)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

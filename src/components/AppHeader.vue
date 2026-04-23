@@ -96,7 +96,7 @@ const handleMenuItemClick = (item: MenuItem) => {
   <header class="sticky top-0 z-40 border-b border-(--border-soft) bg-(--header-bg)">
     <div class="px-4 py-3 sm:px-5 lg:px-6">
       <div class="relative flex items-center justify-between gap-3 md:hidden">
-        <RouterLink to="/" class="flex items-center justify-center">
+        <RouterLink to="/feed" class="flex items-center justify-center">
           <img
             :src="logoSrc"
             :alt="logoAlt"
@@ -158,7 +158,7 @@ const handleMenuItemClick = (item: MenuItem) => {
       </div>
 
       <div class="relative hidden items-center justify-between md:flex">
-        <RouterLink to="/" class="flex items-center justify-center">
+        <RouterLink to="/feed" class="flex items-center justify-center">
           <img
             :src="logoSrc"
             :alt="logoAlt"
@@ -211,26 +211,24 @@ const handleMenuItemClick = (item: MenuItem) => {
           <div class="relative">
             <button
               type="button"
-              class="relative flex items-center rounded-full bg-[var(--surface-secondary)] p-1.5 transition"
-              @click="toggleUserMenu"
+            class="relative inline-flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
+            @click="toggleUserMenu"
+          >
+            <span
+              v-if="props.isAuthenticated && !userImageSrc"
+              class="flex h-full w-full items-center justify-center bg-[var(--accent)] text-sm font-bold text-white"
             >
-              <span
-                v-if="props.isAuthenticated && !userImageSrc"
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-bold text-white"
-              >
-                {{ userInitials }}
-              </span>
-              <img
-                v-else-if="props.isAuthenticated && userImageSrc"
-                :src="userImageSrc"
-                :alt="userName"
-                class="h-10 w-10 rounded-full object-cover"
-              />
-              <span
-                v-else
-                class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-secondary)]"
-              >
-                <CircleUserRound class="h-5 w-5" />
+              {{ userInitials }}
+            </span>
+            <img
+              v-else-if="props.isAuthenticated && userImageSrc"
+              :src="userImageSrc"
+              :alt="userName"
+              class="h-full w-full object-cover"
+            />
+            <span
+              v-else
+              class="flex h-full w-full items-center justify-center bg-[var(--surface-primary)] text-[var(--text-secondary)]"
               </span>
               <span
                 v-if="props.isAuthenticated"
@@ -279,7 +277,7 @@ const handleMenuItemClick = (item: MenuItem) => {
 
                 <button
                   type="button"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
                   aria-label="Close user menu"
                   @click="isUserMenuOpen = false"
                 >

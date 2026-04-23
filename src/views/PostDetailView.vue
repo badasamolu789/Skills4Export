@@ -19,7 +19,7 @@ const answerSamples = [
   <section v-if="post" class="space-y-6">
     <div class="space-y-3 px-1">
       <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-        <RouterLink to="/" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
+        <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>
         <span class="font-medium text-[var(--accent-strong)]">Post Details</span>
       </div>

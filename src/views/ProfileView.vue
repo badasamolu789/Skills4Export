@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BriefcaseBusiness, Globe, Mail, MapPin, Phone, Sparkles, UserRound, Users, Shield, Clock, Award, BookOpen, ExternalLink, Edit2, MoreHorizontal, Save, Trash2, X, GraduationCap, Briefcase } from 'lucide-vue-next'
+import { BriefcaseBusiness, Globe, Mail, MapPin, Phone, Sparkles, UserRound, Award, BookOpen, ExternalLink, Edit2, MoreHorizontal, Save, Trash2, X, GraduationCap, Briefcase } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { usersService } from '@/services/users'
@@ -367,8 +367,8 @@ const profile = computed(() => {
 
 const profileStats = computed(() => [
   { label: 'Posts shared', value: String(stats.value.posts || 0), icon: Sparkles },
-  { label: 'Followers', value: String(stats.value.followers || 0), icon: Users },
-  { label: 'Communities', value: String(stats.value.communities || 0), icon: Users },
+  { label: 'Followers', value: String(stats.value.followers || 0), icon: UserRound },
+  { label: 'Communities', value: String(stats.value.communities || 0), icon: UserRound },
   { label: 'Pages', value: String(stats.value.pages || 0), icon: BriefcaseBusiness },
 ])
 </script>
@@ -377,7 +377,7 @@ const profileStats = computed(() => [
   <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
     <div class="space-y-3 px-1">
       <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-        <RouterLink to="/" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
+        <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>
         <span class="font-medium text-[var(--accent-strong)]">Profile</span>
       </div>
@@ -920,7 +920,7 @@ const profileStats = computed(() => [
         <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Recent activity</h2>
-            <RouterLink to="/" class="text-sm font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]">
+            <RouterLink to="/feed" class="text-sm font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]">
               View feed
             </RouterLink>
           </div>
@@ -937,73 +937,6 @@ const profileStats = computed(() => [
           <div v-else class="text-sm text-[var(--text-secondary)] text-center py-4">
             <p>You have {{ stats.posts }} post{{ stats.posts !== 1 ? 's' : '' }} shared.</p>
           </div>
-        </section>
-      </div>
-
-      <div class="space-y-6">
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <h2 class="text-xl font-semibold text-[var(--text-primary)]">Visibility</h2>
-          <div class="mt-5 rounded-[1.15rem] bg-[var(--surface-secondary)] p-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-[var(--text-primary)]">Profile strength</p>
-                <p class="mt-1 text-sm text-[var(--text-secondary)]">
-                  Complete your profile to improve visibility.
-                </p>
-              </div>
-              <span class="text-lg font-semibold text-[var(--accent-strong)]">—</span>
-            </div>
-          </div>
-
-          <div class="mt-4 flex items-start gap-3 rounded-[1.15rem] bg-[var(--surface-secondary)] p-4">
-            <UserRound class="mt-1 h-4 w-4 text-[var(--accent-strong)]" />
-            <p class="text-sm leading-7 text-[var(--text-secondary)]">
-              A complete profile helps you appear more credible in communities, job applications, and recruiter searches.
-            </p>
-          </div>
-        </section>
-
-        <!-- Network Section -->
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Network</h2>
-            <Users class="h-5 w-5 text-[var(--accent-strong)]" />
-          </div>
-
-          <RouterLink
-            :to="`/profile/followers/${authStore.userId}`"
-            class="block rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
-          >
-            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-              Your followers
-            </p>
-            <p class="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
-              {{ stats.followers }}
-            </p>
-            <p class="mt-1 text-xs text-[var(--text-secondary)]">
-              View & manage followers →
-            </p>
-          </RouterLink>
-        </section>
-
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Security</h2>
-            <Shield class="h-5 w-5 text-[var(--accent-strong)]" />
-          </div>
-
-          <RouterLink
-            to="/profile/login-history"
-            class="block rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/5"
-          >
-            <p class="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-              <Clock class="h-4 w-4" />
-              Login history
-            </p>
-            <p class="mt-2 text-xs text-[var(--text-secondary)]">
-              View your recent login activity & devices →
-            </p>
-          </RouterLink>
         </section>
       </div>
     </div>

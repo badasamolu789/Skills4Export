@@ -5,12 +5,10 @@ import {
   BriefcaseBusiness,
   Compass,
   Flame,
-  Laugh,
   LayoutGrid,
   MessageSquareMore,
   PlusSquare,
   Sparkles,
-  Trophy,
   X,
 } from 'lucide-vue-next'
 import { usePagesStore } from '@/stores/pages'
@@ -37,8 +35,8 @@ const emit = defineEmits<{
 }>()
 
 const trendingLinks = [
-  { label: 'Popular', to: '/' },
-  { label: 'Latest', to: '/' },
+  { label: 'Popular', to: '/feed' },
+  { label: 'Latest', to: '/feed' },
 ]
 
 const menuGroups: SidebarMenuGroup[] = [
@@ -53,24 +51,14 @@ const menuGroups: SidebarMenuGroup[] = [
     to: '/answer/question',
   },
   {
-    label: 'Contests',
-    icon: Trophy,
-    to: '/contests',
-  },
-  {
     label: 'Explore Communities',
     icon: Compass,
     to: '/communities',
   },
   {
-    label: 'Freelancers',
+    label: 'Referrals',
     icon: Sparkles,
-    to: '/freelancers',
-  },
-  {
-    label: 'Jokes',
-    icon: Laugh,
-    to: '/jokes',
+    to: '/referrals',
   },
   {
     label: 'Create Page',
@@ -89,7 +77,7 @@ const footerLinks = [
 
 const pagesStore = usePagesStore()
 const route = useRoute()
-const latestLinkTarget = computed(() => ({ path: '/', query: { feed: 'latest' } }))
+const latestLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'latest' } }))
 const yourPages = computed(() =>
   pagesStore.pages.slice(0, 5).map((page) => ({
     name: page.name,
@@ -108,13 +96,7 @@ const getCurrentQueryValue = (key: string) => {
   return Array.isArray(value) ? value[0] ?? '' : value ?? ''
 }
 
-const isPlaceholderTarget = (target: string) => target === '/'
-
 const isRouteActive = (target: string) => {
-  if (isPlaceholderTarget(target)) {
-    return false
-  }
-
   return route.path === target || route.path.startsWith(`${target}/`)
 }
 
@@ -124,10 +106,10 @@ const isGroupActive = (group: SidebarMenuGroup) => {
 
 const isFeedLinkActive = (label: string) => {
   if (label === 'Latest') {
-    return route.path === '/' && getCurrentQueryValue('feed') === 'latest'
+    return route.path === '/feed' && getCurrentQueryValue('feed') === 'latest'
   }
 
-  return route.path === '/' && getCurrentQueryValue('feed') !== 'latest'
+  return route.path === '/feed' && getCurrentQueryValue('feed') !== 'latest'
 }
 
 const getTopLevelLinkClasses = (isActive: boolean) =>

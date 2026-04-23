@@ -15,11 +15,11 @@ import { useTheme } from '@/composables/useTheme'
 import { notifications } from '@/data/notifications'
 
 const headerLinks = [
-  { label: 'Home', to: '/' },
-  { label: 'Ask', to: '/' },
-  { label: 'Contest', to: '/' },
+  { label: 'Home', to: '/feed' },
+  { label: 'Ask', to: '/answer/question' },
+  { label: 'Contest', to: '/referrals' },
   { label: 'Job', to: '/jobs/feed' },
-  { label: 'Community', to: '/' },
+  { label: 'Community', to: '/communities' },
 ]
 
 const authStore = useAuthStore()
@@ -51,9 +51,12 @@ const userMenu = computed(() => [
   { label: 'Manage activities', to: '/' },
   { label: 'Manage Jobs', to: '/jobs' },
   { label: 'Referrals', to: '/referrals' },
-  authStore.isAuthenticated
-    ? { label: authStore.authMenuLabel, to: '/', action: 'logout' as const }
-    : { label: authStore.authMenuLabel, to: '/auth/login' },
+  ...(authStore.isAuthenticated
+    ? [
+        { label: 'Settings', to: '/settings' },
+        { label: authStore.authMenuLabel, to: '/', action: 'logout' as const },
+      ]
+    : [{ label: authStore.authMenuLabel, to: '/auth/login' }]),
 ])
 
 const { resolvedTheme } = useTheme()
@@ -65,12 +68,17 @@ const toasterOptions = {
   actionButtonClass: 'skills-toast__action',
   cancelButtonClass: 'skills-toast__cancel',
 }
-const showHeader = computed(() => !route.path.startsWith('/auth'))
+const currentLayout = computed(() => String(route.meta.layout ?? 'public'))
+const showHeader = computed(() => currentLayout.value === 'app')
 const usesWorkspaceShell = computed(
   () =>
     showHeader.value &&
     !route.path.startsWith('/profile') &&
+    route.path !== '/settings' &&
     !route.path.startsWith('/pages/create'),
+)
+const showRightRail = computed(
+  () => usesWorkspaceShell.value && route.path !== '/communities' && route.path !== '/settings',
 )
 const mainClasses = computed(() =>
   showHeader.value
@@ -178,7 +186,7 @@ const handleMenuAction = async (action: 'logout') => {
           </div>
         </div>
         <div
-          v-if="usesWorkspaceShell"
+          v-if="showRightRail"
           class="app-scroll hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
         >
           <div class="lg:pt-4">

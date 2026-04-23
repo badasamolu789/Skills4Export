@@ -115,7 +115,7 @@ onMounted(async () => {
       return
     }
 
-    await router.replace('/')
+    await router.replace('/feed')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

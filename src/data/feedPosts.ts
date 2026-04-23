@@ -67,8 +67,8 @@ export const feedPosts: FeedPost[] = [
       'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout. It is a long established fact that a reader will be...',
     imageSrc: '/post/javad_esmaeili-woman-7262808_1920.jpg',
     imageAlt: 'Community post image',
-    score: 18,
-    comments: 3,
+    score: 0,
+    comments: 0,
   },
   {
     type: 'question',
@@ -79,7 +79,7 @@ export const feedPosts: FeedPost[] = [
     authorName: 'Arden Smith',
     authorTo: '/',
     tag: 'Psychologist | CSS3 | Java | Project Mgt.',
-    answers: 7,
+    answers: 0,
   },
   {
     type: 'personal',
@@ -96,8 +96,8 @@ export const feedPosts: FeedPost[] = [
       '"As the population grows, so should job opportunities to match the demand created by growth in population. Unemployment should be a choice."',
     imageSrc: '/post/lobostudiohamburg-internet-3113279_1920.jpg',
     imageAlt: 'Personal post image',
-    score: 26,
-    comments: 3,
+    score: 0,
+    comments: 0,
   },
   {
     type: 'question',
@@ -108,7 +108,7 @@ export const feedPosts: FeedPost[] = [
     authorName: 'Naomi Cole',
     authorTo: '/',
     tag: 'Frontend | UI Systems | Mentorship',
-    answers: 12,
+    answers: 0,
   },
   {
     type: 'question',
@@ -119,7 +119,7 @@ export const feedPosts: FeedPost[] = [
     authorName: 'David Mensah',
     authorTo: '/',
     tag: 'Product Design | Remote Work | Strategy',
-    answers: 4,
+    answers: 0,
   },
 ]
 
