@@ -96,15 +96,7 @@ const handleMenuItemClick = (item: MenuItem) => {
   <header class="sticky top-0 z-40 border-b border-(--border-soft) bg-(--header-bg)">
     <div class="px-4 py-3 sm:px-5 lg:px-6">
       <div class="relative flex items-center justify-between gap-3 md:hidden">
-        <RouterLink to="/feed" class="flex items-center justify-center">
-          <img
-            :src="logoSrc"
-            :alt="logoAlt"
-            class="h-[4.1rem] w-auto object-contain"
-          />
-        </RouterLink>
-
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 items-center gap-3">
           <button
             type="button"
             class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -114,7 +106,16 @@ const handleMenuItemClick = (item: MenuItem) => {
           >
             <Menu class="h-5 w-5" />
           </button>
+          <RouterLink to="/feed" class="flex min-w-0 items-center justify-center">
+            <img
+              :src="logoSrc"
+              :alt="logoAlt"
+              class="h-[3.4rem] w-auto object-contain"
+            />
+          </RouterLink>
+        </div>
 
+        <div class="flex items-center gap-2">
           <RouterLink
             to="/mobile/notifications"
             class="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -137,6 +138,36 @@ const handleMenuItemClick = (item: MenuItem) => {
             :title="searchPlaceholder"
           >
             <Search class="h-4 w-4 text-[var(--text-tertiary)]" />
+          </RouterLink>
+
+          <RouterLink
+            to="/mobile/account"
+            class="relative inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            aria-label="Open account menu"
+            title="Open account menu"
+          >
+            <span
+              v-if="props.isAuthenticated && !userImageSrc"
+              class="flex h-full w-full items-center justify-center bg-[var(--accent)] text-sm font-bold text-white"
+            >
+              {{ userInitials }}
+            </span>
+            <img
+              v-else-if="props.isAuthenticated && userImageSrc"
+              :src="userImageSrc"
+              :alt="userName"
+              class="h-full w-full object-cover"
+            />
+            <span
+              v-else
+              class="flex h-full w-full items-center justify-center bg-[var(--surface-primary)] text-[var(--text-secondary)]"
+            >
+              <CircleUserRound class="h-5 w-5" />
+            </span>
+            <span
+              v-if="props.isAuthenticated"
+              class="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-[var(--surface-primary)] bg-green-500"
+            />
           </RouterLink>
         </div>
       </div>

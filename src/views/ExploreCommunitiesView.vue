@@ -26,9 +26,6 @@ const iconMap = {
           <h1 class="text-[2rem] font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-[2.5rem]">
             Explore Communities
           </h1>
-          <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-            Discover focused spaces to ask questions, share wins, and connect with people building in the same direction.
-          </p>
         </div>
       </div>
 

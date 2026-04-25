@@ -12,12 +12,14 @@ import JobFeedView from '@/views/JobFeedView.vue'
 import JobsView from '@/views/JobsView.vue'
 import LoginView from '@/views/LoginView.vue'
 import MobileNotificationsView from '@/views/MobileNotificationsView.vue'
+import MobileAccountView from '@/views/MobileAccountView.vue'
 import MobileSearchView from '@/views/MobileSearchView.vue'
 import PageDetailView from '@/views/PageDetailView.vue'
 import PostDetailView from '@/views/PostDetailView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import EditProfileView from '@/views/EditProfileView.vue'
 import ProfileView from '@/views/ProfileView.vue'
+import PublicProfileView from '@/views/PublicProfileView.vue'
 import FollowersView from '@/views/FollowersView.vue'
 import LoginHistoryView from '@/views/LoginHistoryView.vue'
 import QuestionAnswerView from '@/views/QuestionAnswerView.vue'
@@ -129,6 +131,15 @@ const router = createRouter({
       },
     },
     {
+      path: '/mobile/account',
+      name: 'mobile-account',
+      component: MobileAccountView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+      },
+    },
+    {
       path: '/communities',
       name: 'explore-communities',
       component: ExploreCommunitiesView,
@@ -162,6 +173,16 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+      },
+    },
+    {
+      path: '/profile/view/:id',
+      name: 'public-profile',
+      component: PublicProfileView,
+      meta: {
+        layout: 'app',
+        hideSidebar: true,
+        showRightRail: true,
       },
     },
     {

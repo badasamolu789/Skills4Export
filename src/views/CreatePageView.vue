@@ -14,9 +14,9 @@ const pageTypes = [
 </script>
 
 <template>
-  <section class="min-h-[calc(100vh-6rem)] px-4 py-12 sm:px-6 lg:px-8">
-    <div class="mx-auto max-w-5xl space-y-10">
-      <div class="space-y-4 px-1">
+  <section class="flex min-h-[calc(100vh-6rem)] items-center px-4 py-12 sm:px-6 lg:px-8">
+    <div class="mx-auto flex w-full max-w-5xl flex-col justify-center space-y-10">
+      <div class="space-y-4 px-1 text-center">
         <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
           <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
           <span>/</span>
@@ -27,9 +27,6 @@ const pageTypes = [
           <h1 class="text-[2.35rem] font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-[3rem]">
             Choose a Page Type
           </h1>
-          <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-            Pick the page type that matches your goal. You’ll continue to the next step after selection.
-          </p>
         </div>
       </div>
 

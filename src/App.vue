@@ -70,6 +70,8 @@ const toasterOptions = {
 }
 const currentLayout = computed(() => String(route.meta.layout ?? 'public'))
 const showHeader = computed(() => currentLayout.value === 'app')
+const hideSidebar = computed(() => Boolean(route.meta.hideSidebar))
+const forceRightRail = computed(() => Boolean(route.meta.showRightRail))
 const usesWorkspaceShell = computed(
   () =>
     showHeader.value &&
@@ -77,14 +79,33 @@ const usesWorkspaceShell = computed(
     route.path !== '/settings' &&
     !route.path.startsWith('/pages/create'),
 )
+const showSidebar = computed(() => usesWorkspaceShell.value && !hideSidebar.value)
+const showWorkspaceShell = computed(() => showSidebar.value || forceRightRail.value)
 const showRightRail = computed(
-  () => usesWorkspaceShell.value && route.path !== '/communities' && route.path !== '/settings',
+  () =>
+    (showWorkspaceShell.value || usesWorkspaceShell.value) &&
+    route.path !== '/communities' &&
+    route.path !== '/settings',
+)
+const workspaceShellClasses = computed(() =>
+  showWorkspaceShell.value
+    ? [
+        'flex flex-col gap-6 lg:h-[calc(100vh-theme(spacing.16))] lg:min-h-0 lg:overflow-hidden lg:grid lg:gap-5 xl:gap-6',
+        showSidebar.value && showRightRail.value
+          ? 'lg:grid-cols-[20rem_minmax(0,1fr)_20rem]'
+          : showSidebar.value
+            ? 'lg:grid-cols-[20rem_minmax(0,1fr)]'
+            : showRightRail.value
+              ? 'lg:grid-cols-[minmax(0,1fr)_20rem]'
+              : 'lg:grid-cols-[minmax(0,1fr)]',
+      ].join(' ')
+    : 'flex flex-col gap-6 lg:items-start lg:gap-5',
 )
 const mainClasses = computed(() =>
   showHeader.value
     ? [
         'mx-auto w-full max-w-[96rem] flex-1 px-4 py-5 sm:px-6 sm:py-6 xl:px-8',
-        usesWorkspaceShell.value ? 'lg:px-6 lg:pt-0 lg:pb-8' : 'lg:px-6 lg:py-8',
+        showWorkspaceShell.value ? 'lg:px-6 lg:pt-0 lg:pb-8' : 'lg:px-6 lg:py-8',
       ].join(' ')
     : 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-7xl flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10',
 )
@@ -133,7 +154,7 @@ const handleMenuAction = async (action: 'logout') => {
   <div
     :class="[
       'flex min-h-screen flex-col bg-(--app-bg) text-(--text-primary) transition-colors duration-300',
-      usesWorkspaceShell ? 'lg:h-screen lg:overflow-hidden' : '',
+      showWorkspaceShell ? 'lg:h-screen lg:overflow-hidden' : '',
     ]"
   >
     <AppHeader
@@ -153,35 +174,31 @@ const handleMenuAction = async (action: 'logout') => {
       :user-menu="userMenu"
     />
 
-    <main :class="[mainClasses, usesWorkspaceShell ? 'lg:overflow-hidden' : '']">
+    <main :class="[mainClasses, showWorkspaceShell ? 'lg:overflow-hidden' : '']">
       <div
         v-if="showHeader"
-        :class="[
-          usesWorkspaceShell
-            ? 'flex flex-col gap-6 lg:h-[calc(100vh-theme(spacing.16))] lg:min-h-0 lg:overflow-hidden lg:grid lg:grid-cols-[20rem_minmax(0,1fr)_20rem] lg:gap-5 xl:gap-6'
-            : 'flex flex-col gap-6 lg:items-start lg:gap-5',
-        ]"
+        :class="workspaceShellClasses"
       >
         <div
-          v-if="usesWorkspaceShell"
+          v-if="showSidebar"
           :class="
-            usesWorkspaceShell
+            showSidebar
               ? 'app-scroll hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
               : 'hidden lg:block lg:-ml-2 xl:-ml-3'
           "
         >
-          <div :class="usesWorkspaceShell ? 'lg:pt-4' : ''">
-            <AppSidebar :pinned-layout="usesWorkspaceShell" />
+          <div :class="showWorkspaceShell ? 'lg:pt-4' : ''">
+            <AppSidebar :pinned-layout="showWorkspaceShell" />
           </div>
         </div>
         <div
           :class="
-            usesWorkspaceShell
+            showWorkspaceShell
               ? 'min-w-0 lg:app-scroll lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
               : 'min-w-0 w-full'
           "
         >
-          <div :class="usesWorkspaceShell ? 'lg:pt-4' : ''">
+          <div :class="showWorkspaceShell ? 'lg:pt-4' : ''">
             <RouterView />
           </div>
         </div>
@@ -209,7 +226,12 @@ const handleMenuAction = async (action: 'logout') => {
     mobile-aside
     :show-header-text="false"
   >
-    <AppSidebar dismissible @close="isMobileSidebarOpen = false" />
+    <AppSidebar
+      dismissible
+      logo-src="/logo_1.svg"
+      logo-alt="Skills4Export logo"
+      @close="isMobileSidebarOpen = false"
+    />
   </ResponsiveOverlay>
 
   <!-- Temporary API debug modal. Remove this whole overlay block after backend work is complete. -->

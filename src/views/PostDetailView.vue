@@ -41,10 +41,10 @@ const answerSamples = [
             <Users class="h-4 w-4 text-[var(--accent-strong)]" />
             {{ post.communityName }}
           </span>
-          <span v-else class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
+          <RouterLink v-else :to="post.author.to" class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5 transition hover:text-[var(--accent-strong)]">
             <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
             {{ post.author.name }}
-          </span>
+          </RouterLink>
           <span>{{ post.time }}</span>
         </div>
       </div>
@@ -52,7 +52,10 @@ const answerSamples = [
       <div class="space-y-6 p-5 sm:p-6">
         <template v-if="post.type === 'question'">
           <p class="text-base leading-8 text-[var(--text-secondary)]">
-            {{ post.authorName }} asked this inside {{ post.communityName }} for members with experience in {{ post.tag }}.
+            <RouterLink :to="post.authorTo" class="font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]">
+              {{ post.authorName }}
+            </RouterLink>
+            asked this inside {{ post.communityName }} for members with experience in {{ post.tag }}.
           </p>
 
           <div class="grid gap-4 md:grid-cols-3">

@@ -23,10 +23,14 @@ const props = withDefaults(
   defineProps<{
     dismissible?: boolean
     pinnedLayout?: boolean
+    logoSrc?: string
+    logoAlt?: string
   }>(),
   {
     dismissible: false,
     pinnedLayout: false,
+    logoSrc: '/logo_1.svg',
+    logoAlt: 'Skills4Export logo',
   },
 )
 
@@ -51,7 +55,7 @@ const menuGroups: SidebarMenuGroup[] = [
     to: '/answer/question',
   },
   {
-    label: 'Explore Communities',
+    label: 'Communities',
     icon: Compass,
     to: '/communities',
   },
@@ -164,7 +168,19 @@ const handleNavigation = () => {
                 ].join(' ')
           "
         >
-          <div v-if="props.dismissible" class="flex justify-end border-b border-[color:var(--border-soft)] pb-4">
+          <div v-if="props.dismissible" class="flex items-center justify-between gap-3 border-b border-[color:var(--border-soft)] pb-4">
+            <RouterLink
+              to="/feed"
+              class="flex min-w-0 items-center"
+              @click="handleNavigation"
+            >
+              <img
+                :src="props.logoSrc"
+                :alt="props.logoAlt"
+                class="h-12 w-auto object-contain"
+              />
+            </RouterLink>
+
             <button
               type="button"
               class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"

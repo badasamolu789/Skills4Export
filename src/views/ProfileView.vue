@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { BriefcaseBusiness, Globe, Mail, MapPin, Phone, Sparkles, UserRound, Award, BookOpen, ExternalLink, Edit2, MoreHorizontal, Save, Trash2, X, GraduationCap, Briefcase } from 'lucide-vue-next'
+import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, Mail, MapPin, MoreHorizontal, Pencil, Phone, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { feedPosts } from '@/data/feedPosts'
 import type { UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience } from '@/services/users'
 
 const authStore = useAuthStore()
@@ -24,11 +25,24 @@ const portfolios = ref<UserPortfolio[]>([])
 const certifications = ref<UserCertification[]>([])
 const educations = ref<UserEducation[]>([])
 const experiences = ref<UserExperience[]>([])
+const followers = ref<Array<{
+  id?: string
+  followerId?: string
+  followingId?: string
+  createdAt?: string
+}>>([])
+const following = ref<Array<{
+  id: string
+  name: string
+  subtitle: string
+  initials: string
+}>>([])
 const activeActionMenu = ref<{ type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience'; id: string } | null>(null)
 const deletingItem = ref<string | null>(null)
 const deleteModal = ref<{ isOpen: boolean; type?: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience'; id?: string; label?: string }>({
   isOpen: false,
 })
+const profileModal = ref<null | 'score' | 'followers' | 'following'>(null)
 const stats = ref({
   pages: 0,
   communities: 0,
@@ -76,6 +90,14 @@ const openDeleteModal = (type: 'skill' | 'portfolio' | 'certification' | 'educat
 
 const closeDeleteModal = () => {
   deleteModal.value = { isOpen: false }
+}
+
+const openProfileModal = (type: 'score' | 'followers' | 'following') => {
+  profileModal.value = type
+}
+
+const closeProfileModal = () => {
+  profileModal.value = null
 }
 
 const confirmDelete = async () => {
@@ -216,9 +238,11 @@ const loadProfile = async () => {
 
     experiences.value = profileResponse.data?.experiences || []
 
-    // Load followers count separately
+    following.value = []
+
+    // Load followers data separately
     if (profileResponse.data?.user?.id) {
-      await loadFollowersCount(profileResponse.data.user.id)
+      await loadFollowersData(profileResponse.data.user.id)
     }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
@@ -230,14 +254,15 @@ const loadProfile = async () => {
   }
 }
 
-const loadFollowersCount = async (userId: string) => {
+const loadFollowersData = async (userId: string) => {
   isLoadingFollowers.value = true
 
   try {
     const response = await usersService.listFollowers(userId, authStore.authToken)
-    stats.value.followers = response.data?.length ?? 0
+    followers.value = response.data ?? []
+    stats.value.followers = followers.value.length
   } catch (error) {
-    // Silently fail - followers count is optional
+    followers.value = []
     stats.value.followers = 0
   } finally {
     isLoadingFollowers.value = false
@@ -361,108 +386,203 @@ const profile = computed(() => {
       .map((part) => part[0])
       .join('')
       .slice(0, 2)
-      .toUpperCase(),
+    .toUpperCase(),
   }
 })
 
-const profileStats = computed(() => [
-  { label: 'Posts shared', value: String(stats.value.posts || 0), icon: Sparkles },
-  { label: 'Followers', value: String(stats.value.followers || 0), icon: UserRound },
-  { label: 'Communities', value: String(stats.value.communities || 0), icon: UserRound },
-  { label: 'Pages', value: String(stats.value.pages || 0), icon: BriefcaseBusiness },
+const featuredExperience = computed(() => experiences.value[0] ?? null)
+
+const featuredSkill = computed(() => skills.value[0]?.name || authStore.signUpDraft.interests[0] || '')
+
+const profileSkillLabel = computed(() => featuredSkill.value || 'Software Developer')
+const profileCompanyLabel = computed(() => featuredExperience.value?.company || 'Amaka Global')
+const profileCountryLabel = computed(() => profile.value.location || 'Nigeria')
+
+const scoreEntries = computed(() =>
+  feedPosts
+    .filter((post) =>
+      post.type === 'personal'
+        ? post.author.name === profile.value.name
+        : post.type === 'question'
+          ? post.authorName === profile.value.name
+          : post.author.name === profile.value.name,
+    )
+    .map((post) => ({
+      id: post.slug,
+      title: post.title,
+      community: post.type === 'question' ? post.communityName : 'Personal post',
+      score: 'score' in post ? post.score : 0,
+      typeLabel: post.type === 'question' ? 'Question' : 'Post',
+    })),
+)
+
+const totalTScore = computed(() =>
+  scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+)
+
+const questionCount = computed(
+  () =>
+    feedPosts.filter(
+      (post) => post.type === 'question' && post.authorName === profile.value.name,
+    ).length,
+)
+
+const summaryCards = computed(() => [
+  {
+    label: 'Comments',
+    value: stats.value.comments || 0,
+    icon: ClipboardList,
+    accentClass: 'bg-[color:color-mix(in_srgb,var(--accent)_18%,white)] text-[var(--accent-strong)]',
+  },
+  {
+    label: 'Questions',
+    value: questionCount.value,
+    icon: Sparkles,
+    accentClass: 'bg-emerald-500/12 text-emerald-600',
+  },
+  {
+    label: 'Answers & Posts',
+    value: stats.value.posts || 0,
+    icon: Rocket,
+    accentClass: 'bg-amber-500/14 text-amber-600',
+  },
 ])
+
+const profileModalTitle = computed(() => {
+  if (profileModal.value === 'score') {
+    return 'T.Scores'
+  }
+
+  if (profileModal.value === 'followers') {
+    return 'Followers'
+  }
+
+  if (profileModal.value === 'following') {
+    return 'Following'
+  }
+
+  return ''
+})
 </script>
 
 <template>
-  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-    <div class="space-y-3 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-        <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
-        <span>/</span>
-        <span class="font-medium text-[var(--accent-strong)]">Profile</span>
-      </div>
-      <div>
-        <h1 class="text-[1.65rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.95rem] lg:text-[2.1rem]">
-          Your profile
-        </h1>
-        <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-          Manage the public details people see about you across jobs, communities, and conversations.
-        </p>
-      </div>
-    </div>
-
-    <section class="relative overflow-hidden rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
-      <div class="absolute inset-0">
-        <div v-if="profile.banner" class="h-full w-full">
-          <img
-            :src="profile.banner"
-            alt="Profile banner"
-            class="h-full w-full object-cover"
-          />
+  <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
+    <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
+      <div class="relative border-b border-[color:var(--border-soft)] px-5 py-6 sm:px-7 lg:px-9 lg:py-7">
+        <div class="absolute right-0 top-0 hidden h-full w-48 opacity-60 lg:block">
+          <div class="absolute right-10 top-0 h-full w-px bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)] rotate-[-32deg]" />
+          <div class="absolute right-20 top-0 h-full w-px bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] rotate-[-32deg]" />
+          <div class="absolute right-[7.5rem] top-0 h-full w-px bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] rotate-[-32deg]" />
         </div>
-        <div v-else class="h-full w-full bg-[linear-gradient(135deg,rgba(66,63,151,0.12),rgba(211,154,69,0.08))]" />
-        <div class="absolute inset-0 bg-[rgba(0,0,0,0.35)]" />
-      </div>
 
-      <div class="relative p-5 sm:p-6">
-        <div class="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex items-center gap-4">
-            <div class="relative">
-              <div class="h-20 w-20 overflow-hidden rounded-[1.75rem] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
-                <img
-                  v-if="profile.avatar"
-                  :src="profile.avatar"
-                  alt="Profile avatar"
-                  class="h-full w-full object-cover"
-                />
-                <span v-else class="flex h-full w-full items-center justify-center text-xl font-semibold text-white">
-                  {{ profile.initials }}
-                </span>
-              </div>
+        <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
+            <div class="h-24 w-24 overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] shadow-[var(--shadow-soft)]">
+              <img
+                v-if="profile.avatar"
+                :src="profile.avatar"
+                alt="Profile avatar"
+                class="h-full w-full object-cover"
+              />
+              <span
+                v-else
+                class="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_84%,white),color-mix(in_srgb,var(--accent-strong)_72%,white))] text-2xl font-semibold text-white"
+              >
+                {{ profile.initials }}
+              </span>
             </div>
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">
-                @{{ profile.username }}
-              </p>
-              <h2 class="mt-1 text-2xl font-semibold leading-tight text-white">
+
+            <div class="min-w-0">
+              <h2 class="text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-[2rem]">
                 {{ profile.name }}
               </h2>
+              <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[0.95rem] leading-5 text-[var(--text-secondary)] sm:justify-start sm:text-[1rem]">
+                <span>{{ profileSkillLabel }}</span>
+                <span>-</span>
+                <span>{{ profileCompanyLabel }}</span>
+                <span>-</span>
+                <span>{{ profileCountryLabel }}</span>
+                <RouterLink
+                  to="/profile/edit"
+                  class="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-primary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                  aria-label="Edit profile"
+                >
+                  <Pencil class="h-4 w-4" />
+                </RouterLink>
+              </div>
+              <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm font-semibold leading-5 sm:justify-start sm:text-[1rem]">
+                <button
+                  type="button"
+                  class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                  @click="openProfileModal('score')"
+                >
+                  {{ totalTScore }} T.Scores
+                </button>
+                <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
+                <button
+                  type="button"
+                  class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                  @click="openProfileModal('followers')"
+                >
+                  {{ stats.followers }} followers
+                </button>
+                <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
+                <button
+                  type="button"
+                  class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                  @click="openProfileModal('following')"
+                >
+                  {{ following.length }} following
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="flex flex-wrap gap-3">
-            <button
-              type="button"
-              class="inline-flex items-center justify-center rounded-[1rem] border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:border-white hover:bg-white/15"
-            >
-              Share profile
-            </button>
-            <RouterLink
-              to="/profile/edit"
-              class="inline-flex items-center justify-center rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
-            >
-              Edit profile
-            </RouterLink>
-          </div>
+          <RouterLink
+            to="/profile/edit"
+            class="inline-flex items-center justify-center gap-3 self-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-3 text-sm font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)] sm:self-start"
+          >
+            <Edit2 class="h-4 w-4" />
+            Edit Profile
+          </RouterLink>
         </div>
       </div>
-    </section>
 
-    <!-- Stats Section -->
-    <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-      <h2 class="text-lg font-semibold text-[var(--text-primary)] mb-5">Overview</h2>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <article
-          v-for="stat in profileStats"
-          :key="stat.label"
-          class="rounded-[1.15rem] bg-[var(--surface-secondary)] p-4 transition hover:bg-[var(--surface-primary)]"
-        >
-          <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-            <component :is="stat.icon" class="h-4 w-4 text-[var(--accent-strong)]" />
-            <span>{{ stat.label }}</span>
-          </div>
-          <p class="mt-3 text-2xl font-semibold text-[var(--text-primary)]">{{ stat.value }}</p>
-        </article>
+      <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
+        <div class="max-w-5xl space-y-6 text-[1.03rem] leading-9 text-[var(--text-secondary)] sm:text-[1.08rem]">
+          <p>
+            {{ profile.bio || 'Add a short introduction to tell people what you do, what you care about, and the kind of opportunities or conversations you want to attract.' }}
+          </p>
+          <p>
+            <span class="font-medium text-[var(--text-primary)]">{{ featuredExperience?.title || 'Community member' }}</span>
+            <span v-if="featuredExperience?.company"> at {{ featuredExperience.company }}</span>
+            <span v-else> building visibility through Skills4Export.</span>
+            <span v-if="profile.location"> Based in {{ profile.location }}.</span>
+          </p>
+        </div>
+
+        <div class="grid gap-4 lg:grid-cols-3">
+          <article
+            v-for="card in summaryCards"
+            :key="card.label"
+            class="flex items-center gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-5 shadow-[var(--shadow-soft)]"
+          >
+            <div
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+              :class="card.accentClass"
+            >
+              <component :is="card.icon" class="h-5 w-5" />
+            </div>
+            <div>
+              <p class="text-[1.55rem] font-semibold leading-none text-[var(--text-primary)]">
+                {{ card.value }}
+              </p>
+              <p class="mt-1.5 text-sm font-medium text-[var(--text-secondary)] sm:text-[1rem]">
+                {{ card.label }}
+              </p>
+            </div>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -560,16 +680,6 @@ const profileStats = computed(() => [
           </form>
         </section>
 
-        <!-- About Section -->
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <h2 class="text-xl font-semibold text-[var(--text-primary)]">About</h2>
-          <p v-if="profile.bio" class="mt-3 text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-            {{ profile.bio }}
-          </p>
-          <p v-else class="mt-3 text-sm text-[var(--text-secondary)] italic">
-            No bio added yet.
-          </p>
-        </section>
         <section id="skills" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
@@ -941,6 +1051,120 @@ const profileStats = computed(() => [
       </div>
     </div>
   </section>
+
+  <div
+    v-if="profileModal"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-4 sm:items-center"
+    @click.self="closeProfileModal"
+  >
+    <div class="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
+      <div class="flex items-center justify-between gap-4 border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
+        <div>
+          <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ profileModalTitle }}</h3>
+          <p class="mt-1 text-sm text-[var(--text-secondary)]">
+            <span v-if="profileModal === 'score'">Your post scores across communities and shared content.</span>
+            <span v-else-if="profileModal === 'followers'">People currently following your profile.</span>
+            <span v-else>Accounts you are following will appear here.</span>
+          </p>
+        </div>
+        <button
+          type="button"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+          @click="closeProfileModal"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+
+      <div class="max-h-[70vh] space-y-3 overflow-y-auto px-5 py-5 sm:px-6">
+        <template v-if="profileModal === 'score'">
+          <div
+            v-for="entry in scoreEntries"
+            :key="entry.id"
+            class="flex items-start justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                {{ entry.typeLabel }}
+              </p>
+              <p class="mt-2 text-base font-semibold text-[var(--text-primary)]">{{ entry.title }}</p>
+              <p class="mt-1 text-sm text-[var(--text-secondary)]">{{ entry.community }}</p>
+            </div>
+            <div class="rounded-full bg-[color:color-mix(in_srgb,var(--accent)_14%,white)] px-3 py-1 text-sm font-semibold text-[var(--accent-strong)]">
+              {{ entry.score }} score
+            </div>
+          </div>
+
+          <div
+            v-if="scoreEntries.length === 0"
+            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+          >
+            No scored posts yet. Your community post scores will show here.
+          </div>
+        </template>
+
+        <template v-else-if="profileModal === 'followers'">
+          <div
+            v-if="isLoadingFollowers"
+            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+          >
+            Loading followers...
+          </div>
+          <template v-else>
+            <div
+              v-for="follower in followers"
+              :key="follower.id || follower.followerId"
+              class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+            >
+              <div class="flex items-center gap-3">
+                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
+                  {{ (follower.followerId?.charAt(0) || 'U').toUpperCase() }}
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-[var(--text-primary)]">User {{ follower.followerId }}</p>
+                  <p class="text-xs text-[var(--text-secondary)]">
+                    {{ follower.createdAt ? new Date(follower.createdAt).toLocaleDateString() : 'Recently followed' }}
+                  </p>
+                </div>
+              </div>
+              <Users class="h-5 w-5 text-[var(--text-tertiary)]" />
+            </div>
+          </template>
+          <div
+            v-if="!isLoadingFollowers && followers.length === 0"
+            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+          >
+            No followers yet.
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="account in following"
+            :key="account.id"
+            class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          >
+            <div class="flex items-center gap-3">
+              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
+                {{ account.initials }}
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
+                <p class="text-xs text-[var(--text-secondary)]">{{ account.subtitle }}</p>
+              </div>
+            </div>
+            <UserRound class="h-5 w-5 text-[var(--text-tertiary)]" />
+          </div>
+          <div
+            v-if="following.length === 0"
+            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+          >
+            Following data is not available from the current API yet. This modal is ready and will populate as soon as that endpoint is connected.
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
 
   <!-- Delete Confirmation Modal -->
   <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

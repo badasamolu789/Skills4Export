@@ -1,4 +1,5 @@
 import { slugify } from '@/utils/slugify'
+import { publicProfileRoute } from '@/data/publicProfiles'
 
 export type CommunityPost = {
   type: 'community'
@@ -58,7 +59,7 @@ export const feedPosts: FeedPost[] = [
     slug: slugify('Bootstrap select pass value with disabled'),
     author: {
       name: 'Chike Collections',
-      to: '/',
+      to: publicProfileRoute('user-chike-collections'),
       avatarText: 'CC',
     },
     time: '6 hours ago',
@@ -77,7 +78,7 @@ export const feedPosts: FeedPost[] = [
     title: 'What is the fourth element of the periodic table of elements?',
     time: '1 hour ago',
     authorName: 'Arden Smith',
-    authorTo: '/',
+    authorTo: publicProfileRoute('user-arden-smith'),
     tag: 'Psychologist | CSS3 | Java | Project Mgt.',
     answers: 0,
   },
@@ -86,7 +87,7 @@ export const feedPosts: FeedPost[] = [
     slug: slugify('Unemployment is an anomaly'),
     author: {
       name: 'Arden Smith',
-      to: '/',
+      to: publicProfileRoute('user-arden-smith'),
       avatarText: 'AS',
       tag: 'Psychologist | CSS3 | Java | Project Mgt.',
     },
@@ -106,7 +107,7 @@ export const feedPosts: FeedPost[] = [
     title: 'What should a junior frontend developer include in a strong portfolio?',
     time: '3 hours ago',
     authorName: 'Naomi Cole',
-    authorTo: '/',
+    authorTo: publicProfileRoute('user-naomi-cole'),
     tag: 'Frontend | UI Systems | Mentorship',
     answers: 0,
   },
@@ -117,7 +118,7 @@ export const feedPosts: FeedPost[] = [
     title: 'Which remote job platforms are best for product designers in Africa?',
     time: '5 hours ago',
     authorName: 'David Mensah',
-    authorTo: '/',
+    authorTo: publicProfileRoute('user-david-mensah'),
     tag: 'Product Design | Remote Work | Strategy',
     answers: 0,
   },

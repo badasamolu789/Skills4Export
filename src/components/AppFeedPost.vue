@@ -4,6 +4,7 @@ import {
   ArrowUp,
   Bookmark,
   Check,
+  Users,
   Copy,
   Flag,
   MessageSquare,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import type { FeedPost } from '@/data/feedPosts'
+import { getSeededPublicProfile } from '@/data/publicProfiles'
 type PostComment = {
   id: number
   author: string
@@ -153,13 +155,44 @@ const reportReasonDescriptions: Record<string, string> = {
   'Invasion of privacy': 'Do not publish private conversations, images, or recordings without consent.',
 }
 
-const getPostBadges = (post: FeedPost) =>
-  post.type === 'personal'
-    ? post.author.tag
-        .split('|')
-        .map((item) => item.trim())
-        .filter(Boolean)
-    : []
+const getPublicProfileIdFromRoute = (routeTarget: string) => {
+  const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
+  return match?.[1] ?? ''
+}
+
+const authorRoute = computed(() =>
+  props.post.type === 'question' ? props.post.authorTo : props.post.author.to,
+)
+
+const authorName = computed(() =>
+  props.post.type === 'question' ? props.post.authorName : props.post.author.name,
+)
+
+const authorProfileDetails = computed(() => {
+  const publicProfileId = getPublicProfileIdFromRoute(authorRoute.value)
+  const publicProfile = publicProfileId ? getSeededPublicProfile(publicProfileId) : null
+
+  if (!publicProfile) {
+    return []
+  }
+
+  const details: string[] = []
+  const jobTitle = publicProfile.experiences[0]?.title?.trim()
+  const skillNames = publicProfile.skills
+    .map((skill) => (skill.name || skill.skill || '').trim())
+    .filter(Boolean)
+    .slice(0, 3)
+
+  if (jobTitle) {
+    details.push(jobTitle)
+  }
+
+  details.push(...skillNames)
+
+  return details
+})
+
+const authorMetaLine = computed(() => authorProfileDetails.value.join(' • '))
 
 const toggleFollow = () => {
   isFollowing.value = !isFollowing.value
@@ -326,6 +359,7 @@ const submitCommentReply = (comment: PostComment) => {
         <div>
           <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
             <span class="font-semibold text-[var(--accent-strong)]">Q.</span>
+            <Users class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
             <span class="truncate">{{ post.communityName }}</span>
           </div>
           <RouterLink
@@ -334,12 +368,16 @@ const submitCommentReply = (comment: PostComment) => {
           >
             {{ post.title }}
           </RouterLink>
-          <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-            {{ post.time }}
-            <RouterLink :to="post.authorTo" class="ml-2 font-semibold text-[var(--accent-strong)]">
-              {{ post.authorName }}
+          <div class="mt-3 flex min-w-0 items-center gap-2 text-sm leading-7 text-[var(--text-secondary)]">
+            <RouterLink :to="authorRoute" class="shrink-0 font-semibold text-[var(--accent-strong)]">
+              {{ authorName }}
             </RouterLink>
-            <span class="ml-2">{{ post.tag }}</span>
+            <span v-if="authorMetaLine" class="min-w-0 truncate">
+              • {{ authorMetaLine }}
+            </span>
+          </div>
+          <p class="mt-1 text-sm leading-7 text-[var(--text-secondary)]">
+            {{ post.time }}
           </p>
         </div>
       </div>
@@ -383,12 +421,20 @@ const submitCommentReply = (comment: PostComment) => {
           <div class="min-w-0 flex-1">
             <div class="min-w-0">
               <div class="flex items-start gap-2">
-                <RouterLink
-                  :to="post.author.to"
-                  class="min-w-0 flex-1 truncate text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-lg"
-                >
-                  {{ post.author.name }}
-                </RouterLink>
+                <div class="min-w-0 flex flex-1 items-center gap-2">
+                  <RouterLink
+                    :to="authorRoute"
+                    class="shrink-0 text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-lg"
+                  >
+                    {{ authorName }}
+                  </RouterLink>
+                  <span
+                    v-if="authorMetaLine"
+                    class="min-w-0 truncate text-sm text-[var(--text-secondary)]"
+                  >
+                    • {{ authorMetaLine }}
+                  </span>
+                </div>
 
                 <div class="relative ml-auto sm:hidden">
                   <button
@@ -465,16 +511,6 @@ const submitCommentReply = (comment: PostComment) => {
           <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.98rem] sm:leading-8">
             {{ post.description }}
           </p>
-
-          <div v-if="post.type === 'personal'" class="mt-3 flex flex-wrap gap-2">
-            <span
-              v-for="badge in getPostBadges(post)"
-              :key="badge"
-              class="inline-flex items-center rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]"
-            >
-              {{ badge }}
-            </span>
-          </div>
 
           <img
             :src="post.imageSrc"

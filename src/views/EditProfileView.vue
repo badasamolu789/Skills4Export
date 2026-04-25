@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AtSign, Globe, Mail, MapPin, Phone, Save, ShieldCheck, Sparkles, UserRound, Plus, Trash2, Award, BookOpen, GraduationCap, Briefcase } from 'lucide-vue-next'
+import { Globe, Mail, MapPin, Phone, ShieldCheck, Sparkles, UserRound, Plus, Trash2, Award, BookOpen, GraduationCap, Briefcase } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
@@ -11,8 +11,9 @@ import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const router = useRouter()
-const isSaving = ref(false)
 const isLoadingProfile = ref(false)
+const isSavingContact = ref(false)
+const isSavingProfessional = ref(false)
 const isLoadingSkills = ref(false)
 const isLoadingPortfolios = ref(false)
 const isAddingSkill = ref(false)
@@ -93,17 +94,6 @@ const form = ref({
   banner: authStore.userProfile?.banner || authStore.signUpDraft.banner || '',
 })
 
-const canSave = computed(
-  () =>
-    Boolean(
-      form.value.name &&
-        form.value.username &&
-        form.value.email &&
-        form.value.location &&
-        form.value.bio,
-    ),
-)
-
 const profileInitials = computed(() =>
   form.value.name
     .split(' ')
@@ -112,10 +102,6 @@ const profileInitials = computed(() =>
     .slice(0, 2)
     .toUpperCase(),
 )
-
-const displayUsername = computed(() => {
-  return form.value.username || authStore.userProfile?.username || 'samuelbada'
-})
 
 const displayName = computed(() => {
   return form.value.name || authStore.signUpDraft.name || 'Samuel Bada'
@@ -135,19 +121,6 @@ const bannerPreviewUrl = computed(() => {
   }
 
   return form.value.banner || authStore.userProfile?.banner || ''
-})
-
-const completionScore = computed(() => {
-  const checks = [
-    Boolean(form.value.name),
-    Boolean(form.value.username),
-    Boolean(form.value.email),
-    Boolean(form.value.phone),
-    Boolean(form.value.location),
-    Boolean(form.value.bio),
-  ]
-
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100)
 })
 
 const loadProfile = async () => {
@@ -791,73 +764,112 @@ const deleteExperience = async (experienceId: string) => {
   }
 }
 
-const saveProfile = async () => {
-  if (!canSave.value || isSaving.value) {
-    if (!canSave.value) {
-      toast.error('Complete the required profile details first.')
+const upsertProfile = async (payload: {
+  username?: string
+  bio?: string
+  location?: string
+  website?: string
+  linkedin?: string
+  github?: string
+}) => {
+  const id = authStore.userId
+
+  if (!id) {
+    throw new Error('No authenticated user ID is available for this profile update.')
+  }
+
+  try {
+    return await usersService.updateUserProfile(id, payload, authStore.authToken)
+  } catch (error) {
+    if (!(error instanceof ApiError && error.status === 404)) {
+      throw error
     }
 
+    return usersService.createUserProfile(id, payload, authStore.authToken)
+  }
+}
+
+const saveContactSection = async () => {
+  if (isSavingContact.value) {
     return
   }
 
-  isSaving.value = true
-  const loadingToastId = toast.loading('Saving profile...', {
-    description: 'Please wait while we update your profile.',
-  })
+  if (!form.value.location.trim()) {
+    toast.error('Location is required.')
+    return
+  }
 
+  isSavingContact.value = true
   try {
-    const id = authStore.userId
+    const profileResponse = await upsertProfile({
+      username: form.value.username,
+      location: form.value.location,
+      bio: authStore.userProfile?.bio || form.value.bio,
+      website: authStore.userProfile?.website || form.value.website,
+      linkedin: authStore.userProfile?.linkedin || form.value.linkedin,
+      github: authStore.userProfile?.github || form.value.github,
+    })
 
-    if (!id) {
-      throw new Error('No authenticated user ID is available for this profile update.')
-    }
+    authStore.signUpDraft.name = form.value.name
+    authStore.signUpDraft.email = form.value.email
+    authStore.signUpDraft.phone = form.value.phone
+    authStore.signUpDraft.location = form.value.location
+    authStore.setUserProfile(profileResponse.data ?? null)
 
-    const payload = {
+    toast.success('Contact details updated successfully.')
+  } catch (error) {
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'We could not save your contact details.'
+
+    toast.error('Contact update failed', {
+      description: message,
+    })
+  } finally {
+    isSavingContact.value = false
+  }
+}
+
+const saveProfessionalSection = async () => {
+  if (isSavingProfessional.value) {
+    return
+  }
+
+  if (!form.value.username.trim() || !form.value.bio.trim()) {
+    toast.error('Username and bio are required.')
+    return
+  }
+
+  isSavingProfessional.value = true
+  try {
+    const profileResponse = await upsertProfile({
       username: form.value.username,
       bio: form.value.bio,
       location: form.value.location,
       website: form.value.website,
       linkedin: form.value.linkedin,
       github: form.value.github,
-    }
-
-    let profileResponse
-
-    try {
-      profileResponse = await usersService.updateUserProfile(id, payload, authStore.authToken)
-    } catch (error) {
-      if (!(error instanceof ApiError && error.status === 404)) {
-        throw error
-      }
-
-      profileResponse = await usersService.createUserProfile(id, payload, authStore.authToken)
-    }
+    })
 
     authStore.signUpDraft.name = form.value.name
     authStore.signUpDraft.username = form.value.username
-    authStore.signUpDraft.email = form.value.email
-    authStore.signUpDraft.phone = form.value.phone
     authStore.signUpDraft.location = form.value.location
+    authStore.signUpDraft.headline = form.value.bio
     authStore.setUserProfile(profileResponse.data ?? null)
 
-    toast.success('Profile updated', {
-      id: loadingToastId,
-      description: 'Your public profile details have been saved.',
-    })
-
-    router.push('/profile')
+    toast.success('Professional profile updated successfully.')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
         ? error.message
-        : 'We could not save your profile.'
+        : 'We could not save your professional profile.'
 
-    toast.error('Profile update failed', {
-      id: loadingToastId,
+    toast.error('Professional update failed', {
       description: message,
     })
   } finally {
-    isSaving.value = false
+    isSavingProfessional.value = false
   }
 }
 </script>
@@ -877,27 +889,6 @@ const saveProfile = async () => {
           <h1 class="text-[1.65rem] font-semibold leading-tight text-(--text-primary) sm:text-[1.95rem] lg:text-[2.1rem]">
             Edit profile
           </h1>
-          <p class="mt-2 max-w-2xl text-sm leading-7 text-(--text-secondary) sm:text-base">
-            Update the details people see about you across your profile, applications, referrals, and community activity.
-          </p>
-        </div>
-
-        <div class="flex flex-wrap gap-3">
-          <RouterLink
-            to="/profile"
-            class="inline-flex items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-          >
-            Cancel
-          </RouterLink>
-          <button
-            type="button"
-            :disabled="!canSave || isSaving"
-            class="inline-flex items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
-            @click="saveProfile"
-          >
-            <Save class="h-4 w-4" />
-            {{ isSaving ? 'Saving...' : 'Save changes' }}
-          </button>
         </div>
       </div>
     </div>
@@ -906,7 +897,7 @@ const saveProfile = async () => {
       Loading profile data...
     </div>
 
-    <form class="space-y-6 rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-6" @submit.prevent="saveProfile">
+    <div class="space-y-6 rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-6">
       <!-- Public Identity Section -->
       <section class="overflow-hidden rounded-[1.35rem] border border-[color:var(--border-soft)]">
         <div class="relative h-[18rem] overflow-hidden bg-[var(--surface-secondary)]">
@@ -924,8 +915,7 @@ const saveProfile = async () => {
               </span>
             </div>
             <div class="text-white">
-              <p class="text-sm uppercase tracking-[0.24em] text-white/70">@{{ displayUsername }}</p>
-              <h2 class="mt-1 text-2xl font-semibold leading-tight">{{ displayName }}</h2>
+              <h2 class="text-2xl font-semibold leading-tight">{{ displayName }}</h2>
             </div>
           </div>
         </div>
@@ -933,9 +923,6 @@ const saveProfile = async () => {
         <div class="space-y-3 p-5 sm:p-6">
           <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
             Public identity
-          </p>
-          <p class="text-base text-[var(--text-secondary)]">
-            These details show up first in your profile, referrals, and job-related interactions.
           </p>
 
           <div class="mt-4 grid gap-4 sm:grid-cols-2">
@@ -998,9 +985,6 @@ const saveProfile = async () => {
           <ShieldCheck class="mt-1 h-5 w-5 text-[var(--accent-strong)]" />
           <div>
             <h2 class="text-[1.2rem] font-semibold text-[var(--text-primary)]">Contact details</h2>
-            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-              Keep these details current so opportunities, referrals, and collaborators can reach you easily.
-            </p>
           </div>
         </div>
 
@@ -1028,6 +1012,17 @@ const saveProfile = async () => {
               <input v-model="form.location" type="text" class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]" />
             </div>
           </div>
+
+          <div class="flex justify-end">
+            <button
+              type="button"
+              :disabled="isSavingContact"
+              class="inline-flex items-center justify-center rounded-[1rem] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+              @click="saveContactSection"
+            >
+              {{ isSavingContact ? 'Saving...' : 'Save Contact Details' }}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1037,13 +1032,23 @@ const saveProfile = async () => {
           <Globe class="mt-1 h-5 w-5 text-[var(--accent-strong)]" />
           <div>
             <h2 class="text-[1.2rem] font-semibold text-[var(--text-primary)]">Professional profile</h2>
-            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-              Shape how people understand what you do and the kind of opportunities you want.
-            </p>
           </div>
         </div>
 
         <div class="mt-5 space-y-5">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-[var(--text-primary)]">Full name</label>
+            <input v-model="form.name" type="text" class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-4 text-sm outline-none transition focus:border-[var(--accent)]" placeholder="Your full name" />
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-[var(--text-primary)]">Username</label>
+            <div class="relative">
+              <UserRound class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
+              <input v-model="form.username" type="text" class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] py-4 pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]" placeholder="Username" />
+            </div>
+          </div>
+
           <div class="space-y-2">
             <label class="text-sm font-semibold text-[var(--text-primary)]">Bio</label>
             <textarea v-model="form.bio" rows="4" class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-4 text-sm outline-none transition focus:border-[var(--accent)]" placeholder="Tell us about yourself..." />
@@ -1063,6 +1068,17 @@ const saveProfile = async () => {
             <label class="text-sm font-semibold text-[var(--text-primary)]">GitHub</label>
             <input v-model="form.github" type="url" class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-4 text-sm outline-none transition focus:border-[var(--accent)]" placeholder="https://github.com/yourusername" />
           </div>
+
+          <div class="flex justify-end">
+            <button
+              type="button"
+              :disabled="isSavingProfessional"
+              class="inline-flex items-center justify-center rounded-[1rem] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+              @click="saveProfessionalSection"
+            >
+              {{ isSavingProfessional ? 'Saving...' : 'Save Professional Profile' }}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1079,42 +1095,39 @@ const saveProfile = async () => {
         </div>
 
         <div class="mt-5 space-y-5">
-          <!-- Add New Skill -->
-          <div class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-            <div class="space-y-3">
-              <div class="space-y-2">
-                <label class="text-sm font-semibold text-[var(--text-primary)]">Skill name</label>
-                <input
-                  v-model="newSkill.skill"
-                  type="text"
-                  placeholder="e.g., JavaScript, Python, Design..."
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-                />
-              </div>
-
-              <div class="space-y-2">
-                <label class="text-sm font-semibold text-[var(--text-primary)]">Level</label>
-                <select
-                  v-model="newSkill.level"
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-                >
-                  <option value="beginner">Beginner</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                  <option value="expert">Expert</option>
-                </select>
-              </div>
-
-              <button
-                type="button"
-                :disabled="isAddingSkill || !newSkill.skill.trim()"
-                class="inline-flex items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)] w-full"
-                @click="addSkill"
-              >
-                <Plus class="h-4 w-4" />
-                {{ isAddingSkill ? 'Adding...' : 'Add Skill' }}
-              </button>
+          <div class="space-y-3">
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-[var(--text-primary)]">Skill name</label>
+              <input
+                v-model="newSkill.skill"
+                type="text"
+                placeholder="e.g., JavaScript, Python, Design..."
+                class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+              />
             </div>
+
+            <div class="space-y-2">
+              <label class="text-sm font-semibold text-[var(--text-primary)]">Level</label>
+              <select
+                v-model="newSkill.level"
+                class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+              >
+                <option value="beginner">Beginner</option>
+                <option value="intermediate">Intermediate</option>
+                <option value="advanced">Advanced</option>
+                <option value="expert">Expert</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              :disabled="isAddingSkill || !newSkill.skill.trim()"
+              class="inline-flex items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)] w-full"
+              @click="addSkill"
+            >
+              <Plus class="h-4 w-4" />
+              {{ isAddingSkill ? 'Adding...' : 'Add Skill' }}
+            </button>
           </div>
         </div>
       </section>
@@ -1132,8 +1145,6 @@ const saveProfile = async () => {
         </div>
 
         <div class="mt-5 space-y-5">
-          <!-- Add New Portfolio Item -->
-          <div class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
             <div class="space-y-3">
               <div class="space-y-2">
                 <label class="text-sm font-semibold text-[var(--text-primary)]">Project title</label>
@@ -1141,7 +1152,7 @@ const saveProfile = async () => {
                   v-model="newPortfolio.title"
                   type="text"
                   placeholder="e.g., E-commerce Mobile App..."
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
               </div>
 
@@ -1151,7 +1162,7 @@ const saveProfile = async () => {
                   v-model="newPortfolio.description"
                   placeholder="Brief description of the project..."
                   rows="3"
-                  class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
               </div>
 
@@ -1161,7 +1172,7 @@ const saveProfile = async () => {
                   v-model="newPortfolio.link"
                   type="url"
                   placeholder="https://example.com/project"
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
               </div>
 
@@ -1175,7 +1186,6 @@ const saveProfile = async () => {
                 {{ isAddingPortfolio ? 'Adding...' : 'Add Portfolio Item' }}
               </button>
             </div>
-          </div>
 
         </div>
       </section>
@@ -1193,8 +1203,6 @@ const saveProfile = async () => {
         </div>
 
         <div class="mt-5 space-y-5">
-          <!-- Add New Certification -->
-          <div class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
             <div class="space-y-3">
               <div class="space-y-2">
                 <label class="text-sm font-semibold text-[var(--text-primary)]">Certification name</label>
@@ -1202,7 +1210,7 @@ const saveProfile = async () => {
                   v-model="newCertification.name"
                   type="text"
                   placeholder="e.g., AWS Certified Solutions Architect..."
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
               </div>
 
@@ -1213,16 +1221,16 @@ const saveProfile = async () => {
                     v-model="newCertification.issuer"
                     type="text"
                     placeholder="e.g., Amazon Web Services..."
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
 
                 <div class="space-y-2">
                   <label class="text-sm font-semibold text-[var(--text-primary)]">Issue date</label>
-                  <input
+                    <input
                     v-model="newCertification.issueDate"
                     type="date"
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
               </div>
@@ -1237,7 +1245,6 @@ const saveProfile = async () => {
                 {{ isAddingCertification ? 'Adding...' : 'Add Certification' }}
               </button>
             </div>
-          </div>
         </div>
       </section>
 
@@ -1254,8 +1261,6 @@ const saveProfile = async () => {
         </div>
 
         <div class="mt-5 space-y-5">
-          <!-- Add New Education -->
-          <div class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
             <div class="space-y-3">
               <div class="space-y-2">
                 <label class="text-sm font-semibold text-[var(--text-primary)]">School/University</label>
@@ -1263,7 +1268,7 @@ const saveProfile = async () => {
                   v-model="newEducation.school"
                   type="text"
                   placeholder="e.g., Harvard University..."
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
               </div>
 
@@ -1274,7 +1279,7 @@ const saveProfile = async () => {
                     v-model="newEducation.degree"
                     type="text"
                     placeholder="e.g., Bachelor of Science..."
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
 
@@ -1284,7 +1289,7 @@ const saveProfile = async () => {
                     v-model="newEducation.field"
                     type="text"
                     placeholder="e.g., Computer Science..."
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
               </div>
@@ -1295,7 +1300,7 @@ const saveProfile = async () => {
                   <input
                     v-model="newEducation.startDate"
                     type="date"
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
 
@@ -1304,7 +1309,7 @@ const saveProfile = async () => {
                   <input
                     v-model="newEducation.endDate"
                     type="date"
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
               </div>
@@ -1319,7 +1324,6 @@ const saveProfile = async () => {
                 {{ isAddingEducation ? 'Adding...' : 'Add Education' }}
               </button>
             </div>
-          </div>
         </div>
       </section>
 
@@ -1336,8 +1340,6 @@ const saveProfile = async () => {
         </div>
 
         <div class="mt-5 space-y-5">
-          <!-- Add New Experience -->
-          <div class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
             <div class="space-y-3">
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-2">
@@ -1346,7 +1348,7 @@ const saveProfile = async () => {
                     v-model="newExperience.company"
                     type="text"
                     placeholder="e.g., Google..."
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
 
@@ -1356,7 +1358,7 @@ const saveProfile = async () => {
                     v-model="newExperience.title"
                     type="text"
                     placeholder="e.g., Software Engineer..."
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
               </div>
@@ -1365,7 +1367,7 @@ const saveProfile = async () => {
                 <label class="text-sm font-semibold text-[var(--text-primary)]">Employment type</label>
                 <select
                   v-model="newExperience.employmentType"
-                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                 >
                   <option value="">Select type</option>
                   <option value="full-time">Full-time</option>
@@ -1382,7 +1384,7 @@ const saveProfile = async () => {
                   <input
                     v-model="newExperience.startDate"
                     type="date"
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                   />
                 </div>
 
@@ -1392,7 +1394,7 @@ const saveProfile = async () => {
                     v-model="newExperience.endDate"
                     type="date"
                     :disabled="newExperience.isCurrent"
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:bg-[var(--surface-tertiary)] disabled:cursor-not-allowed"
+                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
                   />
                 </div>
               </div>
@@ -1413,7 +1415,7 @@ const saveProfile = async () => {
                   v-model="newExperience.description"
                   placeholder="Describe your responsibilities and achievements..."
                   rows="3"
-                  class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+                  class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
               </div>
 
@@ -1427,20 +1429,8 @@ const saveProfile = async () => {
                 {{ isAddingExperience ? 'Adding...' : 'Add Experience' }}
               </button>
             </div>
-          </div>
         </div>
       </section>
-
-      <!-- Form Actions -->
-      <div class="flex flex-wrap justify-end gap-3 border-t border-[color:var(--border-soft)] pt-5">
-        <RouterLink to="/profile" class="inline-flex items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]">
-          Cancel
-        </RouterLink>
-        <button type="submit" :disabled="!canSave || isSaving" class="inline-flex items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]">
-          <Save class="h-4 w-4" />
-          {{ isSaving ? 'Saving...' : 'Save changes' }}
-        </button>
-      </div>
-    </form>
+    </div>
   </section>
 </template>
