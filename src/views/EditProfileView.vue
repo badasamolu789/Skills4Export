@@ -473,17 +473,27 @@ const addSkill = async () => {
   isAddingSkill.value = true
 
   try {
-    await usersService.addUserSkill(
+    const response = await usersService.addUserSkill(
       authStore.userId,
       {
-        name: newSkill.value.skill,
+        skill: newSkill.value.skill,
         level: newSkill.value.level,
       },
       authStore.authToken,
     )
 
+    const createdSkill = response.data
+    skills.value = [
+      {
+        id: createdSkill.id || `skill-${Date.now()}`,
+        name: createdSkill.name || newSkill.value.skill,
+        level: createdSkill.level || newSkill.value.level,
+      },
+      ...skills.value,
+    ]
     toast.success('Skill added successfully!')
     newSkill.value = { skill: '', level: 'intermediate' }
+    await loadProfile()
     router.push('/profile#skills')
   } catch (error) {
     const message =
@@ -531,7 +541,7 @@ const addPortfolio = async () => {
   isAddingPortfolio.value = true
 
   try {
-    await usersService.addUserPortfolio(
+    const response = await usersService.addUserPortfolio(
       authStore.userId,
       {
         title: newPortfolio.value.title,
@@ -541,8 +551,20 @@ const addPortfolio = async () => {
       authStore.authToken,
     )
 
+    if (response.data) {
+      portfolios.value = [
+        {
+          id: response.data.id || `portfolio-${Date.now()}`,
+          title: response.data.title || newPortfolio.value.title,
+          description: response.data.description,
+          link: response.data.link,
+        },
+        ...portfolios.value,
+      ]
+    }
     toast.success('Portfolio item added successfully!')
     newPortfolio.value = { title: '', description: '', link: '' }
+    await loadProfile()
     router.push('/profile#portfolio')
   } catch (error) {
     const message =
@@ -590,7 +612,7 @@ const addCertification = async () => {
   isAddingCertification.value = true
 
   try {
-    await usersService.addUserCertification(
+    const response = await usersService.addUserCertification(
       authStore.userId,
       {
         name: newCertification.value.name,
@@ -600,8 +622,20 @@ const addCertification = async () => {
       authStore.authToken,
     )
 
+    if (response.data) {
+      certifications.value = [
+        {
+          id: response.data.id || `certification-${Date.now()}`,
+          name: response.data.name || newCertification.value.name,
+          issuer: response.data.issuer,
+          issueDate: response.data.issueDate,
+        },
+        ...certifications.value,
+      ]
+    }
     toast.success('Certification added successfully!')
     newCertification.value = { name: '', issuer: '', issueDate: '' }
+    await loadProfile()
     router.push('/profile#certifications')
   } catch (error) {
     const message =
@@ -649,7 +683,7 @@ const addEducation = async () => {
   isAddingEducation.value = true
 
   try {
-    await usersService.addUserEducation(
+    const response = await usersService.addUserEducation(
       authStore.userId,
       {
         school: newEducation.value.school,
@@ -661,8 +695,22 @@ const addEducation = async () => {
       authStore.authToken,
     )
 
+    if (response.data) {
+      educations.value = [
+        {
+          id: response.data.id || `education-${Date.now()}`,
+          school: response.data.school || newEducation.value.school,
+          degree: response.data.degree,
+          field: response.data.field,
+          startDate: response.data.startDate,
+          endDate: response.data.endDate,
+        },
+        ...educations.value,
+      ]
+    }
     toast.success('Education record added successfully!')
     newEducation.value = { school: '', degree: '', field: '', startDate: '', endDate: '' }
+    await loadProfile()
     router.push('/profile#education')
   } catch (error) {
     const message =
@@ -710,7 +758,7 @@ const addExperience = async () => {
   isAddingExperience.value = true
 
   try {
-    await usersService.addUserExperience(
+    const response = await usersService.addUserExperience(
       authStore.userId,
       {
         company: newExperience.value.company,
@@ -724,8 +772,24 @@ const addExperience = async () => {
       authStore.authToken,
     )
 
+    if (response.data) {
+      experiences.value = [
+        {
+          id: response.data.id || `experience-${Date.now()}`,
+          company: response.data.company || newExperience.value.company,
+          title: response.data.title || newExperience.value.title,
+          employmentType: response.data.employmentType,
+          startDate: response.data.startDate || newExperience.value.startDate,
+          endDate: response.data.endDate,
+          isCurrent: response.data.isCurrent === 1,
+          description: response.data.description,
+        },
+        ...experiences.value,
+      ]
+    }
     toast.success('Experience record added successfully!')
     newExperience.value = { company: '', title: '', employmentType: '', startDate: '', endDate: '', isCurrent: false, description: '' }
+    await loadProfile()
     router.push('/profile#experience')
   } catch (error) {
     const message =
@@ -815,6 +879,7 @@ const saveContactSection = async () => {
     authStore.signUpDraft.phone = form.value.phone
     authStore.signUpDraft.location = form.value.location
     authStore.setUserProfile(profileResponse.data ?? null)
+    await loadProfile()
 
     toast.success('Contact details updated successfully.')
   } catch (error) {
@@ -857,6 +922,7 @@ const saveProfessionalSection = async () => {
     authStore.signUpDraft.location = form.value.location
     authStore.signUpDraft.headline = form.value.bio
     authStore.setUserProfile(profileResponse.data ?? null)
+    await loadProfile()
 
     toast.success('Professional profile updated successfully.')
   } catch (error) {

@@ -226,7 +226,7 @@ const loadProfile = async () => {
     // Load additional profile data
     skills.value = (profileResponse.data?.skills || []).map((skill) => ({
       id: skill.id || '',
-      name: skill.name || '',
+      name: skill.skill || skill.name || '',
       level: skill.level,
     }))
 
@@ -690,52 +690,34 @@ const profileModalTitle = computed(() => {
             Loading skills...
           </div>
 
-          <div v-else-if="skills.length > 0" class="grid gap-3 sm:grid-cols-2">
+          <div v-else-if="skills.length > 0" class="flex flex-wrap gap-3">
             <div
               v-for="skill in skills"
               :key="skill.id"
-              class="rounded-[1.1rem] bg-[var(--surface-secondary)] p-5 border border-[color:var(--border-soft)]"
+              class="inline-flex max-w-full items-center gap-3 rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 shadow-[var(--shadow-soft)]"
             >
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex-1">
-                  <p class="text-lg font-semibold text-[var(--text-primary)]">{{ skill.name }}</p>
-                  <span
-                    class="inline-block mt-2 text-xs font-semibold uppercase tracking-[0.15em] px-3 py-1 rounded-full"
-                    :class="{
-                      'bg-blue-500/10 text-blue-500': skill.level === 'beginner',
-                      'bg-amber-500/10 text-amber-500': skill.level === 'intermediate',
-                      'bg-green-500/10 text-green-500': skill.level === 'advanced' || skill.level === 'expert',
-                    }"
-                  >
-                    {{ skill.level || 'beginner' }}
-                  </span>
-                </div>
-
-                <div class="relative">
-                  <button
-                    type="button"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
-                    @click.stop="toggleActionMenu('skill', skill.id)"
-                  >
-                    <MoreHorizontal class="h-5 w-5" />
-                  </button>
-
-                  <div
-                    v-if="activeActionMenu?.type === 'skill' && activeActionMenu?.id === skill.id"
-                    class="absolute right-0 z-10 mt-2 min-w-[11rem] overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
-                  >
-                    <button
-                      type="button"
-                      class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
-                      @click="openDeleteModal('skill', skill.id, 'skill')"
-                      :disabled="isDeleting('skill', skill.id)"
-                    >
-                      <Trash2 class="h-4 w-4" />
-                      Delete skill
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
+                {{ skill.name || 'Unnamed skill' }}
+              </span>
+              <span
+                class="inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em]"
+                :class="{
+                  'bg-blue-500/10 text-blue-500': skill.level === 'beginner',
+                  'bg-amber-500/10 text-amber-500': skill.level === 'intermediate',
+                  'bg-green-500/10 text-green-500': skill.level === 'advanced' || skill.level === 'expert',
+                }"
+              >
+                {{ skill.level || 'beginner' }}
+              </span>
+              <button
+                type="button"
+                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-red-300 hover:text-red-500"
+                @click="openDeleteModal('skill', skill.id, skill.name || 'skill')"
+                :disabled="isDeleting('skill', skill.id)"
+                aria-label="Delete skill"
+              >
+                <X class="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
 
@@ -761,16 +743,16 @@ const profileModalTitle = computed(() => {
             Loading portfolio items...
           </div>
 
-          <div v-else-if="portfolios.length > 0" class="space-y-4">
+          <div v-else-if="portfolios.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article
               v-for="portfolio in portfolios"
               :key="portfolio.id"
-              class="rounded-[1.1rem] bg-[var(--surface-secondary)] p-5 border border-[color:var(--border-soft)] transition hover:border-[var(--accent)]"
+              class="flex h-full flex-col rounded-[1.1rem] bg-[var(--surface-secondary)] p-5 border border-[color:var(--border-soft)] transition hover:border-[var(--accent)]"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <p class="text-lg font-semibold text-[var(--text-primary)] break-words">{{ portfolio.title }}</p>
-                  <p v-if="portfolio.description" class="mt-3 text-sm leading-6 text-[var(--text-secondary)]">
+                  <p v-if="portfolio.description" class="mt-3 line-clamp-5 text-sm leading-6 text-[var(--text-secondary)]">
                     {{ portfolio.description }}
                   </p>
                   <a
@@ -778,7 +760,7 @@ const profileModalTitle = computed(() => {
                     :href="portfolio.link"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:text-[var(--accent-strong)] transition"
+                    class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] hover:text-[var(--accent-strong)] transition"
                   >
                     Visit project
                     <ExternalLink class="h-4 w-4" />
@@ -835,7 +817,7 @@ const profileModalTitle = computed(() => {
             Loading certifications...
           </div>
 
-          <div v-else-if="certifications.length > 0" class="space-y-3">
+          <div v-else-if="certifications.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div
               v-for="certification in certifications"
               :key="certification.id"
@@ -898,7 +880,7 @@ const profileModalTitle = computed(() => {
             Loading education records...
           </div>
 
-          <div v-else-if="educations.length > 0" class="space-y-3">
+          <div v-else-if="educations.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div
               v-for="education in educations"
               :key="education.id"
@@ -966,7 +948,7 @@ const profileModalTitle = computed(() => {
             Loading experience records...
           </div>
 
-          <div v-else-if="experiences.length > 0" class="space-y-3">
+          <div v-else-if="experiences.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div
               v-for="experience in experiences"
               :key="experience.id"

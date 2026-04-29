@@ -59,9 +59,19 @@ const verifyOtp = async () => {
   })
 
   try {
-    const response = await authService.verifyOtp({
+    await authService.verifyOtp({
       email: authStore.signUpDraft.email,
       otpCode: otp.value,
+    })
+
+    await authService.setRegistrationPassword({
+      email: authStore.signUpDraft.email,
+      password: authStore.signUpDraft.password,
+    })
+
+    const response = await authService.completeRegistration({
+      email: authStore.signUpDraft.email,
+      name: authStore.signUpDraft.name,
     })
 
     authStore.signUpDraft.emailVerified = true
@@ -70,11 +80,10 @@ const verifyOtp = async () => {
     if (session) {
       authStore.setAuthenticatedSession(session.token, session.userId)
     }
-    authStore.isAuthenticated = true
 
     toast.success('Email verified', {
       id: loadingToastId,
-      description: 'Your account has been verified successfully. Redirecting to the success screen.',
+      description: 'Your account has been verified successfully and your registration is complete.',
     })
 
     router.push('/auth/signup/success')
@@ -102,14 +111,14 @@ const resendOtp = async () => {
   })
 
   try {
-    const response = await authService.requestOtp(authStore.signUpDraft.email, 'registration')
+    const response = await authService.resendRegistrationOtp(authStore.signUpDraft.email)
     authStore.signUpDraft.verificationSentAt = new Date().toISOString()
     otp.value = ''
 
     toast.success('OTP sent again', {
       id: loadingToastId,
       description:
-        response.data?.message || response.message || 'Check your email for the new verification code.',
+        response.message || 'Check your email for the new verification code.',
     })
   } catch (error) {
     const message =

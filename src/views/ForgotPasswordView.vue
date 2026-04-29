@@ -115,8 +115,10 @@ const submitReset = async () => {
   try {
     await authService.resetPassword({
       email: email.value,
-      otpCode: token.value,
-      newPassword: resetForm.value.newPassword,
+      token: token.value || undefined,
+      otp: token.value || undefined,
+      password: resetForm.value.newPassword,
+      password_confirmation: resetForm.value.confirmPassword,
     })
 
     toast.success('Password reset successful', {

@@ -87,7 +87,10 @@ const loadProfile = async () => {
   }
 
   if (profileResult.status === 'fulfilled') {
-    userProfile.value = profileResult.value.data ?? null
+    userProfile.value = profileResult.value.data?.profile ?? null
+    if (!user.value && profileResult.value.data?.user) {
+      user.value = profileResult.value.data.user
+    }
   } else if (profileResult.reason instanceof ApiError && profileResult.reason.status !== 404) {
     loadError.value = profileResult.reason.message
   } else if (profileResult.status === 'rejected') {

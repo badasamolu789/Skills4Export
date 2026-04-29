@@ -3,6 +3,9 @@ import { api } from '@/lib/api'
 export type UserRecord = {
   id?: string
   email?: string
+  username?: string | null
+  role?: string | null
+  created_at?: string
   [key: string]: unknown
 }
 
@@ -95,6 +98,7 @@ export type MyProfileData = {
 
 export type MyProfileResponse = {
   success?: boolean
+  message?: string
   data?: MyProfileData | null
 }
 
@@ -124,6 +128,12 @@ export type UserResponse = {
 
 export type UserProfileResponse = {
   success?: boolean
+  message?: string
+  data?: MyProfileData | null
+}
+
+export type UpsertUserProfileResponse = {
+  success?: boolean
   data?: UserProfile | null
 }
 
@@ -145,7 +155,7 @@ export type UpsertUserProfileRequest = {
 
 // Skills
 export type AddUserSkillRequest = {
-  name: string
+  skill: string
   level?: string
 }
 
@@ -287,11 +297,9 @@ export type FollowersListResponse = {
 export type LoginHistoryRecord = {
   id?: string
   userId?: string
+  loginMethod?: string | null
   ipAddress?: string
-  userAgent?: string
   loginAt?: string
-  logoutAt?: string | null
-  deviceInfo?: string
   [key: string]: unknown
 }
 
@@ -347,10 +355,10 @@ export const usersService = {
     return api.get<UserProfileResponse>(USER_ROUTES.userProfile(id), { token })
   },
   createUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
-    return api.post<UserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+    return api.post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
   },
   updateUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
-    return api.put<UserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+    return api.put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
   },
   uploadUserAvatar(id: string, body: { url: string }, token?: string | null) {
     return api.post<BackgroundUploadResponse>(USER_ROUTES.userAvatar(id), body, { token })

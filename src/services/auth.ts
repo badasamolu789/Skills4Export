@@ -15,7 +15,6 @@ export type SignUpRequest = {
 export type VerifyOtpRequest = {
   email: string
   otpCode: string
-  purpose?: string
 }
 
 export type CompleteProfileRequest = {
@@ -37,6 +36,10 @@ export type AuthSuccessResponse = {
   expiresIn?: number
   user?: Record<string, unknown>
   data?: {
+    id?: string
+    email?: string
+    username?: string | null
+    api_token?: string | null
     otpId?: string
     message?: string
     token?: string
@@ -70,7 +73,7 @@ export type AuthMessageResponse = {
 }
 
 export type GoogleTokenRequest = {
-  idToken: string
+  id_token: string
 }
 
 export type AuthSession = {
@@ -82,15 +85,15 @@ export type AuthSession = {
 }
 // const BaseURL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 const AUTH_ROUTES = {
-  signUp: '/auth/register',
-  login: '/auth/login',
-  verifyOtp: '/auth/verify-registration',
-  requestOtp: '/auth/request-otp',
-  verifyGeneralOtp: '/auth/verify-otp',
-  resetPassword: '/auth/reset-password',
-  completeProfile: '/auth/complete-profile',
-  me: '/auth/me',
-  logout: '/auth/logout',
+  sendRegistrationOtp: '/register/send-otp',
+  verifyRegistrationOtp: '/register/verify-otp',
+  resendRegistrationOtp: '/register/resend-otp',
+  setRegistrationPassword: '/register/set-password',
+  completeRegistration: '/register/complete',
+  login: '/login',
+  forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
+  logout: '/logout',
   googleRedirect: '/auth/google',
   googleCallback: '/auth/google/callback',
   googleToken: '/auth/google/token',
@@ -104,6 +107,10 @@ export const extractUserId = (response?: AuthSuccessResponse | null): string => 
   const user = response.data?.user || response.user || response.data?.session?.user || response.session?.user
 
   if (!user || typeof user !== 'object') {
+    if (typeof response.data?.id === 'string') {
+      return response.data.id
+    }
+
     return ''
   }
 
@@ -128,6 +135,7 @@ export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthS
     response.accessToken ||
     response.data?.token ||
     response.token ||
+    response.data?.api_token ||
     response.data?.session?.accessToken ||
     response.data?.session?.token ||
     response.session?.accessToken ||
@@ -153,57 +161,48 @@ export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthS
       response.expiresIn ||
       response.data?.session?.expiresIn ||
       response.session?.expiresIn,
-    user,
+    user: user ?? (response.data ? { id: response.data.id, email: response.data.email, username: response.data.username } : undefined),
   }
 }
 
 export const authService = {
-  signUp(payload: SignUpRequest) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.signUp, {
-      fullName: payload.fullName,
-      name: payload.fullName,
-      email: payload.email,
-      password: payload.password,
-    })
+  sendRegistrationOtp(email: string) {
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.sendRegistrationOtp, { email })
   },
   login(payload: LoginRequest) {
     return api.post<AuthSuccessResponse>(AUTH_ROUTES.login, payload)
   },
   verifyOtp(payload: VerifyOtpRequest) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyOtp, {
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyRegistrationOtp, {
       email: payload.email,
-      otpCode: payload.otpCode,
       otp: payload.otpCode,
-      code: payload.otpCode,
-      purpose: payload.purpose,
     })
   },
-  requestOtp(email: string, purpose = 'registration') {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.requestOtp, { email, purpose })
+  resendRegistrationOtp(email: string) {
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.resendRegistrationOtp, { email })
   },
-  verifyGeneralOtp(payload: VerifyOtpRequest) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.verifyGeneralOtp, {
+  setRegistrationPassword(payload: { email: string; password: string }) {
+    return api.post<AuthMessageResponse>(AUTH_ROUTES.setRegistrationPassword, {
       email: payload.email,
-      otpCode: payload.otpCode,
-      otp: payload.otpCode,
-      code: payload.otpCode,
-      purpose: payload.purpose,
+      password: payload.password,
     })
+  },
+  completeRegistration(payload: { email: string; name: string; ref_code?: string }) {
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.completeRegistration, payload)
   },
   forgotPassword(email: string) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.requestOtp, {
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.forgotPassword, {
       email,
-      purpose: 'password_reset',
     })
   },
-  resetPassword(payload: { email: string; otpCode: string; newPassword: string }) {
+  resetPassword(payload: {
+    email: string
+    password: string
+    password_confirmation: string
+    otp?: string
+    token?: string
+  }) {
     return api.post<AuthMessageResponse>(AUTH_ROUTES.resetPassword, payload)
-  },
-  completeProfile(payload: CompleteProfileRequest, token?: string | null) {
-    return api.post<AuthSuccessResponse>(AUTH_ROUTES.completeProfile, payload, { token })
-  },
-  getCurrentUser(token?: string | null) {
-    return api.get<AuthSuccessResponse>(AUTH_ROUTES.me, { token })
   },
   logout(token?: string | null) {
     return api.post<AuthMessageResponse>(AUTH_ROUTES.logout, undefined, { token })

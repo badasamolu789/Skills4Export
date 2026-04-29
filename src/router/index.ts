@@ -271,7 +271,6 @@ const router = createRouter({
       component: SignUpSuccessView,
       meta: {
         layout: 'auth',
-        guestOnly: true,
       },
     },
     {

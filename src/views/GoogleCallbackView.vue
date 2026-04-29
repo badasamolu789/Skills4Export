@@ -75,7 +75,7 @@ const finishSignIn = async () => {
 
   if (idToken) {
     clearAuthFragment()
-    const response = await authService.googleTokenSignIn({ idToken })
+    const response = await authService.googleTokenSignIn({ id_token: idToken })
     const session = extractAuthSession(response)
 
     if (!session) {

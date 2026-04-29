@@ -5,7 +5,6 @@ import { BriefcaseBusiness, MapPin, Sparkles } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
-import { authService, extractUserId } from '@/services/auth'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 
@@ -52,24 +51,7 @@ const toggleInterest = (interest: string) => {
   form.value.interests.push(interest)
 }
 
-const resolveUserId = async () => {
-  if (authStore.userId) {
-    return authStore.userId
-  }
-
-  if (!authStore.authToken) {
-    return ''
-  }
-
-  const response = await authService.getCurrentUser(authStore.authToken)
-  const id = extractUserId(response)
-
-  if (id) {
-    authStore.setUserId(id)
-  }
-
-  return id
-}
+const resolveUserId = async () => authStore.userId
 
 const submitDetails = async () => {
   if (isSubmitting.value) {

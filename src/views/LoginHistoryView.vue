@@ -13,11 +13,9 @@ const router = useRouter()
 const loginHistory = ref<Array<{
   id?: string
   userId?: string
+  loginMethod?: string | null
   ipAddress?: string
-  userAgent?: string
   loginAt?: string
-  logoutAt?: string | null
-  deviceInfo?: string
 }>>([])
 const isLoading = ref(false)
 
@@ -51,25 +49,6 @@ const formatDate = (dateString?: string) => {
     return new Date(dateString).toLocaleString()
   } catch {
     return dateString
-  }
-}
-
-const getDuration = (loginAt?: string, logoutAt?: string | null) => {
-  if (!loginAt || !logoutAt) return 'Active'
-  try {
-    const login = new Date(loginAt).getTime()
-    const logout = new Date(logoutAt).getTime()
-    const durationMs = logout - login
-
-    if (durationMs < 60000) {
-      return `${Math.round(durationMs / 1000)}s`
-    } else if (durationMs < 3600000) {
-      return `${Math.round(durationMs / 60000)}m`
-    } else {
-      return `${Math.round(durationMs / 3600000)}h`
-    }
-  } catch {
-    return 'Unknown'
   }
 }
 
@@ -142,14 +121,17 @@ onMounted(() => {
       >
         <div class="flex items-start gap-4">
           <div class="flex-shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--surface-secondary)]">
-            <Smartphone v-if="session.deviceInfo?.toLowerCase().includes('mobile')" class="h-5 w-5 text-[var(--accent)]" />
+            <Smartphone
+              v-if="session.loginMethod?.toLowerCase().includes('mobile')"
+              class="h-5 w-5 text-[var(--accent)]"
+            />
             <Globe v-else class="h-5 w-5 text-[var(--accent)]" />
           </div>
 
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <p class="font-semibold text-[var(--text-primary)]">
-                {{ session.deviceInfo || 'Unknown Device' }}
+                {{ session.loginMethod || 'Login activity' }}
               </p>
               <span v-if="isCurrentSession(session.loginAt)" class="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2.5 py-1 text-xs font-semibold text-green-700 dark:text-green-200">
                 Current
@@ -163,13 +145,6 @@ onMounted(() => {
               <span v-if="session.loginAt">
                 Logged in: {{ formatDate(session.loginAt) }}
               </span>
-              <span v-if="session.logoutAt || !isCurrentSession(session.loginAt)">
-                Duration: {{ getDuration(session.loginAt, session.logoutAt) }}
-              </span>
-            </p>
-
-            <p v-if="session.userAgent" class="mt-2 text-xs text-[var(--text-tertiary)] break-all">
-              {{ session.userAgent }}
             </p>
           </div>
 
@@ -178,7 +153,7 @@ onMounted(() => {
               Active Now
             </span>
             <span v-else class="inline-block text-xs font-medium text-[var(--text-tertiary)]">
-              Ended
+              Recorded
             </span>
           </div>
         </div>

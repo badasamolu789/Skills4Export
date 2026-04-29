@@ -41,18 +41,14 @@ const continueSignUp = async () => {
   authStore.signUpDraft.verificationSentAt = ''
 
   try {
-    const response = await authService.signUp({
-      email: form.value.email,
-      password: form.value.password,
-      fullName: form.value.name,
-    })
+    const response = await authService.sendRegistrationOtp(form.value.email)
 
     authStore.signUpDraft.verificationSentAt = new Date().toISOString()
 
     toast.success('Verification code sent', {
       id: loadingToastId,
       description:
-        response.data?.message || response.message || 'Check your email for the OTP to continue. Redirecting now.',
+        response.message || 'Check your email for the OTP to continue. Redirecting now.',
     })
 
     router.push('/auth/signup/verify')

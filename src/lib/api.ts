@@ -276,9 +276,19 @@ const getCacheKey = (method: ApiMethod, path: string) => {
   return `${method}:${path}`
 }
 
+const DYNAMIC_CACHE_BYPASS_PREFIXES = [
+  '/user/',
+  '/users/',
+  '/media/',
+]
+
 const isCacheable = (method: ApiMethod, path: string) => {
-  // Only cache GET requests for non-auth endpoints
-  return method === 'GET' && !path.includes('/auth/')
+  // Only cache GET requests for endpoints that are not auth- or user-state driven.
+  if (method !== 'GET' || path.includes('/auth/')) {
+    return false
+  }
+
+  return !DYNAMIC_CACHE_BYPASS_PREFIXES.some((prefix) => path.startsWith(prefix))
 }
 
 const getCachedResponse = (method: ApiMethod, path: string) => {
@@ -304,6 +314,23 @@ const setCachedResponse = (method: ApiMethod, path: string, data: any, ttl = DEF
     timestamp: Date.now(),
     ttl,
   })
+}
+
+const invalidateRelatedCacheEntries = (path: string) => {
+  for (const key of responseCache.keys()) {
+    const [, cachedPath] = key.split(':', 2)
+
+    if (
+      cachedPath.startsWith('/user/') ||
+      cachedPath.startsWith('/users/') ||
+      cachedPath.startsWith('/media/') ||
+      path.startsWith('/user/') ||
+      path.startsWith('/users/') ||
+      path.startsWith('/media/')
+    ) {
+      responseCache.delete(key)
+    }
+  }
 }
 
 const getRequestPriority = (path: string) => {
@@ -472,6 +499,8 @@ export const apiRequest = async <T>(
       // Cache successful GET responses
       if (isCacheable(method, path)) {
         setCachedResponse(method, path, payload)
+      } else if (method !== 'GET') {
+        invalidateRelatedCacheEntries(path)
       }
 
       return payload as T

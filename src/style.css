@@ -173,6 +173,16 @@ input {
   font: inherit;
 }
 
+:root:not([data-theme='dark']) :where(button, a, [role='button'])[class*='bg-[var(--accent)]'],
+:root:not([data-theme='dark']) :where(button, a, [role='button'])[class*='bg-(--accent)'] {
+  color: #fff;
+}
+
+:root:not([data-theme='dark']) :where(button, a, [role='button'])[class*='bg-[var(--accent)]'] :where(svg),
+:root:not([data-theme='dark']) :where(button, a, [role='button'])[class*='bg-(--accent)'] :where(svg) {
+  color: currentColor;
+}
+
 #app {
   min-height: 100vh;
 }
