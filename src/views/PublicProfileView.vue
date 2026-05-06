@@ -270,16 +270,32 @@ watch(
 
     <template v-else>
       <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
-        <div class="relative border-b border-[color:var(--border-soft)] px-5 py-6 sm:px-7 lg:px-9 lg:py-7">
-          <div class="absolute right-0 top-0 hidden h-full w-48 opacity-60 lg:block">
-            <div class="absolute right-10 top-0 h-full w-px rotate-[-32deg] bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)]" />
-            <div class="absolute right-20 top-0 h-full w-px rotate-[-32deg] bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)]" />
-            <div class="absolute right-[7.5rem] top-0 h-full w-px rotate-[-32deg] bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)]" />
+        <div class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
+          <img
+            v-if="profile.banner"
+            :src="profile.banner"
+            alt="Profile banner"
+            class="h-full w-full object-cover"
+          />
+          <div
+            v-else
+            class="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_16%,white),color-mix(in_srgb,var(--surface-secondary)_80%,white))] text-sm font-semibold text-[var(--text-secondary)]"
+          >
+            Banner
+          </div>
+          <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,12,27,0.04),rgba(12,12,27,0.28))]" />
+        </div>
+
+        <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-0 sm:px-7 lg:px-9 lg:pb-7">
+          <div class="absolute right-0 top-0 hidden h-full w-48 lg:block">
+            <div class="absolute right-10 top-0 h-full w-px rotate-[-32deg] bg-[var(--accent-soft)]" />
+            <div class="absolute right-20 top-0 h-full w-px rotate-[-32deg] bg-[var(--accent-soft)]" />
+            <div class="absolute right-[7.5rem] top-0 h-full w-px rotate-[-32deg] bg-[var(--accent-soft)]" />
           </div>
 
           <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-              <div class="h-24 w-24 overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] shadow-[var(--shadow-soft)]">
+              <div class="-mt-12 h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:-mt-14">
                 <img
                   v-if="profile.avatar"
                   :src="profile.avatar"
@@ -332,7 +348,7 @@ watch(
               class="inline-flex items-center justify-center gap-3 self-center rounded-[1rem] px-5 py-3 text-sm font-semibold shadow-[var(--shadow-soft)] transition sm:self-start"
               :class="
                 isFollowingProfile
-                  ? 'border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] hover:border-red-500/30 hover:text-red-500'
+                  ? 'border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] hover:border-red-500 hover:text-red-500'
                   : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
               "
               @click="handleFollowToggle"
@@ -356,8 +372,9 @@ watch(
         </div>
       </section>
 
-      <div v-if="isLoadingProfile" class="rounded-[1.25rem] border border-dashed border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
-        Loading profile...
+      <div v-if="isLoadingProfile" class="animate-pulse rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
+        <div class="h-4 w-40 rounded-full bg-[var(--surface-muted)]" />
+        <div class="mt-3 h-3 w-64 max-w-full rounded-full bg-[var(--surface-muted)]" />
       </div>
 
       <div class="space-y-6">
@@ -409,9 +426,9 @@ watch(
               <span
                 class="mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em]"
                 :class="{
-                  'bg-blue-500/10 text-blue-500': skill.level === 'beginner',
-                  'bg-amber-500/10 text-amber-500': skill.level === 'intermediate',
-                  'bg-green-500/10 text-green-500': skill.level === 'advanced' || skill.level === 'expert',
+                  'bg-blue-100 text-blue-700': skill.level === 'beginner',
+                  'bg-amber-100 text-amber-700': skill.level === 'intermediate',
+                  'bg-green-100 text-green-700': skill.level === 'advanced' || skill.level === 'expert',
                 }"
               >
                 {{ skill.level || 'beginner' }}
@@ -515,7 +532,7 @@ watch(
 
   <div
     v-if="profileModal"
-    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-4 sm:items-center"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-4 sm:items-center"
     @click.self="profileModal = null"
   >
     <div class="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">

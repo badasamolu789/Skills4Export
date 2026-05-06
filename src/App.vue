@@ -14,11 +14,10 @@ import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
 import { notifications } from '@/data/notifications'
 
-const headerLinks = [
+const headerLinks: Array<{ label: string; to?: string; action?: 'ask' | 'post'; target?: string }> = [
   { label: 'Home', to: '/feed' },
-  { label: 'Ask', to: '/answer/question' },
-  { label: 'Contest', to: '/referrals' },
-  { label: 'Job', to: '/jobs/feed' },
+  { label: 'Ask', action: 'ask' },
+  { label: 'Post', action: 'post' },
   { label: 'Community', to: '/communities' },
 ]
 
@@ -90,24 +89,24 @@ const showRightRail = computed(
 const workspaceShellClasses = computed(() =>
   showWorkspaceShell.value
     ? [
-        'flex flex-col gap-6 lg:h-[calc(100vh-theme(spacing.16))] lg:min-h-0 lg:overflow-hidden lg:grid lg:gap-5 xl:gap-6',
+        'flex flex-col gap-4 lg:h-[calc(100vh-theme(spacing.14))] lg:min-h-0 lg:overflow-hidden lg:grid lg:gap-4 xl:gap-5',
         showSidebar.value && showRightRail.value
-          ? 'lg:grid-cols-[20rem_minmax(0,1fr)_20rem]'
+          ? 'lg:grid-cols-[17.5rem_minmax(0,1fr)_17.5rem]'
           : showSidebar.value
-            ? 'lg:grid-cols-[20rem_minmax(0,1fr)]'
+            ? 'lg:grid-cols-[17.5rem_minmax(0,1fr)]'
             : showRightRail.value
-              ? 'lg:grid-cols-[minmax(0,1fr)_20rem]'
+              ? 'lg:grid-cols-[minmax(0,1fr)_17.5rem]'
               : 'lg:grid-cols-[minmax(0,1fr)]',
       ].join(' ')
-    : 'flex flex-col gap-6 lg:items-start lg:gap-5',
+    : 'flex flex-col gap-4 lg:items-start lg:gap-4',
 )
 const mainClasses = computed(() =>
   showHeader.value
     ? [
-        'mx-auto w-full max-w-[96rem] flex-1 px-4 py-5 sm:px-6 sm:py-6 xl:px-8',
-        showWorkspaceShell.value ? 'lg:px-6 lg:pt-0 lg:pb-8' : 'lg:px-6 lg:py-8',
+        'mx-auto w-full max-w-[86rem] flex-1 px-3 py-4 sm:px-4 sm:py-5 xl:px-8',
+        showWorkspaceShell.value ? 'lg:px-5 lg:pt-0 lg:pb-5' : 'lg:px-6 lg:py-6',
       ].join(' ')
-    : 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-7xl flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10',
+    : 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl flex-1 items-center justify-center px-3 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-8',
 )
 
 watch(
@@ -187,7 +186,7 @@ const handleMenuAction = async (action: 'logout') => {
               : 'hidden lg:block lg:-ml-2 xl:-ml-3'
           "
         >
-          <div :class="showWorkspaceShell ? 'lg:pt-4' : ''">
+          <div :class="showWorkspaceShell ? 'lg:pt-3' : ''">
             <AppSidebar :pinned-layout="showWorkspaceShell" />
           </div>
         </div>
@@ -198,7 +197,7 @@ const handleMenuAction = async (action: 'logout') => {
               : 'min-w-0 w-full'
           "
         >
-          <div :class="showWorkspaceShell ? 'lg:pt-4' : ''">
+          <div :class="showWorkspaceShell ? 'lg:pt-3' : ''">
             <RouterView />
           </div>
         </div>
@@ -206,7 +205,7 @@ const handleMenuAction = async (action: 'logout') => {
           v-if="showRightRail"
           class="app-scroll hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
         >
-          <div class="lg:pt-4">
+          <div class="lg:pt-3">
             <AppRightRail :pinned-layout="true" />
           </div>
         </div>

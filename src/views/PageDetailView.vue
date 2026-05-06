@@ -98,7 +98,7 @@ const managementActions = computed(() => {
     </div>
 
     <section class="overflow-hidden rounded-[1.55rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
-      <div class="bg-[linear-gradient(135deg,rgba(66,63,151,0.12),rgba(211,154,69,0.08))] p-5 sm:p-6">
+      <div class="bg-[linear-gradient(135deg,#e8e9ff,#fef3c7)] p-5 sm:p-6">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div class="flex items-start gap-4">
             <span class="inline-flex h-18 w-18 items-center justify-center rounded-[1.65rem] bg-[var(--surface-primary)] text-[var(--accent-strong)] shadow-[var(--shadow-soft)]">
@@ -110,7 +110,7 @@ const managementActions = computed(() => {
                 <span class="inline-flex items-center rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
                   {{ categoryCopy[page.category].label }}
                 </span>
-                <span class="inline-flex items-center rounded-full bg-[rgba(34,197,94,0.12)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-green-700">
+                <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-green-700">
                   {{ page.status }}
                 </span>
               </div>

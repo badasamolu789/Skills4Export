@@ -108,10 +108,8 @@ const openDashboardPreview = () => {
   >
     <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
       <main class="flex-1">
-        <div
-          class="landing-card overflow-hidden rounded-[2rem] border border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_74%,transparent)] shadow-[var(--shadow-elevated)] backdrop-blur-sm"
-        >
-          <div class="grid min-h-[calc(100vh-11rem)] gap-14 px-6 py-8 sm:px-10 sm:py-10 lg:grid-cols-[minmax(20rem,0.9fr)_minmax(24rem,1.1fr)] lg:gap-16 lg:px-14 lg:py-12">
+        <div>
+          <div class="grid min-h-[calc(100vh-11rem)] gap-10 py-8 lg:grid-cols-[minmax(20rem,0.9fr)_minmax(24rem,1.1fr)] lg:gap-14 lg:py-10">
             <div class="flex flex-col justify-center">
               <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[38rem]">
                 <div class="flex justify-center lg:justify-start">
@@ -133,7 +131,7 @@ const openDashboardPreview = () => {
                 <div class="mt-12 max-w-[38rem] space-y-4">
                   <button
                     type="button"
-                    class="inline-flex h-14 w-full items-center justify-center rounded-full bg-[var(--landing-heading)] px-6 text-base font-semibold text-white shadow-[var(--shadow-soft)] transition hover:opacity-90"
+                    class="inline-flex h-14 w-full items-center justify-center rounded-full bg-[var(--landing-heading)] px-6 text-base font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)]"
                     @click="openDashboardPreview"
                   >
                     Open Dashboard Preview
@@ -148,7 +146,7 @@ const openDashboardPreview = () => {
 
                   <RouterLink
                     :to="{ path: '/auth/signup', query: redirectQuery }"
-                    class="inline-flex h-14 w-full items-center justify-center rounded-full border border-[color:color-mix(in_srgb,var(--accent)_38%,var(--surface-primary))] bg-[color:color-mix(in_srgb,var(--surface-primary)_86%,transparent)] px-6 text-base font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent)] hover:bg-[var(--surface-primary)]"
+                    class="inline-flex h-14 w-full items-center justify-center rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent)] hover:bg-[var(--surface-muted)]"
                   >
                     Create Account
                   </RouterLink>
@@ -170,7 +168,7 @@ const openDashboardPreview = () => {
 
                 <button
                   type="button"
-                  class="mt-8 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_28%,var(--surface-primary))] bg-[color:color-mix(in_srgb,var(--surface-primary)_78%,transparent)] px-6 text-base font-semibold text-[var(--accent)] transition hover:bg-[var(--surface-primary)]"
+                  class="mt-8 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent)] transition hover:bg-[var(--surface-muted)]"
                   @click="continueWithGoogle"
                 >
                   <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -190,8 +188,8 @@ const openDashboardPreview = () => {
                   Skills4Export is a career and business focused community where users can showcase skills, share experiences, exchange ideas, ask and answer career-related questions, score and comment on others, join contests, subscribe to services, and apply for jobs, internships, and freelance roles.
                 </p>
 
-                <div class="mt-8 rounded-[1.5rem] border border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_68%,transparent)] p-5 shadow-[var(--shadow-soft)]">
-                  <div class="space-y-7">
+                <div class="mt-8">
+                  <div class="space-y-6">
                     <article
                       v-for="feature in featureGroups"
                       :key="feature.title"
@@ -214,9 +212,9 @@ const openDashboardPreview = () => {
                   </div>
                 </div>
 
-                <div class="mt-10 w-full rounded-[1.6rem] border border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_88%,transparent)] p-5 shadow-[var(--shadow-soft)]">
+                <div class="mt-10 w-full">
                   <div class="min-h-[10.5rem]">
-                    <div class="relative overflow-hidden rounded-[1.35rem]">
+                    <div class="relative overflow-hidden">
                       <Quote class="absolute left-0 top-0 h-5 w-5 text-[var(--accent-soft)]" />
                       <p class="max-w-[38rem] pl-8 pr-1 text-sm leading-7 text-[var(--landing-muted)] sm:text-[0.95rem] sm:leading-8">
                         {{ currentQuote }}
@@ -256,7 +254,7 @@ const openDashboardPreview = () => {
         </div>
       </main>
 
-      <footer class="mt-6 rounded-[1.5rem] border border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_82%,transparent)] px-6 py-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-elevated)] backdrop-blur-sm sm:px-8">
+      <footer class="mt-6 rounded-[1.5rem] border border-[color:var(--landing-border)] bg-[var(--surface-primary)] px-6 py-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-elevated)] sm:px-8">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-wrap gap-x-5 gap-y-2">
             <a

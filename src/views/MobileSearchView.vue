@@ -98,7 +98,7 @@ const filteredTargets = computed(() => {
           v-model="searchQuery"
           type="search"
           placeholder="Search jobs, communities, alerts..."
-          class="w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+          class="w-full border-none bg-[var(--surface-primary)] text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
         />
       </label>
     </div>

@@ -3,11 +3,27 @@ import { publicProfileRoute } from '@/data/publicProfiles'
 
 export type CommunityPost = {
   type: 'community'
+  apiId?: string
+  userId?: string
+  communityId?: string | null
+  communityName?: string
+  pageId?: string | null
+  createdAt?: string
+  updatedAt?: string
+  media?: {
+    id: string
+    url: string
+    thumbnailUrl?: string
+    mediaType?: string
+    displayOrder?: number
+  }[]
   slug: string
   author: {
     name: string
     to: string
     avatarText: string
+    avatarSrc?: string | null
+    tag?: string
   }
   time: string
   title: string
@@ -21,9 +37,16 @@ export type CommunityPost = {
 
 export type QuestionPost = {
   type: 'question'
+  apiId?: string
+  userId?: string
+  communityId?: string | null
+  pageId?: string | null
+  createdAt?: string
+  updatedAt?: string
   slug: string
   communityName: string
   title: string
+  body?: string
   time: string
   authorName: string
   authorTo: string
@@ -34,11 +57,26 @@ export type QuestionPost = {
 
 export type PersonalPost = {
   type: 'personal'
+  apiId?: string
+  userId?: string
+  communityId?: string | null
+  communityName?: string
+  pageId?: string | null
+  createdAt?: string
+  updatedAt?: string
+  media?: {
+    id: string
+    url: string
+    thumbnailUrl?: string
+    mediaType?: string
+    displayOrder?: number
+  }[]
   slug: string
   author: {
     name: string
     to: string
     avatarText: string
+    avatarSrc?: string | null
     tag: string
   }
   time: string

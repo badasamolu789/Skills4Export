@@ -7,6 +7,8 @@ export type JobPost = {
   location: string
   type: string
   salary: string
+  experience: string
+  skills: string[]
   description: string
   summary: string
   responsibilities: string[]
@@ -22,6 +24,8 @@ export const jobs: JobPost[] = [
     location: 'Lagos, Nigeria',
     type: 'Full-time',
     salary: 'N450k - N650k / month',
+    experience: '2+ years',
+    skills: ['Vue', 'Tailwind CSS', 'TypeScript', 'UI Systems'],
     description:
       'Build polished user experiences, maintain design consistency, and ship fast with the product team.',
     summary:
@@ -45,6 +49,8 @@ export const jobs: JobPost[] = [
     location: 'Remote',
     type: 'Contract',
     salary: 'N300k - N420k / month',
+    experience: '3+ years',
+    skills: ['Community Growth', 'Content Strategy', 'Analytics', 'Moderation'],
     description:
       'Grow engagement, coordinate creator programs, and help shape community campaigns across the platform.',
     summary:
@@ -68,6 +74,8 @@ export const jobs: JobPost[] = [
     location: 'Abuja, Nigeria',
     type: 'Hybrid',
     salary: 'N500k - N750k / month',
+    experience: '4+ years',
+    skills: ['Product Design', 'Figma', 'UX Research', 'Design Systems'],
     description:
       'Design job flows, creator tools, and marketplace experiences with strong visual craft and thoughtful UX.',
     summary:

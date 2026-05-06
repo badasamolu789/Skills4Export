@@ -133,7 +133,7 @@ const filteredAppliedJobs = computed(() => {
             v-model="searchQuery"
             type="search"
             placeholder="Search jobs"
-            class="w-full border-none bg-transparent text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+            class="w-full border-none bg-[var(--surface-secondary)] text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
           />
         </label>
       </div>

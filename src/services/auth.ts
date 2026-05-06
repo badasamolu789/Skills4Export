@@ -83,6 +83,42 @@ export type AuthSession = {
   expiresIn?: number
   user?: Record<string, unknown>
 }
+
+const readStringField = (source: Record<string, unknown> | undefined, keys: string[]) => {
+  if (!source) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+
+  return ''
+}
+
+export const extractUserIdFromToken = (token?: string) => {
+  if (!token || typeof window === 'undefined') {
+    return ''
+  }
+
+  const [, payload] = token.split('.')
+  if (!payload) {
+    return ''
+  }
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = window.atob(normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '='))
+    const claims = JSON.parse(decoded) as Record<string, unknown>
+
+    return readStringField(claims, ['sub', 'userId', 'user_id', 'id', 'uid'])
+  } catch {
+    return ''
+  }
+}
 // const BaseURL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 const AUTH_ROUTES = {
   sendRegistrationOtp: '/register/send-otp',
@@ -107,22 +143,10 @@ export const extractUserId = (response?: AuthSuccessResponse | null): string => 
   const user = response.data?.user || response.user || response.data?.session?.user || response.session?.user
 
   if (!user || typeof user !== 'object') {
-    if (typeof response.data?.id === 'string') {
-      return response.data.id
-    }
-
-    return ''
+    return readStringField(response.data, ['id', 'userId', 'user_id', 'uid'])
   }
 
-  if (typeof user.id === 'string') {
-    return user.id
-  }
-
-  if (typeof user.userId === 'string') {
-    return user.userId
-  }
-
-  return ''
+  return readStringField(user as Record<string, unknown>, ['id', 'userId', 'user_id', 'uid'])
 }
 
 export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthSession | null => {
@@ -146,7 +170,7 @@ export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthS
   }
 
   const user = response.data?.user || response.user || response.data?.session?.user || response.session?.user
-  const userId = extractUserId(response) || undefined
+  const userId = extractUserId(response) || extractUserIdFromToken(token) || undefined
 
   return {
     token,

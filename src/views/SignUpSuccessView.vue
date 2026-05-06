@@ -32,12 +32,12 @@ if (!hasCompletedSignUp.value) {
   >
     <div class="relative mx-auto flex w-full max-w-md flex-col items-center overflow-hidden rounded-[1.75rem] px-1 py-2 text-center">
       <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[1.75rem]">
-        <div class="absolute left-4 top-6 h-20 w-20 rounded-full bg-(--accent)/10 blur-xl" />
-        <div class="absolute right-2 top-16 h-24 w-24 rounded-4xl bg-(--accent)/8" />
-        <div class="absolute bottom-2 left-1/2 h-28 w-28 -translate-x-1/2 rounded-full bg-(--accent)/8 blur-2xl" />
+        <div class="absolute left-4 top-6 h-20 w-20 rounded-full bg-(--accent-soft)" />
+        <div class="absolute right-2 top-16 h-24 w-24 rounded-4xl bg-(--accent-soft)" />
+        <div class="absolute bottom-2 left-1/2 h-28 w-28 -translate-x-1/2 rounded-full bg-(--accent-soft)" />
       </div>
 
-      <div class="flex h-18 w-18 items-center justify-center rounded-full bg-(--accent) text-white shadow-[0_18px_40px_-18px_rgba(124,110,255,0.9)]">
+      <div class="flex h-18 w-18 items-center justify-center rounded-full bg-(--accent) text-white shadow-[var(--shadow-soft)]">
         <CheckCheck class="h-9 w-9" />
       </div>
 

@@ -51,7 +51,7 @@ const copyReferralLink = async () => {
 
 <template>
   <section class="px-1 py-2 sm:px-2">
-    <div class="mx-auto max-w-6xl rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[0_18px_48px_rgba(15,23,42,0.08)] sm:p-8 lg:p-12">
+    <div class="mx-auto max-w-6xl rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-8 lg:p-12">
       <div class="max-w-4xl">
         <h1 class="text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-[var(--text-primary)] sm:text-[2.75rem] lg:text-[3.25rem]">
           Spread the word with friends.
@@ -66,7 +66,7 @@ const copyReferralLink = async () => {
                 v-model="emailInput"
                 type="text"
                 placeholder="Enter 5 email address separated by comma"
-                class="min-h-16 flex-1 border-none bg-transparent px-5 text-lg text-[var(--text-primary)] outline-none placeholder:text-[color:color-mix(in_srgb,var(--text-secondary)_55%,white)] sm:px-7"
+                class="min-h-16 flex-1 border-none bg-[var(--surface-primary)] px-5 text-lg text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)] sm:px-7"
               />
               <button
                 type="button"

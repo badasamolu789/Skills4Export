@@ -119,8 +119,21 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="isLoadingFollowers" class="rounded-[1.25rem] border border-dashed border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
-      Loading followers...
+    <div v-if="isLoadingFollowers" class="space-y-3">
+      <div
+        v-for="item in 5"
+        :key="item"
+        class="flex animate-pulse items-center justify-between gap-4 rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
+      >
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="h-12 w-12 rounded-full bg-[var(--surface-muted)]" />
+          <div class="min-w-0 space-y-2">
+            <div class="h-4 w-36 rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-3 w-24 rounded-full bg-[var(--surface-muted)]" />
+          </div>
+        </div>
+        <div class="h-9 w-20 rounded-[0.8rem] bg-[var(--surface-muted)]" />
+      </div>
     </div>
 
     <div v-else-if="followers.length === 0" class="rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-elevated)]">
@@ -156,7 +169,7 @@ onMounted(() => {
             class="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-[0.875rem] px-3 py-2 text-sm font-semibold transition"
             :class="
               isFollowing[follower.followerId]
-                ? 'bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-red-500/10 hover:text-red-500'
+                ? 'bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-red-100 hover:text-red-500'
                 : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
             "
             @click="isFollowing[follower.followerId] ? unfollowUser(follower.followerId) : followUser(follower.followerId)"

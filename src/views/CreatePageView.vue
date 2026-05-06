@@ -35,7 +35,7 @@ const pageTypes = [
           v-for="item in pageTypes"
           :key="item.label"
           type="button"
-          class="group rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-10 text-left shadow-[var(--shadow-elevated)] transition hover:border-[var(--accent)] hover:shadow-[0_22px_70px_rgba(66,63,151,0.12)]"
+          class="group rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-10 text-left shadow-[var(--shadow-elevated)] transition hover:border-[var(--accent)] hover:shadow-[var(--shadow-elevated)]"
         >
           <div class="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)] transition group-hover:bg-[var(--accent)] group-hover:text-white">
             <component :is="item.icon" class="h-8 w-8" />

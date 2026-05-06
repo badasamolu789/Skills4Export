@@ -143,13 +143,13 @@ const resendOtp = async () => {
   >
     <div class="relative mx-auto flex w-full max-w-md flex-col justify-center rounded-[1.75rem] sm:max-w-md">
       <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[1.75rem]">
-        <div class="absolute -left-8 top-8 h-24 w-24 rounded-3xl bg-[var(--accent)]/8" />
-        <div class="absolute right-2 top-14 h-20 w-20 rounded-full border border-[color:color-mix(in srgb,var(--accent) 25%,transparent)] bg-[var(--accent)]/6" />
-        <div class="absolute -right-10 bottom-8 h-28 w-28 rotate-12 rounded-[2rem] bg-[var(--accent)]/7" />
+        <div class="absolute -left-8 top-8 h-24 w-24 rounded-3xl bg-[var(--accent-soft)]" />
+        <div class="absolute right-2 top-14 h-20 w-20 rounded-full border border-[color:var(--accent)] bg-[var(--surface-muted)]" />
+        <div class="absolute -right-10 bottom-8 h-28 w-28 rotate-12 rounded-[2rem] bg-[var(--accent-soft)]" />
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent)]/12 text-[var(--accent-strong)]">
+        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
           <ShieldCheck class="h-7 w-7" />
         </div>
       </div>

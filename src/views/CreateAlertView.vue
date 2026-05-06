@@ -103,7 +103,7 @@ const removeJobSearchTag = (tag: string) => {
     <div
       class="overflow-hidden rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
     >
-      <div class="bg-[linear-gradient(135deg,rgba(66,63,151,0.12),rgba(211,154,69,0.08))] p-5 sm:p-6">
+      <div class="bg-[linear-gradient(135deg,#e8e9ff,#fef3c7)] p-5 sm:p-6">
         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
           Alerts Setup
         </p>
@@ -219,7 +219,7 @@ const removeJobSearchTag = (tag: string) => {
                 <span>{{ tag }}</span>
                 <button
                   type="button"
-                  class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/70 text-[var(--accent-strong)] transition hover:bg-white"
+                  class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-[var(--accent-strong)] transition hover:bg-[var(--surface-muted)]"
                   @click="removeJobSearchTag(tag)"
                 >
                   <X class="h-3.5 w-3.5" />
@@ -231,7 +231,7 @@ const removeJobSearchTag = (tag: string) => {
                 :value="jobSearchInput"
                 type="text"
                 placeholder="Product designer, frontend developer, UI/UX, ..."
-                class="min-w-[14rem] flex-1 border-none bg-transparent px-1 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+                class="min-w-[14rem] flex-1 border-none bg-[var(--surface-secondary)] px-1 py-2 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
                 @input="handleJobSearchInput"
                 @blur="finalizeJobSearchInput"
                 @keydown.enter.prevent="finalizeJobSearchInput"

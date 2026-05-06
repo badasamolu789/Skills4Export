@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, Mail, MapPin, MoreHorizontal, Pencil, Phone, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
+import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, MoreHorizontal, Pencil, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { usersService } from '@/services/users'
+import { postsService, type PostRecord } from '@/services/posts'
+import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
 import { feedPosts } from '@/data/feedPosts'
 import type { UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience } from '@/services/users'
@@ -18,8 +20,10 @@ const isLoadingPortfolios = ref(false)
 const isLoadingCertifications = ref(false)
 const isLoadingEducations = ref(false)
 const isLoadingExperiences = ref(false)
-const isEditingContact = ref(false)
-const isSavingContact = ref(false)
+const isLoadingActivity = ref(false)
+const isProfileDetailsModalOpen = ref(false)
+const isSavingProfileDetails = ref(false)
+const isSavingSectionEdit = ref(false)
 const skills = ref<UserSkill[]>([])
 const portfolios = ref<UserPortfolio[]>([])
 const certifications = ref<UserCertification[]>([])
@@ -30,6 +34,15 @@ const followers = ref<Array<{
   followerId?: string
   followingId?: string
   createdAt?: string
+}>>([])
+const recentActivities = ref<Array<{
+  id: string
+  title: string
+  description: string
+  typeLabel: string
+  time: string
+  to: string
+  createdAt: string
 }>>([])
 const following = ref<Array<{
   id: string
@@ -42,6 +55,9 @@ const deletingItem = ref<string | null>(null)
 const deleteModal = ref<{ isOpen: boolean; type?: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience'; id?: string; label?: string }>({
   isOpen: false,
 })
+const editModal = ref<{ isOpen: boolean; type?: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience'; id?: string }>({
+  isOpen: false,
+})
 const profileModal = ref<null | 'score' | 'followers' | 'following'>(null)
 const stats = ref({
   pages: 0,
@@ -50,6 +66,11 @@ const stats = ref({
   comments: 0,
   followers: 0,
 })
+
+const optionalField = (value?: string | null) => {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
 
 const toggleActionMenu = (type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience', id: string | undefined) => {
   if (!id) {
@@ -90,6 +111,112 @@ const openDeleteModal = (type: 'skill' | 'portfolio' | 'certification' | 'educat
 
 const closeDeleteModal = () => {
   deleteModal.value = { isOpen: false }
+}
+
+const editSkillForm = ref({
+  skill: '',
+  level: 'intermediate',
+})
+const editPortfolioForm = ref({
+  title: '',
+  description: '',
+  link: '',
+})
+const editCertificationForm = ref({
+  name: '',
+  issuer: '',
+  issueDate: '',
+})
+const editEducationForm = ref({
+  school: '',
+  degree: '',
+  field: '',
+  startDate: '',
+  endDate: '',
+})
+const editExperienceForm = ref({
+  company: '',
+  title: '',
+  employmentType: '',
+  startDate: '',
+  endDate: '',
+  isCurrent: false,
+  description: '',
+})
+
+const openEditModal = (
+  type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience',
+  id: string | undefined,
+) => {
+  if (!id) {
+    return
+  }
+
+  if (type === 'skill') {
+    const item = skills.value.find((skill) => skill.id === id)
+    if (!item) return
+    editSkillForm.value = {
+      skill: item.skill || item.name || '',
+      level: item.level || 'intermediate',
+    }
+  }
+
+  if (type === 'portfolio') {
+    const item = portfolios.value.find((portfolio) => portfolio.id === id)
+    if (!item) return
+    editPortfolioForm.value = {
+      title: item.title || '',
+      description: item.description || '',
+      link: item.link || '',
+    }
+  }
+
+  if (type === 'certification') {
+    const item = certifications.value.find((certification) => certification.id === id)
+    if (!item) return
+    editCertificationForm.value = {
+      name: item.name || '',
+      issuer: item.issuer || '',
+      issueDate: item.issueDate || '',
+    }
+  }
+
+  if (type === 'education') {
+    const item = educations.value.find((education) => education.id === id)
+    if (!item) return
+    editEducationForm.value = {
+      school: item.school || '',
+      degree: item.degree || '',
+      field: item.field || '',
+      startDate: item.startDate || '',
+      endDate: item.endDate || '',
+    }
+  }
+
+  if (type === 'experience') {
+    const item = experiences.value.find((experience) => experience.id === id)
+    if (!item) return
+    editExperienceForm.value = {
+      company: item.company || '',
+      title: item.title || '',
+      employmentType: item.employmentType || '',
+      startDate: item.startDate || '',
+      endDate: item.endDate || '',
+      isCurrent: Boolean(item.isCurrent),
+      description: item.description || '',
+    }
+  }
+
+  editModal.value = { isOpen: true, type, id }
+  closeActionMenu()
+}
+
+const closeEditModal = () => {
+  if (isSavingSectionEdit.value) {
+    return
+  }
+
+  editModal.value = { isOpen: false }
 }
 
 const openProfileModal = (type: 'score' | 'followers' | 'following') => {
@@ -168,11 +295,87 @@ const handleDelete = async (
   }
 }
 
-const contactForm = ref({
-  email: '',
-  phone: '',
+const profileDetailsForm = ref({
+  displayName: '',
   location: '',
+  currentWorkplace: '',
+  currentJobTitle: '',
 })
+
+const formatActivityTime = (value: string) => {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const getPostDescription = (content: string) => {
+  if (typeof document === 'undefined') {
+    return content.replace(/<[^>]*>/g, '').trim()
+  }
+
+  const element = document.createElement('div')
+  element.innerHTML = content
+
+  return (element.textContent || '').trim()
+}
+
+const loadRecentActivity = async (userId: string) => {
+  isLoadingActivity.value = true
+
+  try {
+    const [postsResult, questionsResult] = await Promise.allSettled([
+      postsService.listPosts(authStore.authToken),
+      questionsService.listQuestions(authStore.authToken),
+    ])
+
+    const postActivities =
+      postsResult.status === 'fulfilled'
+        ? postsResult.value.data
+          .filter((post: PostRecord) => post.user_id === userId)
+          .map((post) => ({
+            id: post.id,
+            title: post.title,
+            description: getPostDescription(post.content),
+            typeLabel: post.community_id ? 'Community post' : 'Post',
+            time: formatActivityTime(post.created_at),
+            to: `/posts/${post.id}`,
+            createdAt: post.created_at,
+          }))
+        : []
+
+    const questionActivities =
+      questionsResult.status === 'fulfilled'
+        ? questionsResult.value.data
+          .filter((question: QuestionRecord) => question.userId === userId)
+          .map((question) => ({
+            id: question.id,
+            title: question.title,
+            description: question.body,
+            typeLabel: 'Question',
+            time: formatActivityTime(question.createdAt),
+            to: `/questions/${question.id}`,
+            createdAt: question.createdAt,
+          }))
+        : []
+
+    recentActivities.value = [...postActivities, ...questionActivities]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5)
+  } catch {
+    recentActivities.value = []
+  } finally {
+    isLoadingActivity.value = false
+  }
+}
 
 const loadProfile = async () => {
   if (!authStore.isAuthenticated) {
@@ -243,6 +446,7 @@ const loadProfile = async () => {
     // Load followers data separately
     if (profileResponse.data?.user?.id) {
       await loadFollowersData(profileResponse.data.user.id)
+      await loadRecentActivity(profileResponse.data.user.id)
     }
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
@@ -269,73 +473,244 @@ const loadFollowersData = async (userId: string) => {
   }
 }
 
-const startEditingContact = () => {
-  contactForm.value = {
-    email: authStore.signUpDraft.email || '',
-    phone: authStore.signUpDraft.phone || '',
+const openProfileDetailsModal = () => {
+  profileDetailsForm.value = {
+    displayName: authStore.signUpDraft.name || authStore.userProfile?.username || '',
     location: authStore.userProfile?.location || authStore.signUpDraft.location || '',
+    currentWorkplace: featuredExperience.value?.company || '',
+    currentJobTitle: featuredExperience.value?.title || '',
   }
-  isEditingContact.value = true
+  isProfileDetailsModalOpen.value = true
 }
 
-const cancelEditingContact = () => {
-  isEditingContact.value = false
-  contactForm.value = {
-    email: '',
-    phone: '',
-    location: '',
+const closeProfileDetailsModal = () => {
+  if (isSavingProfileDetails.value) {
+    return
   }
+
+  isProfileDetailsModalOpen.value = false
 }
 
-const saveContactDetails = async () => {
+const upsertCurrentExperience = async () => {
   if (!authStore.userId) {
     return
   }
 
-  isSavingContact.value = true
+  const company = profileDetailsForm.value.currentWorkplace.trim()
+  const title = profileDetailsForm.value.currentJobTitle.trim()
+
+  if (!company && !title) {
+    return
+  }
+
+  if (!company || !title) {
+    throw new Error('Current work place and current job title are required together.')
+  }
+
+  const existingExperience = featuredExperience.value
+  const payload = {
+    company,
+    title,
+    employmentType: existingExperience?.employmentType || 'full-time',
+    startDate: existingExperience?.startDate || new Date().toISOString().slice(0, 10),
+    endDate: existingExperience?.endDate ?? null,
+    isCurrent: existingExperience?.isCurrent === undefined ? true : Boolean(existingExperience.isCurrent),
+    description: existingExperience?.description || '',
+  }
+
+  if (existingExperience?.id) {
+    const response = await usersService.updateUserExperience(
+      authStore.userId,
+      existingExperience.id,
+      payload,
+      authStore.authToken,
+    )
+    experiences.value = experiences.value.map((experience) =>
+      experience.id === existingExperience.id ? response.data : experience,
+    )
+    return
+  }
+
+  const response = await usersService.addUserExperience(authStore.userId, payload, authStore.authToken)
+  experiences.value = [response.data, ...experiences.value]
+}
+
+const saveProfileDetails = async () => {
+  if (!authStore.userId || isSavingProfileDetails.value) {
+    return
+  }
+
+  isSavingProfileDetails.value = true
 
   try {
     const payload = {
-      username: authStore.signUpDraft.username,
-      location: contactForm.value.location,
-      website: authStore.userProfile?.website || '',
-      linkedin: authStore.userProfile?.linkedin || '',
-      github: authStore.userProfile?.github || '',
+      username: authStore.userProfile?.username || authStore.signUpDraft.username,
+      bio: authStore.userProfile?.bio || authStore.signUpDraft.headline,
+      location: profileDetailsForm.value.location.trim(),
+      website: authStore.userProfile?.website || authStore.signUpDraft.website || '',
+      linkedin: authStore.userProfile?.linkedin || authStore.signUpDraft.linkedin || '',
+      github: authStore.userProfile?.github || authStore.signUpDraft.github || '',
     }
 
-    let profileResponse
+    const profileResponse = authStore.userProfile?.id
+      ? await usersService.updateUserProfile(authStore.userId, payload, authStore.authToken)
+      : await usersService.createUserProfile(authStore.userId, payload, authStore.authToken)
 
-    try {
-      profileResponse = await usersService.updateUserProfile(authStore.userId, payload, authStore.authToken)
-    } catch (error) {
-      if (!(error instanceof ApiError && error.status === 404)) {
-        throw error
-      }
-      profileResponse = await usersService.createUserProfile(authStore.userId, payload, authStore.authToken)
-    }
+    await upsertCurrentExperience()
 
-    // Update store
-    authStore.signUpDraft.email = contactForm.value.email
-    authStore.signUpDraft.phone = contactForm.value.phone
-    authStore.signUpDraft.location = contactForm.value.location
+    authStore.signUpDraft.name = profileDetailsForm.value.displayName.trim()
+    authStore.signUpDraft.location = profileDetailsForm.value.location.trim()
     authStore.setUserProfile(profileResponse.data ?? null)
 
-    toast.success('Contact details updated', {
-      description: 'Your profile information has been saved.',
-    })
-
-    isEditingContact.value = false
+    isProfileDetailsModalOpen.value = false
+    toast.success('Profile updated.')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
         ? error.message
-        : 'Failed to update contact details.'
+        : 'We could not save your profile details.'
 
-    toast.error('Update failed', {
-      description: message,
-    })
+    toast.error('Update failed', { description: message })
   } finally {
-    isSavingContact.value = false
+    isSavingProfileDetails.value = false
+  }
+}
+
+const replaceSectionItem = async () => {
+  if (!authStore.userId || !editModal.value.type || !editModal.value.id) {
+    return
+  }
+
+  const { type, id } = editModal.value
+  isSavingSectionEdit.value = true
+
+  try {
+    if (type === 'skill') {
+      if (!editSkillForm.value.skill.trim()) {
+        toast.error('Skill name is required.')
+        return
+      }
+
+      const response = await usersService.addUserSkill(
+        authStore.userId,
+        {
+          skill: editSkillForm.value.skill.trim(),
+          level: editSkillForm.value.level,
+        },
+        authStore.authToken,
+      )
+      await usersService.deleteUserSkill(authStore.userId, id, authStore.authToken)
+      skills.value = skills.value.map((skill) => (skill.id === id ? response.data : skill))
+    }
+
+    if (type === 'portfolio') {
+      if (!editPortfolioForm.value.title.trim()) {
+        toast.error('Project title is required.')
+        return
+      }
+
+      const description = optionalField(editPortfolioForm.value.description)
+      const link = optionalField(editPortfolioForm.value.link)
+      const response = await usersService.addUserPortfolio(
+        authStore.userId,
+        {
+          title: editPortfolioForm.value.title.trim(),
+          ...(description ? { description } : {}),
+          ...(link ? { link } : {}),
+        },
+        authStore.authToken,
+      )
+      await usersService.deleteUserPortfolio(authStore.userId, id, authStore.authToken)
+      portfolios.value = portfolios.value.map((portfolio) => (portfolio.id === id ? response.data : portfolio))
+    }
+
+    if (type === 'certification') {
+      if (!editCertificationForm.value.name.trim()) {
+        toast.error('Certificate name is required.')
+        return
+      }
+
+      const issuer = optionalField(editCertificationForm.value.issuer)
+      const issueDate = optionalField(editCertificationForm.value.issueDate)
+      const response = await usersService.addUserCertification(
+        authStore.userId,
+        {
+          name: editCertificationForm.value.name.trim(),
+          ...(issuer ? { issuer } : {}),
+          ...(issueDate ? { issueDate } : {}),
+        },
+        authStore.authToken,
+      )
+      await usersService.deleteUserCertification(authStore.userId, id, authStore.authToken)
+      certifications.value = certifications.value.map((certification) => (
+        certification.id === id ? response.data : certification
+      ))
+    }
+
+    if (type === 'education') {
+      if (!editEducationForm.value.school.trim()) {
+        toast.error('School name is required.')
+        return
+      }
+
+      const degree = optionalField(editEducationForm.value.degree)
+      const field = optionalField(editEducationForm.value.field)
+      const startDate = optionalField(editEducationForm.value.startDate)
+      const endDate = optionalField(editEducationForm.value.endDate)
+      const response = await usersService.addUserEducation(
+        authStore.userId,
+        {
+          school: editEducationForm.value.school.trim(),
+          ...(degree ? { degree } : {}),
+          ...(field ? { field } : {}),
+          ...(startDate ? { startDate } : {}),
+          ...(endDate ? { endDate } : {}),
+        },
+        authStore.authToken,
+      )
+      await usersService.deleteUserEducation(authStore.userId, id, authStore.authToken)
+      educations.value = educations.value.map((education) => (education.id === id ? response.data : education))
+    }
+
+    if (type === 'experience') {
+      if (!editExperienceForm.value.company.trim() || !editExperienceForm.value.title.trim()) {
+        toast.error('Company and job title are required.')
+        return
+      }
+
+      const employmentType = optionalField(editExperienceForm.value.employmentType)
+      const startDate = optionalField(editExperienceForm.value.startDate)
+      const endDate = optionalField(editExperienceForm.value.endDate)
+      const description = optionalField(editExperienceForm.value.description)
+      const response = await usersService.addUserExperience(
+        authStore.userId,
+        {
+          company: editExperienceForm.value.company.trim(),
+          title: editExperienceForm.value.title.trim(),
+          isCurrent: editExperienceForm.value.isCurrent,
+          ...(employmentType ? { employmentType } : {}),
+          ...(startDate ? { startDate } : {}),
+          ...(description ? { description } : {}),
+          ...(!editExperienceForm.value.isCurrent && endDate ? { endDate } : {}),
+        },
+        authStore.authToken,
+      )
+      await usersService.deleteUserExperience(authStore.userId, id, authStore.authToken)
+      experiences.value = experiences.value.map((experience) => (experience.id === id ? response.data : experience))
+    }
+
+    await loadProfile()
+    editModal.value = { isOpen: false }
+    toast.success('Updated successfully.')
+  } catch (error) {
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'Failed to update item.'
+
+    toast.error('Update failed', { description: message })
+  } finally {
+    isSavingSectionEdit.value = false
   }
 }
 
@@ -394,7 +769,7 @@ const featuredExperience = computed(() => experiences.value[0] ?? null)
 
 const featuredSkill = computed(() => skills.value[0]?.name || authStore.signUpDraft.interests[0] || '')
 
-const profileSkillLabel = computed(() => featuredSkill.value || 'Software Developer')
+const profileSkillLabel = computed(() => featuredExperience.value?.title || featuredSkill.value || 'Software Developer')
 const profileCompanyLabel = computed(() => featuredExperience.value?.company || 'Amaka Global')
 const profileCountryLabel = computed(() => profile.value.location || 'Nigeria')
 
@@ -432,19 +807,19 @@ const summaryCards = computed(() => [
     label: 'Comments',
     value: stats.value.comments || 0,
     icon: ClipboardList,
-    accentClass: 'bg-[color:color-mix(in_srgb,var(--accent)_18%,white)] text-[var(--accent-strong)]',
+    accentClass: 'bg-[var(--accent-soft)] text-[var(--accent-strong)]',
   },
   {
     label: 'Questions',
     value: questionCount.value,
     icon: Sparkles,
-    accentClass: 'bg-emerald-500/12 text-emerald-600',
+    accentClass: 'bg-emerald-100 text-emerald-700',
   },
   {
     label: 'Answers & Posts',
     value: stats.value.posts || 0,
     icon: Rocket,
-    accentClass: 'bg-amber-500/14 text-amber-600',
+    accentClass: 'bg-amber-100 text-amber-700',
   },
 ])
 
@@ -463,21 +838,49 @@ const profileModalTitle = computed(() => {
 
   return ''
 })
+
+const editModalTitle = computed(() => {
+  const titles = {
+    skill: 'Edit Skill',
+    portfolio: 'Edit Project',
+    certification: 'Edit Professional Certificate',
+    education: 'Edit Education',
+    experience: 'Edit Experience',
+  }
+
+  return editModal.value.type ? titles[editModal.value.type] : 'Edit item'
+})
 </script>
 
 <template>
   <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
     <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
-      <div class="relative border-b border-[color:var(--border-soft)] px-5 py-6 sm:px-7 lg:px-9 lg:py-7">
-        <div class="absolute right-0 top-0 hidden h-full w-48 opacity-60 lg:block">
-          <div class="absolute right-10 top-0 h-full w-px bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)] rotate-[-32deg]" />
-          <div class="absolute right-20 top-0 h-full w-px bg-[color:color-mix(in_srgb,var(--accent)_12%,transparent)] rotate-[-32deg]" />
-          <div class="absolute right-[7.5rem] top-0 h-full w-px bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] rotate-[-32deg]" />
+      <div class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
+        <img
+          v-if="profile.banner"
+          :src="profile.banner"
+          alt="Profile banner"
+          class="h-full w-full object-cover"
+        />
+        <div
+          v-else
+          class="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_16%,white),color-mix(in_srgb,var(--surface-secondary)_80%,white))] text-sm font-semibold text-[var(--text-secondary)]"
+        >
+          Banner
+        </div>
+        <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,12,27,0.04),rgba(12,12,27,0.28))]" />
+      </div>
+
+      <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-0 sm:px-7 lg:px-9 lg:pb-7">
+        <div class="absolute right-0 top-0 hidden h-full w-48 lg:block">
+          <div class="absolute right-10 top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
+          <div class="absolute right-20 top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
+          <div class="absolute right-[7.5rem] top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
         </div>
 
         <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-            <div class="h-24 w-24 overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] shadow-[var(--shadow-soft)]">
+            <div class="-mt-12 h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:-mt-14">
               <img
                 v-if="profile.avatar"
                 :src="profile.avatar"
@@ -493,24 +896,25 @@ const profileModalTitle = computed(() => {
             </div>
 
             <div class="min-w-0">
-              <h2 class="text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-[2rem]">
+              <h2 class="text-xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-2xl">
                 {{ profile.name }}
               </h2>
-              <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[0.95rem] leading-5 text-[var(--text-secondary)] sm:justify-start sm:text-[1rem]">
+              <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-sm leading-5 text-[var(--text-secondary)] sm:justify-start">
                 <span>{{ profileSkillLabel }}</span>
                 <span>-</span>
                 <span>{{ profileCompanyLabel }}</span>
                 <span>-</span>
                 <span>{{ profileCountryLabel }}</span>
-                <RouterLink
-                  to="/profile/edit"
+                <button
+                  type="button"
+                  @click="openProfileDetailsModal"
                   class="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-primary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
                   aria-label="Edit profile"
                 >
                   <Pencil class="h-4 w-4" />
-                </RouterLink>
+                </button>
               </div>
-              <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm font-semibold leading-5 sm:justify-start sm:text-[1rem]">
+              <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold leading-5 sm:justify-start sm:text-sm">
                 <button
                   type="button"
                   class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
@@ -540,7 +944,7 @@ const profileModalTitle = computed(() => {
 
           <RouterLink
             to="/profile/edit"
-            class="inline-flex items-center justify-center gap-3 self-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-3 text-sm font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)] sm:self-start"
+            class="inline-flex items-center justify-center gap-3 self-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-2.5 text-xs font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)] sm:self-start"
           >
             <Edit2 class="h-4 w-4" />
             Edit Profile
@@ -549,7 +953,7 @@ const profileModalTitle = computed(() => {
       </div>
 
       <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
-        <div class="max-w-5xl space-y-6 text-[1.03rem] leading-9 text-[var(--text-secondary)] sm:text-[1.08rem]">
+        <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
           <p>
             {{ profile.bio || 'Add a short introduction to tell people what you do, what you care about, and the kind of opportunities or conversations you want to attract.' }}
           </p>
@@ -586,108 +990,21 @@ const profileModalTitle = computed(() => {
       </div>
     </section>
 
-    <div v-if="isLoadingProfile" class="rounded-[1.25rem] border border-dashed border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
-      Loading your profile...
+    <div v-if="isLoadingProfile" class="animate-pulse rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
+      <div class="h-4 w-40 rounded-full bg-[var(--surface-muted)]" />
+      <div class="mt-3 h-3 w-64 max-w-full rounded-full bg-[var(--surface-muted)]" />
     </div>
 
     <div class="space-y-6">
       <div class="space-y-6">
-        <!-- Contact Section -->
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <div class="flex items-center justify-between gap-3 mb-5">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Contact</h2>
-            <button
-              v-if="!isEditingContact"
-              type="button"
-              @click="startEditingContact"
-              class="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent-strong)] hover:text-[var(--accent)] transition"
-            >
-              <Edit2 class="h-4 w-4" />
-              Edit
-            </button>
-          </div>
-
-          <div v-if="!isEditingContact" class="mt-5 space-y-3">
-            <div class="flex items-center gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-              <Mail class="h-4 w-4 text-[var(--accent-strong)]" />
-              <span class="text-sm text-[var(--text-secondary)]">{{ profile.email }}</span>
-            </div>
-            <div class="flex items-center gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-              <Phone class="h-4 w-4 text-[var(--accent-strong)]" />
-              <span class="text-sm text-[var(--text-secondary)]">{{ profile.phone }}</span>
-            </div>
-            <div class="flex items-center gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-              <MapPin class="h-4 w-4 text-[var(--accent-strong)]" />
-              <span class="text-sm text-[var(--text-secondary)]">{{ profile.location }}</span>
-            </div>
-          </div>
-
-          <form v-else class="mt-5 space-y-4" @submit.prevent="saveContactDetails">
-            <div class="space-y-2">
-              <label class="text-sm font-semibold text-[var(--text-primary)]">Email address</label>
-              <div class="relative">
-                <Mail class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-                <input
-                  v-model="contactForm.email"
-                  type="email"
-                  class="h-11 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]"
-                />
-              </div>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-sm font-semibold text-[var(--text-primary)]">Phone number</label>
-              <div class="relative">
-                <Phone class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-                <input
-                  v-model="contactForm.phone"
-                  type="tel"
-                  class="h-11 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]"
-                />
-              </div>
-            </div>
-
-            <div class="space-y-2">
-              <label class="text-sm font-semibold text-[var(--text-primary)]">Location</label>
-              <div class="relative">
-                <MapPin class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-                <input
-                  v-model="contactForm.location"
-                  type="text"
-                  class="h-11 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]"
-                />
-              </div>
-            </div>
-
-            <div class="flex gap-3 pt-4 border-t border-[color:var(--border-soft)]">
-              <button
-                type="button"
-                @click="cancelEditingContact"
-                class="flex-1 inline-flex items-center justify-center gap-2 rounded-[1rem] border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-              >
-                <X class="h-4 w-4" />
-                Cancel
-              </button>
-              <button
-                type="submit"
-                :disabled="isSavingContact"
-                class="flex-1 inline-flex items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
-              >
-                <Save class="h-4 w-4" />
-                {{ isSavingContact ? 'Saving...' : 'Save' }}
-              </button>
-            </div>
-          </form>
-        </section>
-
         <section id="skills" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="isLoadingSkills" class="text-sm text-[var(--text-secondary)] text-center py-4">
-            Loading skills...
+          <div v-if="isLoadingSkills" class="flex animate-pulse flex-wrap gap-3 py-2">
+            <div v-for="item in 4" :key="item" class="h-11 w-32 rounded-full bg-[var(--surface-muted)]" />
           </div>
 
           <div v-else-if="skills.length > 0" class="flex flex-wrap gap-3">
@@ -702,22 +1019,46 @@ const profileModalTitle = computed(() => {
               <span
                 class="inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em]"
                 :class="{
-                  'bg-blue-500/10 text-blue-500': skill.level === 'beginner',
-                  'bg-amber-500/10 text-amber-500': skill.level === 'intermediate',
-                  'bg-green-500/10 text-green-500': skill.level === 'advanced' || skill.level === 'expert',
+                  'bg-blue-100 text-blue-700': skill.level === 'beginner',
+                  'bg-amber-100 text-amber-700': skill.level === 'intermediate',
+                  'bg-green-100 text-green-700': skill.level === 'advanced' || skill.level === 'expert',
                 }"
               >
                 {{ skill.level || 'beginner' }}
               </span>
-              <button
-                type="button"
-                class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-red-300 hover:text-red-500"
-                @click="openDeleteModal('skill', skill.id, skill.name || 'skill')"
-                :disabled="isDeleting('skill', skill.id)"
-                aria-label="Delete skill"
-              >
-                <X class="h-3.5 w-3.5" />
-              </button>
+              <div class="relative">
+                <button
+                  type="button"
+                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                  @click.stop="toggleActionMenu('skill', skill.id)"
+                  aria-label="Open skill actions"
+                >
+                  <MoreHorizontal class="h-4 w-4" />
+                </button>
+
+                <div
+                  v-if="activeActionMenu?.type === 'skill' && activeActionMenu?.id === skill.id"
+                  class="absolute right-0 z-10 mt-2 min-w-[10rem] overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
+                >
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
+                    @click="openEditModal('skill', skill.id)"
+                  >
+                    <Edit2 class="h-4 w-4" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
+                    @click="openDeleteModal('skill', skill.id, skill.name || 'skill')"
+                    :disabled="isDeleting('skill', skill.id)"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -739,8 +1080,12 @@ const profileModalTitle = computed(() => {
             <BookOpen class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="isLoadingPortfolios" class="text-sm text-[var(--text-secondary)] text-center py-4">
-            Loading portfolio items...
+          <div v-if="isLoadingPortfolios" class="grid animate-pulse gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div v-for="item in 3" :key="item" class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+              <div class="h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-3 h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-2 h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+            </div>
           </div>
 
           <div v-else-if="portfolios.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -782,6 +1127,14 @@ const profileModalTitle = computed(() => {
                   >
                     <button
                       type="button"
+                      class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
+                      @click="openEditModal('portfolio', portfolio.id)"
+                    >
+                      <Edit2 class="h-4 w-4" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
                       class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
                       @click="openDeleteModal('portfolio', portfolio.id, 'portfolio item')"
                       :disabled="isDeleting('portfolio', portfolio.id)"
@@ -813,8 +1166,11 @@ const profileModalTitle = computed(() => {
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="isLoadingCertifications" class="text-sm text-[var(--text-secondary)] text-center py-4">
-            Loading certifications...
+          <div v-if="isLoadingCertifications" class="grid animate-pulse gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div v-for="item in 3" :key="item" class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+              <div class="h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-3 h-3 w-1/2 rounded-full bg-[var(--surface-muted)]" />
+            </div>
           </div>
 
           <div v-else-if="certifications.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -843,6 +1199,14 @@ const profileModalTitle = computed(() => {
                     v-if="activeActionMenu?.type === 'certification' && activeActionMenu?.id === certification.id"
                     class="absolute right-0 z-10 mt-2 min-w-[11rem] overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
                   >
+                    <button
+                      type="button"
+                      class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
+                      @click="openEditModal('certification', certification.id)"
+                    >
+                      <Edit2 class="h-4 w-4" />
+                      Edit
+                    </button>
                     <button
                       type="button"
                       class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
@@ -876,8 +1240,12 @@ const profileModalTitle = computed(() => {
             <GraduationCap class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="isLoadingEducations" class="text-sm text-[var(--text-secondary)] text-center py-4">
-            Loading education records...
+          <div v-if="isLoadingEducations" class="grid animate-pulse gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div v-for="item in 3" :key="item" class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+              <div class="h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-3 h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-2 h-3 w-1/2 rounded-full bg-[var(--surface-muted)]" />
+            </div>
           </div>
 
           <div v-else-if="educations.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -913,6 +1281,14 @@ const profileModalTitle = computed(() => {
                   >
                     <button
                       type="button"
+                      class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
+                      @click="openEditModal('education', education.id)"
+                    >
+                      <Edit2 class="h-4 w-4" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
                       class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
                       @click="openDeleteModal('education', education.id, 'education entry')"
                       :disabled="isDeleting('education', education.id)"
@@ -944,8 +1320,12 @@ const profileModalTitle = computed(() => {
             <Briefcase class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="isLoadingExperiences" class="text-sm text-[var(--text-secondary)] text-center py-4">
-            Loading experience records...
+          <div v-if="isLoadingExperiences" class="grid animate-pulse gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div v-for="item in 3" :key="item" class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+              <div class="h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-3 h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-2 h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+            </div>
           </div>
 
           <div v-else-if="experiences.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -984,6 +1364,14 @@ const profileModalTitle = computed(() => {
                   >
                     <button
                       type="button"
+                      class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
+                      @click="openEditModal('experience', experience.id)"
+                    >
+                      <Edit2 class="h-4 w-4" />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
                       class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
                       @click="openDeleteModal('experience', experience.id, 'experience entry')"
                       :disabled="isDeleting('experience', experience.id)"
@@ -1017,17 +1405,52 @@ const profileModalTitle = computed(() => {
             </RouterLink>
           </div>
 
-          <div v-if="stats.posts === 0" class="text-center py-8 text-sm text-[var(--text-secondary)]">
+          <div v-if="isLoadingActivity" class="space-y-3">
+            <div
+              v-for="item in 3"
+              :key="item"
+              class="animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="h-3 w-24 rounded-full bg-[var(--surface-muted)]" />
+                <div class="h-3 w-20 rounded-full bg-[var(--surface-muted)]" />
+              </div>
+              <div class="mt-3 h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-3 h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-2 h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+            </div>
+          </div>
+
+          <div v-else-if="recentActivities.length === 0" class="text-center py-8 text-sm text-[var(--text-secondary)]">
             <p class="mb-3">No posts shared yet.</p>
             <RouterLink
-              to="/profile/edit"
+              to="/feed"
               class="text-sm font-semibold text-[var(--accent-strong)] hover:text-[var(--accent)] transition"
             >
               Start sharing →
             </RouterLink>
           </div>
-          <div v-else class="text-sm text-[var(--text-secondary)] text-center py-4">
-            <p>You have {{ stats.posts }} post{{ stats.posts !== 1 ? 's' : '' }} shared.</p>
+
+          <div v-else class="space-y-3">
+            <RouterLink
+              v-for="activity in recentActivities"
+              :key="`${activity.typeLabel}-${activity.id}`"
+              :to="activity.to"
+              class="block rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 transition hover:border-[color:var(--accent-soft)] hover:bg-[var(--surface-primary)]"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2 text-[0.75rem] text-[var(--text-tertiary)]">
+                <span class="rounded-full bg-[var(--surface-primary)] px-2.5 py-1 font-semibold uppercase tracking-[0.14em] text-[var(--accent-strong)]">
+                  {{ activity.typeLabel }}
+                </span>
+                <span>{{ activity.time }}</span>
+              </div>
+              <h3 class="mt-3 line-clamp-2 text-sm font-semibold text-[var(--text-primary)]">
+                {{ activity.title }}
+              </h3>
+              <p v-if="activity.description" class="mt-2 line-clamp-2 text-sm leading-6 text-[var(--text-secondary)]">
+                {{ activity.description }}
+              </p>
+            </RouterLink>
           </div>
         </section>
       </div>
@@ -1035,8 +1458,77 @@ const profileModalTitle = computed(() => {
   </section>
 
   <div
+    v-if="isProfileDetailsModalOpen"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-0 sm:items-center sm:p-4"
+    @click.self="closeProfileDetailsModal"
+  >
+    <form
+      class="w-full max-h-[calc(100dvh-1.5rem)] max-w-lg overflow-y-auto rounded-t-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:rounded-[1.35rem] sm:p-6"
+      @submit.prevent="saveProfileDetails"
+    >
+      <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
+      <div class="mb-4 flex justify-end">
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+          aria-label="Close modal"
+          @click="closeProfileDetailsModal"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Display name</span>
+          <input
+            v-model="profileDetailsForm.displayName"
+            type="text"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
+          <input
+            v-model="profileDetailsForm.location"
+            type="text"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Current work place</span>
+          <input
+            v-model="profileDetailsForm.currentWorkplace"
+            type="text"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Current job title</span>
+          <input
+            v-model="profileDetailsForm.currentJobTitle"
+            type="text"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        :disabled="isSavingProfileDetails"
+        class="mt-5 inline-flex w-full items-center justify-center rounded-[0.9rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+      >
+        {{ isSavingProfileDetails ? 'Saving...' : 'Save changes' }}
+      </button>
+    </form>
+  </div>
+
+  <div
     v-if="profileModal"
-    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-4 sm:items-center"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-4 sm:items-center"
     @click.self="closeProfileModal"
   >
     <div class="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
@@ -1088,9 +1580,15 @@ const profileModalTitle = computed(() => {
         <template v-else-if="profileModal === 'followers'">
           <div
             v-if="isLoadingFollowers"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+            class="space-y-3"
           >
-            Loading followers...
+            <div v-for="item in 3" :key="item" class="flex animate-pulse items-center gap-3 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+              <div class="h-10 w-10 rounded-full bg-[var(--surface-muted)]" />
+              <div class="min-w-0 flex-1 space-y-2">
+                <div class="h-3 w-32 rounded-full bg-[var(--surface-muted)]" />
+                <div class="h-3 w-20 rounded-full bg-[var(--surface-muted)]" />
+              </div>
+            </div>
           </div>
           <template v-else>
             <div
@@ -1148,8 +1646,158 @@ const profileModalTitle = computed(() => {
     </div>
   </div>
 
+  <div
+    v-if="editModal.isOpen"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-0 sm:items-center sm:p-4"
+    @click.self="closeEditModal"
+  >
+    <form
+      class="w-full max-h-[calc(100dvh-1.5rem)] max-w-lg overflow-y-auto rounded-t-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:rounded-[1.35rem] sm:p-6"
+      @submit.prevent="replaceSectionItem"
+    >
+      <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
+      <div class="mb-5 flex items-center justify-between gap-4">
+        <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ editModalTitle }}</h3>
+        <button
+          type="button"
+          class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+          aria-label="Close modal"
+          @click="closeEditModal"
+        >
+          <X class="h-4 w-4" />
+        </button>
+      </div>
+
+      <div v-if="editModal.type === 'skill'" class="space-y-4">
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Skill name</span>
+          <input v-model="editSkillForm.skill" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Level</span>
+          <select v-model="editSkillForm.level" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]">
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="expert">Expert</option>
+          </select>
+        </label>
+      </div>
+
+      <div v-else-if="editModal.type === 'portfolio'" class="space-y-4">
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Project title</span>
+          <input v-model="editPortfolioForm.title" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Description</span>
+          <textarea v-model="editPortfolioForm.description" rows="4" class="w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Link</span>
+          <input v-model="editPortfolioForm.link" type="url" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+      </div>
+
+      <div v-else-if="editModal.type === 'certification'" class="space-y-4">
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Certificate name</span>
+          <input v-model="editCertificationForm.name" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Issuer</span>
+          <input v-model="editCertificationForm.issuer" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Issue date</span>
+          <input v-model="editCertificationForm.issueDate" type="date" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+      </div>
+
+      <div v-else-if="editModal.type === 'education'" class="space-y-4">
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">School/University</span>
+          <input v-model="editEducationForm.school" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Degree</span>
+            <input v-model="editEducationForm.degree" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Field</span>
+            <input v-model="editEducationForm.field" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Start date</span>
+            <input v-model="editEducationForm.startDate" type="date" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">End date</span>
+            <input v-model="editEducationForm.endDate" type="date" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+        </div>
+      </div>
+
+      <div v-else-if="editModal.type === 'experience'" class="space-y-4">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Company</span>
+            <input v-model="editExperienceForm.company" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Job title</span>
+            <input v-model="editExperienceForm.title" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+          <label class="block space-y-2 sm:col-span-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Employment type</span>
+            <select v-model="editExperienceForm.employmentType" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]">
+              <option value="">Select type</option>
+              <option value="full-time">Full-time</option>
+              <option value="part-time">Part-time</option>
+              <option value="contract">Contract</option>
+              <option value="freelance">Freelance</option>
+            </select>
+          </label>
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Start date</span>
+            <input v-model="editExperienceForm.startDate" type="date" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          </label>
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">End date</span>
+            <input v-model="editExperienceForm.endDate" type="date" :disabled="editExperienceForm.isCurrent" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:opacity-60" />
+          </label>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+          <input v-model="editExperienceForm.isCurrent" type="checkbox" class="h-4 w-4 rounded border-[color:var(--border-soft)]" />
+          I currently work here
+        </label>
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Description</span>
+          <textarea v-model="editExperienceForm.description" rows="4" class="w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]" />
+        </label>
+      </div>
+
+      <div class="mt-6 flex gap-3 border-t border-[color:var(--border-soft)] pt-4">
+        <button
+          type="button"
+          class="flex-1 inline-flex items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+          @click="closeEditModal"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          :disabled="isSavingSectionEdit"
+          class="flex-1 inline-flex items-center justify-center rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+        >
+          {{ isSavingSectionEdit ? 'Saving...' : 'Save' }}
+        </button>
+      </div>
+    </form>
+  </div>
+
   <!-- Delete Confirmation Modal -->
-  <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+  <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
     <div class="w-full max-w-sm overflow-hidden rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <div class="p-6">
         <h3 class="text-lg font-semibold text-[var(--text-primary)]">Delete {{ deleteModal.label }}?</h3>

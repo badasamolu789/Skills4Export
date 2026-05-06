@@ -37,7 +37,7 @@ export class ApiError extends Error {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
-const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 8000) // Reduced from 15000 to 8000ms
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30000)
 
 // Request deduplication cache
 const pendingRequests = new Map<string, Promise<any>>()
@@ -277,6 +277,7 @@ const getCacheKey = (method: ApiMethod, path: string) => {
 }
 
 const DYNAMIC_CACHE_BYPASS_PREFIXES = [
+  '/posts',
   '/user/',
   '/users/',
   '/media/',
@@ -324,9 +325,11 @@ const invalidateRelatedCacheEntries = (path: string) => {
       cachedPath.startsWith('/user/') ||
       cachedPath.startsWith('/users/') ||
       cachedPath.startsWith('/media/') ||
+      cachedPath.startsWith('/posts') ||
       path.startsWith('/user/') ||
       path.startsWith('/users/') ||
-      path.startsWith('/media/')
+      path.startsWith('/media/') ||
+      path.startsWith('/posts')
     ) {
       responseCache.delete(key)
     }
@@ -340,13 +343,19 @@ const getRequestPriority = (path: string) => {
 const getTimeoutForEndpoint = (path: string) => {
   // Shorter timeout for high-priority endpoints
   if (getRequestPriority(path) === 'high') {
-    return 5000 // 5 seconds for auth/me requests
+    return 10000
   }
+
+  if (path.startsWith('/posts')) {
+    return 45000
+  }
+
   // Longer timeout for data-heavy endpoints
-  if (path.includes('/portfolios') || path.includes('/posts') || path.includes('/communities')) {
-    return 12000 // 12 seconds for data-heavy requests
+  if (path.includes('/portfolios') || path.includes('/communities')) {
+    return 40000
   }
-  return API_TIMEOUT_MS // 8 seconds default
+
+  return API_TIMEOUT_MS
 }
 
 const shouldRetry = (error: any, attempt: number): boolean => {
@@ -448,11 +457,10 @@ export const apiRequest = async <T>(
     mergedHeaders.set('Authorization', `Bearer ${token}`)
   }
 
-  // Use endpoint-specific timeout
-  const endpointTimeout = getTimeoutForEndpoint(path)
-  const { signal: requestSignal, cleanup } = mergeSignals(signal, endpointTimeout)
-
   const makeRequest = async (): Promise<T> => {
+    const endpointTimeout = getTimeoutForEndpoint(path)
+    const { signal: requestSignal, cleanup } = mergeSignals(signal, endpointTimeout)
+
     try {
       requestUrl = buildUrl(path)
       logApiRequest({
@@ -555,7 +563,7 @@ export const api = {
     apiRequest<T>(path, { ...options, method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown, options?: Omit<ApiRequestOptions, 'method' | 'body'>) =>
     apiRequest<T>(path, { ...options, method: 'PATCH', body }),
-  delete: <T>(path: string, options?: Omit<ApiRequestOptions, 'method' | 'body'>) =>
+  delete: <T>(path: string, options?: Omit<ApiRequestOptions, 'method'>) =>
     apiRequest<T>(path, { ...options, method: 'DELETE' }),
 }
 

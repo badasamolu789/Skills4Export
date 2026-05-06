@@ -150,10 +150,10 @@ const submitReset = async () => {
   >
     <div class="relative mx-auto flex w-full max-w-md flex-col justify-center overflow-hidden rounded-[1.75rem] sm:max-w-md">
       <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[1.75rem]">
-        <div class="absolute -left-10 top-8 h-28 w-28 rotate-12 rounded-3xl bg-(--accent)/8" />
-        <div class="absolute right-4 top-16 h-16 w-16 rounded-full border border-[color:color-mix(in srgb,var(--accent) 28%,transparent)] bg-(--accent)/5" />
-        <div class="absolute -right-8 bottom-10 h-24 w-24 rotate-45 rounded-2xl bg-(--accent)/7" />
-        <div class="absolute bottom-5 left-6 h-0 w-0 border-x-20 border-b-34 border-x-transparent border-b-[color-mix(in_srgb,var(--accent)_12%,transparent)]" />
+        <div class="absolute -left-10 top-8 h-28 w-28 rotate-12 rounded-3xl bg-(--accent-soft)" />
+        <div class="absolute right-4 top-16 h-16 w-16 rounded-full border border-(--accent) bg-(--surface-muted)" />
+        <div class="absolute -right-8 bottom-10 h-24 w-24 rotate-45 rounded-2xl bg-(--accent-soft)" />
+        <div class="absolute bottom-5 left-6 h-0 w-0 border-x-20 border-b-34 border-x-(--surface-primary) border-b-(--accent-soft)" />
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">

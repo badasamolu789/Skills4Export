@@ -255,7 +255,7 @@ export type AddUserExperienceRequest = {
   company: string
   title: string
   employmentType?: string
-  startDate: string
+  startDate?: string
   endDate?: string | null
   isCurrent?: boolean
   description?: string
@@ -360,11 +360,29 @@ export const usersService = {
   updateUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
     return api.put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
   },
-  uploadUserAvatar(id: string, body: { url: string }, token?: string | null) {
-    return api.post<BackgroundUploadResponse>(USER_ROUTES.userAvatar(id), body, { token })
+  uploadUserAvatar(
+    id: string,
+    body: { url: string },
+    token?: string | null,
+    options?: { replace?: boolean },
+  ) {
+    const endpoint = options?.replace
+      ? `${USER_ROUTES.userAvatar(id)}?replace=true`
+      : USER_ROUTES.userAvatar(id)
+
+    return api.post<BackgroundUploadResponse>(endpoint, body, { token })
   },
-  uploadUserBanner(id: string, body: { url: string }, token?: string | null) {
-    return api.post<BackgroundUploadResponse>(USER_ROUTES.userBanner(id), body, { token })
+  uploadUserBanner(
+    id: string,
+    body: { url: string },
+    token?: string | null,
+    options?: { replace?: boolean },
+  ) {
+    const endpoint = options?.replace
+      ? `${USER_ROUTES.userBanner(id)}?replace=true`
+      : USER_ROUTES.userBanner(id)
+
+    return api.post<BackgroundUploadResponse>(endpoint, body, { token })
   },
 
   // ========================================================================
@@ -523,6 +541,14 @@ export const usersService = {
    */
   addUserExperience(userId: string, payload: AddUserExperienceRequest, token?: string | null) {
     return api.post<UserExperienceResponse>(USER_ROUTES.userExperiences(userId), payload, { token })
+  },
+
+  updateUserExperience(userId: string, experienceId: string, payload: AddUserExperienceRequest, token?: string | null) {
+    return api.put<UserExperienceResponse>(
+      USER_ROUTES.userExperienceById(userId, experienceId),
+      payload,
+      { token },
+    )
   },
 
   /**

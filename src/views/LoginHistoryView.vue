@@ -91,7 +91,7 @@ onMounted(() => {
     </div>
 
     <!-- Security Alert -->
-    <div class="rounded-[1.35rem] border border-blue-500/30 bg-blue-50 dark:bg-blue-950/20 p-4 flex gap-3">
+    <div class="rounded-[1.35rem] border border-blue-500 bg-blue-50 dark:bg-blue-950 p-4 flex gap-3">
       <Shield class="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
       <div>
         <p class="font-semibold text-blue-900 dark:text-blue-100">Security Tip</p>
@@ -101,8 +101,18 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="isLoading" class="rounded-[1.25rem] border border-dashed border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
-      Loading login history...
+    <div v-if="isLoading" class="space-y-3">
+      <div
+        v-for="item in 5"
+        :key="item"
+        class="animate-pulse rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <div class="h-4 w-36 rounded-full bg-[var(--surface-muted)]" />
+          <div class="h-3 w-24 rounded-full bg-[var(--surface-muted)]" />
+        </div>
+        <div class="mt-3 h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+      </div>
     </div>
 
     <div v-else-if="loginHistory.length === 0" class="rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-elevated)]">
@@ -133,7 +143,7 @@ onMounted(() => {
               <p class="font-semibold text-[var(--text-primary)]">
                 {{ session.loginMethod || 'Login activity' }}
               </p>
-              <span v-if="isCurrentSession(session.loginAt)" class="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900/30 px-2.5 py-1 text-xs font-semibold text-green-700 dark:text-green-200">
+              <span v-if="isCurrentSession(session.loginAt)" class="inline-flex items-center rounded-full bg-green-100 dark:bg-green-900 px-2.5 py-1 text-xs font-semibold text-green-700 dark:text-green-200">
                 Current
               </span>
             </div>

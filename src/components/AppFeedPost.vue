@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   ArrowUp,
   Bookmark,
   Check,
+  ChevronDown,
   Users,
   Copy,
   Flag,
@@ -16,9 +17,19 @@ import {
 import { toast } from 'vue-sonner'
 import type { FeedPost } from '@/data/feedPosts'
 import { getSeededPublicProfile } from '@/data/publicProfiles'
+import { ApiError } from '@/lib/api'
+import PostCommentThread from '@/components/PostCommentThread.vue'
+import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
+import { postsService, type PostCommentRecord } from '@/services/posts'
+import { usersService, type MyProfileData } from '@/services/users'
+import { useAuthStore } from '@/stores/auth'
 type PostComment = {
-  id: number
+  id: number | string
+  parentId?: string | null
   author: string
+  authorTo: string
+  avatarSrc: string | null
+  avatarText: string
   time: string
   tag: string
   body: string
@@ -26,89 +37,46 @@ type PostComment = {
   isScored: boolean
   isFollowing: boolean
   isReplying: boolean
+  areRepliesOpen: boolean
   replyInput: string
-  replies: {
-    id: number
-    author: string
-    time: string
-    body: string
-  }[]
+  replies: PostComment[]
 }
 
 const props = defineProps<{
   post: FeedPost
 }>()
 
+const authStore = useAuthStore()
 const isFollowing = ref(props.post.isFollowing ?? false)
 const isSaved = ref(false)
 const isScored = ref(false)
 const currentScore = ref('score' in props.post ? props.post.score : 0)
-const isCommentModalOpen = ref(false)
+const isCommentsOpen = ref(false)
 const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
 const commentInput = ref('')
-const currentComments = ref('comments' in props.post ? props.post.comments : 0)
-const commentList = ref<PostComment[]>([
-  {
-    id: 1,
-    author: 'Eric Bawa',
-    time: '8 hours ago',
-    tag: 'Psychologist | CSS3 | Java | Project Mgt.',
-    body: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-    score: 0,
-    isScored: false,
-    isFollowing: false,
-    isReplying: false,
-    replyInput: '',
-    replies: [],
-  },
-  {
-    id: 2,
-    author: 'Kevin Martin',
-    time: '8 hours ago',
-    tag: 'Psychologist | CSS3 | Java | Project Mgt.',
-    body: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt.',
-    score: 0,
-    isScored: false,
-    isFollowing: false,
-    isReplying: false,
-    replyInput: '',
-    replies: [],
-  },
-  {
-    id: 3,
-    author: 'Aaron Aiken',
-    time: '8 hours ago',
-    tag: 'Psychologist | CSS3 | Java | Project Mgt.',
-    body: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod.',
-    score: 0,
-    isScored: false,
-    isFollowing: false,
-    isReplying: false,
-    replyInput: '',
-    replies: [],
-  },
-])
+const visibleCommentCount = ref(3)
 const shareCommunity = ref('')
 const shareComment = ref('')
-const selectedReportReason = ref('Spam')
+const selectedReportReason = ref('')
 const reportTargetLabel = ref('this post')
+const isSavingPost = ref(false)
+const isReactingToPost = ref(false)
+const isSubmittingComment = ref(false)
+const isSubmittingReport = ref(false)
+const isLoadingComments = ref(false)
+const hasLoadedComments = ref(false)
 const followLabel = computed(() => (isFollowing.value ? 'Following' : 'Follow'))
 const activeActionClass =
   'border-[color:var(--accent)] bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)] hover:text-white'
+const apiPostId = computed(() => props.post.apiId)
+const detailPath = computed(() =>
+  props.post.type === 'question' ? `/questions/${props.post.slug}` : `/posts/${props.post.slug}`,
+)
 const shareLink = computed(() => {
-  const slugSource =
-    props.post.type === 'question'
-      ? `${props.post.communityName}-${props.post.title}`
-      : `${props.post.author.name}-${props.post.title}`
-
-  const slug = slugSource
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return `https://www.skills4export.com/share/${slug}`
+  const path = detailPath.value
+  return typeof window === 'undefined' ? path : new URL(path, window.location.origin).toString()
 })
 const sharePreviewAuthor = computed(() =>
   props.post.type === 'question' ? props.post.authorName : props.post.author.name,
@@ -155,6 +123,13 @@ const reportReasonDescriptions: Record<string, string> = {
   'Invasion of privacy': 'Do not publish private conversations, images, or recordings without consent.',
 }
 
+const commentList = ref<PostComment[]>([])
+const currentComments = ref('comments' in props.post ? props.post.comments : 0)
+const visibleComments = computed(() => commentList.value.slice(0, visibleCommentCount.value))
+const hiddenCommentCount = computed(() =>
+  Math.max(commentList.value.length - visibleCommentCount.value, 0),
+)
+
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
   const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
   return match?.[1] ?? ''
@@ -173,7 +148,12 @@ const authorProfileDetails = computed(() => {
   const publicProfile = publicProfileId ? getSeededPublicProfile(publicProfileId) : null
 
   if (!publicProfile) {
-    return []
+    const tag = props.post.type === 'question' ? props.post.tag : props.post.author.tag
+
+    return (tag || 'Skills4Export member')
+      .split('|')
+      .map((item: string) => item.trim())
+      .filter(Boolean)
   }
 
   const details: string[] = []
@@ -192,61 +172,331 @@ const authorProfileDetails = computed(() => {
   return details
 })
 
-const authorMetaLine = computed(() => authorProfileDetails.value.join(' • '))
+const authorMetaItems = computed(() => authorProfileDetails.value.slice(0, 3))
+
+const feedPostContextDetail = computed(() => {
+  if (props.post.type === 'question') {
+    return props.post.communityName
+  }
+
+  return props.post.communityId ? props.post.communityName || 'Community' : ''
+})
+
+const formatCommentTime = (value: string) => {
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const getInitials = (value: string) =>
+  value
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'CM'
+
+const getProfileName = (profile?: MyProfileData | null) =>
+  profile?.profile?.username?.trim() ||
+  profile?.user?.username?.trim() ||
+  profile?.user?.email?.split('@')[0]?.trim() ||
+  ''
+
+const getProfileSkills = (profile?: MyProfileData | null) =>
+  profile?.skills
+    ?.map((skill) => (skill.name || skill.skill || '').trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(' | ') || ''
+
+const currentUserCommentProfile = () => {
+  const name =
+    authStore.userProfile?.username ||
+    authStore.signUpDraft.username ||
+    authStore.signUpDraft.name ||
+    'You'
+
+  return {
+    name,
+    to: authStore.userId ? `/profile/view/${authStore.userId}` : '/profile',
+    avatarSrc: authStore.userProfile?.avatar || authStore.signUpDraft.avatar || null,
+    tag: authStore.signUpDraft.interests.slice(0, 3).join(' | '),
+  }
+}
+
+const resolveCommentAuthor = async (comment: PostCommentRecord) => {
+  if (comment.user_id && comment.user_id === authStore.userId) {
+    return currentUserCommentProfile()
+  }
+
+  const response = comment.user_id
+    ? await usersService.getUserProfile(comment.user_id, authStore.authToken).catch(() => null)
+    : null
+  const profile = response?.data ?? null
+  const name = getProfileName(profile) || 'Community member'
+
+  return {
+    name,
+    to: comment.user_id ? `/profile/view/${comment.user_id}` : '/profile',
+    avatarSrc: profile?.profile?.avatar || null,
+    tag: getProfileSkills(profile),
+  }
+}
+
+const mapComment = async (comment: PostCommentRecord): Promise<PostComment> => {
+  const author = await resolveCommentAuthor(comment)
+
+  return {
+    id: comment.id,
+    parentId: comment.parent_comment_id,
+    author: author.name,
+    authorTo: author.to,
+    avatarSrc: author.avatarSrc,
+    avatarText: getInitials(author.name),
+    time: formatCommentTime(comment.created_at),
+    tag: author.tag,
+    body: comment.content,
+    score: 0,
+    isScored: false,
+    isFollowing: false,
+    isReplying: false,
+    areRepliesOpen: false,
+    replyInput: '',
+    replies: [],
+  }
+}
+
+const buildCommentTree = async (comments: PostCommentRecord[]) => {
+  const mapped = await Promise.all(comments.map(mapComment))
+  const byId = new Map<string, PostComment>()
+  const roots: PostComment[] = []
+
+  mapped.forEach((comment) => {
+    byId.set(String(comment.id), comment)
+  })
+
+  mapped.forEach((comment) => {
+    if (comment.parentId && byId.has(comment.parentId)) {
+      const parent = byId.get(comment.parentId)
+      parent?.replies.push(comment)
+      parent!.areRepliesOpen = true
+      return
+    }
+
+    roots.push(comment)
+  })
+
+  return roots
+}
+
+const loadComments = async () => {
+  if (!apiPostId.value || isLoadingComments.value || hasLoadedComments.value) {
+    return
+  }
+
+  isLoadingComments.value = true
+
+  try {
+    const response = await postsService.listComments(apiPostId.value, authStore.authToken)
+    commentList.value = await buildCommentTree(response.data)
+    currentComments.value = response.total
+    hasLoadedComments.value = true
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to load comments.'
+    toast.error('Comments failed', { description: message })
+  } finally {
+    isLoadingComments.value = false
+  }
+}
+
+const syncPostCounters = () => {
+  currentScore.value = 'score' in props.post ? props.post.score : 0
+  currentComments.value = 'comments' in props.post ? props.post.comments : 0
+}
+
+onMounted(() => {
+  if (props.post.type !== 'question') {
+    void loadComments()
+  }
+})
+
+watch(
+  () => props.post,
+  () => {
+    syncPostCounters()
+    commentList.value = []
+    hasLoadedComments.value = false
+
+    if (props.post.type !== 'question') {
+      void loadComments()
+    }
+  },
+)
 
 const toggleFollow = () => {
   isFollowing.value = !isFollowing.value
 }
 
-const toggleScore = () => {
-  isScored.value = !isScored.value
-  currentScore.value += isScored.value ? 1 : -1
+const toggleScore = async () => {
+  if (!apiPostId.value) {
+    isScored.value = !isScored.value
+    currentScore.value += isScored.value ? 1 : -1
+    return
+  }
+
+  if (isReactingToPost.value) {
+    return
+  }
+
+  isReactingToPost.value = true
+
+  try {
+    const response = await postsService.togglePostReaction(
+      apiPostId.value,
+      {
+        userId: authStore.userId || undefined,
+        type: 'like',
+      },
+      authStore.authToken,
+    )
+    isScored.value = !isScored.value
+    currentScore.value = response.data.count
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
+    toast.error('Reaction failed', { description: message })
+  } finally {
+    isReactingToPost.value = false
+  }
 }
 
-const toggleSave = () => {
-  isSaved.value = !isSaved.value
+const toggleSave = async () => {
+  if (!apiPostId.value) {
+    isSaved.value = !isSaved.value
 
-  toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved', {
-    description: isSaved.value
-      ? 'This post is now in your saved list.'
-      : 'This post has been removed from your saved list.',
-  })
+    toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved', {
+      description: isSaved.value
+        ? 'This post is now in your saved list.'
+        : 'This post has been removed from your saved list.',
+    })
+    return
+  }
+
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before saving posts.',
+    })
+    return
+  }
+
+  if (isSavingPost.value) {
+    return
+  }
+
+  isSavingPost.value = true
+
+  try {
+    const response = await postsService.toggleSave(
+      apiPostId.value,
+      { userId: authStore.userId },
+      authStore.authToken,
+    )
+    isSaved.value = response.data.saved
+
+    toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved', {
+      description: isSaved.value
+        ? 'This post is now in your saved list.'
+        : 'This post has been removed from your saved list.',
+    })
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
+    toast.error('Save failed', { description: message })
+  } finally {
+    isSavingPost.value = false
+  }
 }
 
-const openCommentModal = () => {
-  isCommentModalOpen.value = true
+const toggleComments = () => {
+  isCommentsOpen.value = !isCommentsOpen.value
+
+  if (isCommentsOpen.value) {
+    visibleCommentCount.value = Math.max(visibleCommentCount.value, 3)
+    void loadComments()
+  }
 }
 
-const closeCommentModal = () => {
-  isCommentModalOpen.value = false
-  commentInput.value = ''
+const loadMoreComments = () => {
+  visibleCommentCount.value = Math.min(visibleCommentCount.value + 10, commentList.value.length)
 }
 
-const submitComment = () => {
+const submitComment = async () => {
   const value = commentInput.value.trim()
 
   if (!value) {
     return
   }
 
-  commentList.value.unshift({
-    id: Date.now(),
-    author: 'You',
-    time: 'Just now',
-    tag: 'Community Member',
-    body: value,
-    score: 0,
-    isScored: false,
-    isFollowing: false,
-    isReplying: false,
-    replyInput: '',
-    replies: [],
-  })
-  currentComments.value += 1
-  commentInput.value = ''
+  if (apiPostId.value) {
+    if (isSubmittingComment.value) {
+      return
+    }
 
-  toast.success('Comment added', {
-    description: 'Your comment has been added to this post.',
+    isSubmittingComment.value = true
+
+    try {
+      const response = await postsService.createComment(
+        apiPostId.value,
+        {
+          userId: authStore.userId || undefined,
+          content: value,
+          parentCommentId: null,
+        },
+        authStore.authToken,
+      )
+
+      commentList.value.unshift({
+        id: response.data.id,
+        parentId: null,
+        author: currentUserCommentProfile().name,
+        authorTo: currentUserCommentProfile().to,
+        avatarSrc: currentUserCommentProfile().avatarSrc,
+        avatarText: getInitials(currentUserCommentProfile().name),
+        time: 'Just now',
+        tag: currentUserCommentProfile().tag,
+        body: response.data.content,
+        score: 0,
+        isScored: false,
+        isFollowing: false,
+        isReplying: false,
+        areRepliesOpen: false,
+        replyInput: '',
+        replies: [],
+      })
+      currentComments.value += 1
+      commentInput.value = ''
+
+      toast.success('Comment added', {
+        description: 'Your comment has been added to this post.',
+      })
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
+      toast.error('Comment failed', { description: message })
+    } finally {
+      isSubmittingComment.value = false
+    }
+    return
+  }
+
+  toast.error('Comment needs a post ID', {
+    description: 'Only posts loaded from the API can receive live comments.',
   })
 }
 
@@ -271,17 +521,47 @@ const copyShareLink = async () => {
   }
 }
 
-const submitShare = () => {
-  toast.success('Post shared', {
-    description: shareCommunity.value
-      ? `Shared to ${shareCommunity.value}.`
-      : 'Your share has been prepared successfully.',
-  })
-  closeShareModal()
+const submitShare = async () => {
+  const comment = shareComment.value.trim()
+  const communityContext = shareCommunity.value ? `Shared from ${shareCommunity.value}` : ''
+  const text = [comment, communityContext, sharePreviewDescription.value]
+    .filter(Boolean)
+    .join('\n\n')
+  const canNativeShare = 'share' in navigator && typeof navigator.share === 'function'
+
+  try {
+    if (canNativeShare) {
+      await navigator.share({
+        title: props.post.title,
+        text: text || props.post.title,
+        url: shareLink.value,
+      })
+    } else {
+      await navigator.clipboard.writeText(
+        [comment, props.post.title, shareLink.value].filter(Boolean).join('\n\n'),
+      )
+    }
+
+    toast.success('Post shared', {
+      description: canNativeShare ? 'The native share sheet has been opened.' : 'The share text has been copied.',
+    })
+    shareCommunity.value = ''
+    shareComment.value = ''
+    closeShareModal()
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+
+    toast.error('Unable to share', {
+      description: 'Please copy the link and share it manually.',
+    })
+  }
 }
 
 const openReportModal = () => {
   reportTargetLabel.value = 'this post'
+  selectedReportReason.value = ''
   isReportModalOpen.value = true
 }
 
@@ -303,16 +583,71 @@ const closeReportModal = () => {
   isReportModalOpen.value = false
 }
 
-const submitReport = () => {
-  toast.success('Report submitted', {
-    description: `Thanks for reporting ${reportTargetLabel.value} under ${selectedReportReason.value}.`,
-  })
-  closeReportModal()
+const submitReport = async () => {
+  if (!selectedReportReason.value) {
+    toast.error('Select a report reason first.')
+    return
+  }
+
+  if (!apiPostId.value || reportTargetLabel.value !== 'this post') {
+    toast.error('Report needs an endpoint', {
+      description: 'Send me the comment report endpoint and I will wire this action live.',
+    })
+    return
+  }
+
+  if (isSubmittingReport.value) {
+    return
+  }
+
+  isSubmittingReport.value = true
+
+  try {
+    await postsService.reportPost(
+      apiPostId.value,
+      {
+        userId: authStore.userId || undefined,
+        reason: selectedReportReason.value,
+        details: reportReasonDescriptions[selectedReportReason.value] ?? '',
+      },
+      authStore.authToken,
+    )
+
+    toast.success('Report submitted', {
+      description: `Thanks for reporting ${reportTargetLabel.value} under ${selectedReportReason.value}.`,
+    })
+    closeReportModal()
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to submit report.'
+    toast.error('Report failed', { description: message })
+  } finally {
+    isSubmittingReport.value = false
+  }
 }
 
-const toggleCommentScore = (comment: PostComment) => {
+const toggleCommentScore = async (comment: PostCommentThreadItem) => {
+  if (typeof comment.id === 'string') {
+    try {
+      const response = await postsService.toggleCommentReaction(
+        comment.id,
+        {
+          userId: authStore.userId || undefined,
+          type: 'like',
+        },
+        authStore.authToken,
+      )
+      comment.isScored = !comment.isScored
+      comment.score = response.data.count
+      return
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
+      toast.error('Reaction failed', { description: message })
+      return
+    }
+  }
+
   comment.isScored = !comment.isScored
-  comment.score += comment.isScored ? 1 : -1
+  comment.score = (comment.score ?? 0) + (comment.isScored ? 1 : -1)
 }
 
 const toggleCommentFollow = (comment: PostComment) => {
@@ -321,38 +656,84 @@ const toggleCommentFollow = (comment: PostComment) => {
 
 const openCommentReportModal = (comment: PostComment) => {
   reportTargetLabel.value = `${comment.author}'s comment`
+  selectedReportReason.value = ''
   isReportModalOpen.value = true
 }
 
-const toggleCommentReply = (comment: PostComment) => {
+const toggleCommentReply = (comment: PostCommentThreadItem) => {
   comment.isReplying = !comment.isReplying
 }
 
-const submitCommentReply = (comment: PostComment) => {
+const toggleCommentReplies = (comment: PostComment) => {
+  comment.areRepliesOpen = !comment.areRepliesOpen
+}
+
+const submitCommentReply = async (comment: PostCommentThreadItem) => {
   const value = comment.replyInput.trim()
 
   if (!value) {
     return
   }
 
-  comment.replies.unshift({
-    id: Date.now(),
-    author: 'You',
-    time: 'Just now',
-    body: value,
-  })
-  comment.replyInput = ''
-  comment.isReplying = false
+  if (!apiPostId.value || typeof comment.id !== 'string') {
+    toast.error('Reply needs a saved comment', {
+      description: 'Only comments loaded from the API can receive live replies.',
+    })
+    return
+  }
 
-  toast.success('Reply added', {
-    description: `Your reply to ${comment.author} is now live.`,
-  })
+  if (isSubmittingComment.value) {
+    return
+  }
+
+  isSubmittingComment.value = true
+
+  try {
+    const response = await postsService.createComment(
+      apiPostId.value,
+      {
+        userId: authStore.userId || undefined,
+        content: value,
+        parentCommentId: comment.id,
+      },
+      authStore.authToken,
+    )
+
+    comment.replies.unshift({
+      id: response.data.id,
+      parentId: response.data.parent_comment_id,
+      author: currentUserCommentProfile().name,
+      authorTo: currentUserCommentProfile().to,
+      avatarSrc: currentUserCommentProfile().avatarSrc,
+      avatarText: getInitials(currentUserCommentProfile().name),
+      time: 'Just now',
+      tag: currentUserCommentProfile().tag,
+      body: response.data.content,
+      score: 0,
+      isScored: false,
+      isFollowing: false,
+      isReplying: false,
+      areRepliesOpen: false,
+      replyInput: '',
+      replies: [],
+    })
+    comment.areRepliesOpen = true
+    comment.isReplying = false
+    comment.replyInput = ''
+    currentComments.value += 1
+    toast.success('Reply added')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to add reply.'
+    toast.error('Reply failed', { description: message })
+  } finally {
+    isSubmittingComment.value = false
+  }
 }
 </script>
 
 <template>
   <article
-    class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)] sm:p-5"
+    class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-3 shadow-[var(--shadow-elevated)] sm:p-4"
   >
     <template v-if="post.type === 'question'">
       <div class="min-w-0">
@@ -363,28 +744,35 @@ const submitCommentReply = (comment: PostComment) => {
             <span class="truncate">{{ post.communityName }}</span>
           </div>
           <RouterLink
-            :to="`/posts/${post.slug}`"
+            :to="detailPath"
             class="mt-3 block text-[1.22rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.4rem] lg:text-[1.55rem]"
           >
             {{ post.title }}
           </RouterLink>
-          <div class="mt-3 flex min-w-0 items-center gap-2 text-sm leading-7 text-[var(--text-secondary)]">
+          <div class="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] leading-5 text-[var(--text-secondary)]">
             <RouterLink :to="authorRoute" class="shrink-0 font-semibold text-[var(--accent-strong)]">
               {{ authorName }}
             </RouterLink>
-            <span v-if="authorMetaLine" class="min-w-0 truncate">
-              • {{ authorMetaLine }}
+            <span class="text-[var(--text-tertiary)]">-</span>
+            <span class="shrink-0">{{ post.time }}</span>
+            <span v-if="authorMetaItems.length" class="text-[var(--text-tertiary)]">-</span>
+            <span
+              v-for="item in authorMetaItems"
+              :key="item"
+              class="inline-flex max-w-[9rem] truncate rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-[0.62rem] font-medium leading-4 text-[var(--text-secondary)]"
+            >
+              {{ item }}
             </span>
           </div>
-          <p class="mt-1 text-sm leading-7 text-[var(--text-secondary)]">
-            {{ post.time }}
+          <p v-if="post.body" class="mt-3 line-clamp-2 text-[0.9rem] leading-7 text-[var(--text-secondary)]">
+            {{ post.body }}
           </p>
         </div>
       </div>
 
       <div class="mt-5 flex flex-wrap gap-1.5 sm:gap-2">
         <RouterLink
-          :to="`/posts/${post.slug}`"
+          :to="detailPath"
           class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
         >
           View details
@@ -410,29 +798,36 @@ const submitCommentReply = (comment: PostComment) => {
     </template>
 
     <template v-else>
-      <div class="space-y-4">
-        <div class="flex items-start gap-3 sm:gap-4">
+      <div class="space-y-3">
+        <div class="flex items-start gap-3">
           <span
-            class="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.6rem] border border-[color:var(--border-soft)] text-lg font-semibold text-[var(--accent-strong)] sm:h-18 sm:w-18"
+            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] text-sm font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
           >
-            {{ post.author.avatarText }}
+            <img
+              v-if="post.author.avatarSrc"
+              :src="post.author.avatarSrc"
+              :alt="post.author.name"
+              class="h-full w-full rounded-full object-cover"
+            />
+            <span v-else>{{ post.author.avatarText }}</span>
           </span>
 
           <div class="min-w-0 flex-1">
             <div class="min-w-0">
               <div class="flex items-start gap-2">
-                <div class="min-w-0 flex flex-1 items-center gap-2">
+                <div class="min-w-0 flex flex-1 flex-wrap items-center gap-1.5">
                   <RouterLink
                     :to="authorRoute"
-                    class="shrink-0 text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-lg"
+                    class="shrink-0 text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.16rem]"
                   >
                     {{ authorName }}
                   </RouterLink>
                   <span
-                    v-if="authorMetaLine"
-                    class="min-w-0 truncate text-sm text-[var(--text-secondary)]"
+                    v-for="item in authorMetaItems"
+                    :key="item"
+                    class="inline-flex max-w-[8.5rem] truncate rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-[0.61rem] font-medium leading-4 text-[var(--text-secondary)]"
                   >
-                    • {{ authorMetaLine }}
+                    {{ item }}
                   </span>
                 </div>
 
@@ -485,12 +880,15 @@ const submitCommentReply = (comment: PostComment) => {
                     {{ followLabel }}
                   </button>
                   <span class="truncate">{{ post.time }}</span>
+                  <span v-if="feedPostContextDetail" class="hidden truncate text-[0.78rem] text-[var(--text-tertiary)] sm:inline">
+                    {{ feedPostContextDetail }}
+                  </span>
                 </div>
 
                 <div class="ml-auto flex items-center gap-2 self-start">
                   <RouterLink
                     v-if="post.type === 'community'"
-                    :to="`/posts/${post.slug}`"
+                    :to="detailPath"
                     class="inline-flex h-9 shrink-0 items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
                   >
                     View post
@@ -503,25 +901,26 @@ const submitCommentReply = (comment: PostComment) => {
 
         <div class="min-w-0">
           <RouterLink
-            :to="`/posts/${post.slug}`"
-            class="block text-[1.22rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.4rem] lg:text-[1.55rem]"
+            :to="detailPath"
+            class="block text-[1.05rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.18rem] lg:text-[1.28rem]"
           >
             {{ post.title }}
           </RouterLink>
-          <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.98rem] sm:leading-8">
+          <p class="feed-post-description mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)] sm:text-[0.9rem] sm:leading-7">
             {{ post.description }}
           </p>
 
           <img
+            v-if="post.imageSrc"
             :src="post.imageSrc"
             :alt="post.imageAlt || post.title"
-            class="mt-5 h-52 w-full rounded-[1.25rem] object-cover sm:h-72 lg:h-80"
+            class="-mx-3 mt-4 aspect-[4/5] w-[calc(100%+1.5rem)] max-w-none bg-[var(--surface-secondary)] object-cover sm:-mx-4 sm:aspect-[1.91/1] sm:w-[calc(100%+2rem)]"
           />
 
-          <div class="mt-5 flex flex-wrap gap-1.5 sm:gap-2">
+          <div class="mt-4 flex flex-wrap gap-1.5">
             <button
               type="button"
-              class="inline-flex h-9 items-center gap-1.5 rounded-[1rem] border px-2.5 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3 sm:text-[0.84rem]"
+              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border px-2 text-[0.78rem] font-medium transition sm:h-8 sm:px-2.5"
               :class="
                 isScored
                   ? activeActionClass
@@ -529,36 +928,40 @@ const submitCommentReply = (comment: PostComment) => {
               "
               @click="toggleScore"
             >
-              <ArrowUp class="h-3.5 w-3.5" />
+              <ArrowUp class="h-3 w-3" />
               {{ currentScore }} score
             </button>
             <button
               type="button"
-              class="inline-flex h-9 items-center gap-1.5 rounded-[1rem] border border-[color:var(--border-soft)] px-2.5 text-[0.9rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3 sm:text-[0.84rem]"
+              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:px-2.5"
               @click="openShareModal"
             >
-              <Share2 class="h-3.5 w-3.5" />
+              <Share2 class="h-3 w-3" />
               Share
             </button>
             <button
               type="button"
-              class="inline-flex h-9 items-center gap-1.5 rounded-[1rem] border border-[color:var(--border-soft)] px-2.5 text-[0.9rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3 sm:text-[0.84rem]"
-              @click="openCommentModal"
+              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:px-2.5"
+              @click="toggleComments"
             >
-              <MessageSquare class="h-3.5 w-3.5" />
-              {{ currentComments }}
+              <MessageSquare class="h-3 w-3" />
+              {{ currentComments }} {{ currentComments === 1 ? 'comment' : 'comments' }}
+              <ChevronDown
+                class="h-3 w-3 transition"
+                :class="isCommentsOpen ? 'rotate-180' : ''"
+              />
             </button>
             <button
               type="button"
-              class="hidden h-9 items-center gap-1.5 rounded-[1rem] border border-[color:var(--border-soft)] px-2.5 text-[0.9rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:inline-flex sm:h-8.5 sm:px-3 sm:text-[0.84rem]"
+              class="hidden h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:inline-flex sm:h-8 sm:px-2.5"
               @click="handleMobileReport"
             >
-              <Flag class="h-3.5 w-3.5" />
+              <Flag class="h-3 w-3" />
               Report
             </button>
             <button
               type="button"
-              class="hidden h-9 items-center gap-1.5 rounded-[1rem] border px-2.5 text-[0.9rem] font-medium transition sm:inline-flex sm:h-8.5 sm:px-3 sm:text-[0.84rem]"
+              class="hidden h-8 items-center gap-1 rounded-[0.8rem] border px-2 text-[0.78rem] font-medium transition sm:inline-flex sm:h-8 sm:px-2.5"
               :class="
                 isSaved
                   ? activeActionClass
@@ -566,10 +969,270 @@ const submitCommentReply = (comment: PostComment) => {
               "
               @click="handleMobileSave"
             >
-              <Bookmark class="h-3.5 w-3.5" />
+              <Bookmark class="h-3 w-3" />
               {{ isSaved ? 'Saved' : 'Save' }}
             </button>
           </div>
+
+          <section
+            v-if="isCommentsOpen"
+            class="mt-4 overflow-hidden rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
+          >
+            <div class="flex flex-col gap-2 border-b border-[color:var(--border-soft)] p-3 sm:flex-row">
+              <input
+                v-model="commentInput"
+                type="text"
+                placeholder="Comment..."
+                class="h-9 min-w-0 flex-1 rounded-[0.7rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-[0.8rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+                @keydown.enter.prevent="submitComment"
+              />
+              <button
+                type="button"
+                class="inline-flex h-9 items-center justify-center rounded-[0.7rem] bg-[var(--accent)] px-3 text-[0.8rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+                @click="submitComment"
+              >
+                Add Comment
+              </button>
+            </div>
+
+            <div class="max-h-[26rem] overflow-y-auto">
+              <div
+                v-if="isLoadingComments"
+                class="space-y-3 p-3"
+              >
+                <div
+                  v-for="item in 3"
+                  :key="item"
+                  class="flex animate-pulse items-start gap-2.5"
+                >
+                  <div class="h-8 w-8 rounded-full bg-[var(--surface-muted)]" />
+                  <div class="flex-1 space-y-2">
+                    <div class="h-3 w-32 rounded-full bg-[var(--surface-muted)]" />
+                    <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+                    <div class="h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+                  </div>
+                </div>
+              </div>
+
+              <p
+                v-else-if="hasLoadedComments && !commentList.length"
+                class="p-4 text-center text-[0.82rem] text-[var(--text-secondary)]"
+              >
+                No comments yet.
+              </p>
+
+              <div
+                v-else
+                class="divide-y divide-[color:var(--border-soft)]"
+              >
+                <article
+                  v-for="comment in visibleComments"
+                  :key="comment.id"
+                  class="p-3"
+                >
+                  <div class="flex items-start gap-2.5">
+                    <RouterLink
+                      :to="comment.authorTo"
+                      class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                    >
+                      <img
+                        v-if="comment.avatarSrc"
+                        :src="comment.avatarSrc"
+                        :alt="comment.author"
+                        class="h-full w-full object-cover"
+                      />
+                      <span v-else>{{ comment.avatarText }}</span>
+                    </RouterLink>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-1.5 text-[0.78rem] text-[var(--text-secondary)]">
+                        <RouterLink
+                          :to="comment.authorTo"
+                          class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+                        >
+                          {{ comment.author }}
+                        </RouterLink>
+                        <span>{{ comment.time }}</span>
+                      </div>
+                      <p class="mt-0.5 text-[0.72rem] text-[var(--text-secondary)] sm:text-[0.76rem]">{{ comment.tag }}</p>
+                      <p class="mt-1.5 text-[0.82rem] leading-6 text-[var(--text-primary)]">
+                        {{ comment.body }}
+                      </p>
+
+                      <div class="mt-2.5 flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.76rem] font-medium transition"
+                          :class="
+                            comment.isScored
+                              ? activeActionClass
+                              : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                          "
+                          @click="toggleCommentScore(comment)"
+                        >
+                          <ArrowUp class="h-3 w-3" />
+                          {{ comment.score }} score
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded-[0.7rem] border border-[color:var(--border-soft)] px-2 py-1.5 text-[0.76rem] font-medium text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                          @click="toggleCommentReply(comment)"
+                        >
+                          <Reply class="h-3 w-3" />
+                          {{ comment.isReplying ? 'Cancel Reply' : 'Reply' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.76rem] font-medium transition"
+                          :class="
+                            comment.isFollowing
+                              ? activeActionClass
+                              : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                          "
+                          @click="toggleCommentFollow(comment)"
+                        >
+                          <Check v-if="comment.isFollowing" class="h-3 w-3" />
+                          {{ comment.isFollowing ? 'Following' : 'Follow' }}
+                        </button>
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 rounded-[0.7rem] border border-[color:var(--border-soft)] px-2 py-1.5 text-[0.76rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                          @click="openCommentReportModal(comment)"
+                        >
+                          <Flag class="h-3 w-3" />
+                          Report
+                        </button>
+                      </div>
+
+                      <div v-if="comment.isReplying" class="mt-3 flex flex-col gap-2 border-l-2 border-[color:var(--border-soft)] pl-3">
+                        <textarea
+                          v-model="comment.replyInput"
+                          rows="3"
+                          placeholder="Write your reply..."
+                          class="w-full rounded-[0.7rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-[0.8rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+                        />
+                        <div class="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            class="inline-flex items-center justify-center rounded-[0.7rem] border border-[color:var(--border-soft)] px-3 py-2 text-[0.78rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                            @click="toggleCommentReply(comment)"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            :disabled="isSubmittingComment || !comment.replyInput.trim()"
+                            class="inline-flex items-center justify-center rounded-[0.7rem] bg-[var(--accent)] px-3 py-2 text-[0.78rem] font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+                            @click="submitCommentReply(comment)"
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      </div>
+
+                      <div v-if="comment.replies.length" class="mt-3">
+                        <button
+                          type="button"
+                          class="inline-flex items-center gap-1 text-[0.78rem] font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]"
+                          @click="toggleCommentReplies(comment)"
+                        >
+                          <ChevronDown
+                            class="h-3.5 w-3.5 transition"
+                            :class="comment.areRepliesOpen ? 'rotate-180' : ''"
+                          />
+                          {{ comment.areRepliesOpen ? 'Hide replies' : `View ${comment.replies.length} replies` }}
+                        </button>
+
+                        <div
+                          v-if="comment.areRepliesOpen"
+                          class="mt-2 space-y-2 border-l-2 border-[color:var(--border-soft)] pl-3"
+                        >
+                          <article
+                            v-for="reply in comment.replies"
+                            :key="reply.id"
+                            class="py-1.5"
+                          >
+                            <div class="flex flex-wrap items-center gap-1.5 text-[0.76rem] text-[var(--text-secondary)]">
+                              <span class="font-semibold text-[var(--text-primary)]">{{ reply.author }}</span>
+                              <span>{{ reply.time }}</span>
+                            </div>
+                            <p class="mt-1.5 text-[0.8rem] leading-6 text-[var(--text-primary)]">{{ reply.body }}</p>
+                            <div class="mt-2 flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.74rem] font-medium transition"
+                                :class="
+                                  reply.isScored
+                                    ? activeActionClass
+                                    : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                                "
+                                @click="toggleCommentScore(reply)"
+                              >
+                                <ArrowUp class="h-3 w-3" />
+                                {{ reply.score }} score
+                              </button>
+                              <button
+                                type="button"
+                                class="inline-flex items-center gap-1 rounded-[0.7rem] border border-[color:var(--border-soft)] px-2 py-1.5 text-[0.74rem] font-medium text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                                @click="toggleCommentReply(reply)"
+                              >
+                                <Reply class="h-3 w-3" />
+                                {{ reply.isReplying ? 'Cancel Reply' : 'Reply' }}
+                              </button>
+                            </div>
+
+                            <div v-if="reply.isReplying" class="mt-2 flex flex-col gap-2 border-l-2 border-[color:var(--border-soft)] pl-3">
+                              <textarea
+                                v-model="reply.replyInput"
+                                rows="3"
+                                placeholder="Write your reply..."
+                                class="w-full rounded-[0.7rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-[0.8rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+                              />
+                              <div class="flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  class="inline-flex items-center justify-center rounded-[0.7rem] border border-[color:var(--border-soft)] px-3 py-2 text-[0.78rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                                  @click="toggleCommentReply(reply)"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  :disabled="isSubmittingComment || !reply.replyInput.trim()"
+                                  class="inline-flex items-center justify-center rounded-[0.7rem] bg-[var(--accent)] px-3 py-2 text-[0.78rem] font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+                                  @click="submitCommentReply(reply)"
+                                >
+                                  Reply
+                                </button>
+                              </div>
+                            </div>
+
+                            <PostCommentThread
+                              v-if="reply.replies.length"
+                              class="mt-2"
+                              :comments="reply.replies"
+                              :is-submitting="isSubmittingComment"
+                              @toggle-score="toggleCommentScore"
+                              @toggle-reply="toggleCommentReply"
+                              @submit-reply="submitCommentReply"
+                            />
+                          </article>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <button
+                v-if="hiddenCommentCount"
+                type="button"
+                class="inline-flex w-full items-center justify-center border-t border-[color:var(--border-soft)] px-3 py-2.5 text-[0.8rem] font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                @click="loadMoreComments"
+              >
+                Load more comments ({{ hiddenCommentCount }} left)
+              </button>
+            </div>
+          </section>
         </div>
       </div>
     </template>
@@ -577,191 +1240,38 @@ const submitCommentReply = (comment: PostComment) => {
 
   <Teleport to="body">
     <div
-      v-if="isCommentModalOpen"
-      class="fixed inset-0 z-[120] flex items-end justify-center bg-[color:rgba(12,12,27,0.58)] px-0 pt-6 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6"
-    >
-      <div
-        class="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[0_32px_90px_rgba(12,12,27,0.28)] sm:max-h-[92vh] sm:rounded-[1.6rem]"
-      >
-        <div class="flex items-center justify-between border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
-          <h2 class="text-[1.35rem] font-semibold text-[var(--text-primary)] sm:text-[1.45rem]">Comments</h2>
-          <button
-            type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            @click="closeCommentModal"
-          >
-            <X class="h-5 w-5" />
-          </button>
-        </div>
-
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-          <div class="flex overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)]">
-            <input
-              v-model="commentInput"
-              type="text"
-              placeholder="Comment..."
-              class="h-13 min-w-0 flex-1 bg-[var(--surface-secondary)] px-4 text-sm text-[var(--text-primary)] outline-none"
-              @keydown.enter.prevent="submitComment"
-            />
-            <button
-              type="button"
-              class="inline-flex items-center justify-center bg-[var(--text-secondary)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--text-primary)]"
-              @click="submitComment"
-            >
-              Add Comment
-            </button>
-            <button
-              type="button"
-              class="inline-flex items-center justify-center bg-[#d64a4a] px-5 text-sm font-semibold text-white transition hover:bg-[#be3d3d]"
-              @click="closeCommentModal"
-            >
-              Cancel
-            </button>
-          </div>
-
-          <div class="mt-6 space-y-6">
-            <article
-              v-for="comment in commentList"
-              :key="`${comment.author}-${comment.time}-${comment.body}`"
-              class="border-b border-[color:var(--border-soft)] pb-6"
-            >
-              <div class="flex items-start gap-4">
-                <span
-                  class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-center text-[0.7rem] font-medium leading-tight text-[var(--text-tertiary)]"
-                >
-                  Image<br />
-                  Loading
-                </span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-                    <span class="font-semibold text-[var(--text-primary)]">{{ comment.author }}</span>
-                    <span>{{ comment.time }}</span>
-                  </div>
-                  <p class="mt-1 text-sm text-[var(--text-secondary)]">{{ comment.tag }}</p>
-                  <p class="mt-2 text-base leading-8 text-[var(--text-primary)]">{{ comment.body }}</p>
-
-                  <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-[0.9rem] border px-3 py-2 text-sm font-medium transition"
-                      :class="
-                        comment.isScored
-                          ? activeActionClass
-                          : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
-                      "
-                      @click="toggleCommentScore(comment)"
-                    >
-                      <ArrowUp class="h-4 w-4" />
-                      {{ comment.score }} score
-                    </button>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-[0.9rem] border border-[color:var(--border-soft)] px-3 py-2 text-sm font-medium text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
-                      @click="toggleCommentReply(comment)"
-                    >
-                      <Reply class="h-4 w-4" />
-                      {{ comment.isReplying ? 'Cancel Reply' : 'Reply' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-[0.9rem] border px-3 py-2 text-sm font-medium transition"
-                      :class="
-                        comment.isFollowing
-                          ? activeActionClass
-                          : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
-                      "
-                      @click="toggleCommentFollow(comment)"
-                    >
-                      <Check v-if="comment.isFollowing" class="h-4 w-4" />
-                      {{ comment.isFollowing ? 'Following' : 'Follow' }}
-                    </button>
-                    <button
-                      type="button"
-                      class="inline-flex items-center gap-2 rounded-[0.9rem] border border-[color:var(--border-soft)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-                      @click="openCommentReportModal(comment)"
-                    >
-                      <Flag class="h-4 w-4" />
-                      Report
-                    </button>
-                  </div>
-
-                  <div v-if="comment.isReplying" class="mt-4 flex flex-col gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-                    <textarea
-                      v-model="comment.replyInput"
-                      rows="3"
-                      placeholder="Write your reply..."
-                      class="w-full rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
-                    />
-                    <div class="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        class="inline-flex items-center justify-center rounded-[0.9rem] border border-[color:var(--border-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-                        @click="toggleCommentReply(comment)"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        class="inline-flex items-center justify-center rounded-[0.9rem] bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
-                        @click="submitCommentReply(comment)"
-                      >
-                        Reply
-                      </button>
-                    </div>
-                  </div>
-
-                  <div v-if="comment.replies.length" class="mt-4 space-y-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-                    <article
-                      v-for="reply in comment.replies"
-                      :key="reply.id"
-                      class="rounded-[0.9rem] bg-[var(--surface-primary)] p-3"
-                    >
-                      <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-                        <span class="font-semibold text-[var(--text-primary)]">{{ reply.author }}</span>
-                        <span>{{ reply.time }}</span>
-                      </div>
-                      <p class="mt-2 text-sm leading-7 text-[var(--text-primary)]">{{ reply.body }}</p>
-                    </article>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div
       v-if="isShareModalOpen"
-      class="fixed inset-0 z-[120] flex items-end justify-center bg-[color:rgba(12,12,27,0.58)] px-0 pt-6 backdrop-blur-sm sm:items-center sm:px-4 sm:py-6"
+      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/80 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
+      @click.self="closeShareModal"
     >
       <div
-        class="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[0_32px_90px_rgba(12,12,27,0.28)] sm:max-h-[92vh] sm:rounded-[1.6rem]"
+        class="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)] sm:max-h-[92vh] sm:rounded-[1rem]"
       >
-        <div class="flex items-center justify-between border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
-          <h2 class="text-[1.35rem] font-semibold text-[var(--text-primary)] sm:text-[1.45rem]">Share</h2>
+        <div class="mx-auto mt-3 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
+        <div class="flex items-center justify-between border-b border-[color:var(--border-soft)] px-4 py-3 sm:px-5">
+          <h2 class="text-lg font-semibold text-[var(--text-primary)]">Share</h2>
           <button
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             @click="closeShareModal"
           >
-            <X class="h-5 w-5" />
+            <X class="h-4 w-4" />
           </button>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-          <div class="space-y-6">
+        <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <div class="space-y-4">
             <div class="space-y-2">
-              <p class="text-base font-semibold text-[var(--text-primary)]">Share a link to this Post</p>
-              <div class="flex overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]">
+              <p class="text-[0.92rem] font-semibold text-[var(--text-primary)]">Share a link to this Post</p>
+              <div class="flex overflow-hidden rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]">
                 <input
                   :value="shareLink"
                   readonly
-                  class="h-13 min-w-0 flex-1 bg-transparent px-4 text-sm text-[var(--text-primary)] outline-none"
+                  class="h-10 min-w-0 flex-1 bg-[var(--surface-secondary)] px-3 text-[0.86rem] text-[var(--text-primary)] outline-none"
                 />
                 <button
                   type="button"
-                  class="inline-flex items-center gap-2 border-l border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                  class="inline-flex items-center gap-1.5 border-l border-[color:var(--border-soft)] px-3 text-[0.84rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
                   @click="copyShareLink"
                 >
                   <Copy class="h-4 w-4" />
@@ -770,11 +1280,11 @@ const submitCommentReply = (comment: PostComment) => {
               </div>
             </div>
 
-            <div class="space-y-2 border-t border-[color:var(--border-soft)] pt-5">
-              <p class="text-base font-semibold text-[var(--text-primary)]">Share within a community</p>
+            <div class="space-y-2 border-t border-[color:var(--border-soft)] pt-4">
+              <p class="text-[0.92rem] font-semibold text-[var(--text-primary)]">Share within a community</p>
               <select
                 v-model="shareCommunity"
-                class="h-13 w-full rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+                class="h-10 w-full rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 text-[0.86rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
               >
                 <option value="">Select a community</option>
                 <option value="Design Community">Design Community</option>
@@ -782,6 +1292,9 @@ const submitCommentReply = (comment: PostComment) => {
                 <option value="Opportunities Hub">Opportunities Hub</option>
                 <option value="General Community">General Community</option>
               </select>
+              <p class="text-xs leading-5 text-[var(--text-tertiary)]">
+                This adds community context to the shared link.
+              </p>
             </div>
 
             <div class="space-y-2">
@@ -789,18 +1302,18 @@ const submitCommentReply = (comment: PostComment) => {
                 v-model="shareComment"
                 rows="3"
                 placeholder="Make comment here..."
-                class="w-full rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+                class="w-full rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2.5 text-[0.86rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
               />
             </div>
 
-            <div class="rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-              <p class="text-[1.3rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.4rem]">
+            <div class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3">
+              <p class="text-base font-semibold leading-tight text-[var(--text-primary)]">
                 {{ post.title }}
               </p>
-              <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+              <p class="mt-2 text-[0.86rem] leading-6 text-[var(--text-secondary)]">
                 {{ sharePreviewDescription }}
               </p>
-              <div class="mt-3 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+              <div class="mt-2 flex items-center gap-2 text-[0.84rem] text-[var(--text-secondary)]">
                 <span class="font-semibold text-[var(--text-primary)]">{{ sharePreviewAuthor }}</span>
                 <span>{{ post.time }}</span>
               </div>
@@ -808,17 +1321,17 @@ const submitCommentReply = (comment: PostComment) => {
                 v-if="sharePreviewImageSrc"
                 :src="sharePreviewImageSrc"
                 :alt="sharePreviewImageAlt"
-                class="mt-4 h-64 w-full rounded-[1rem] object-cover sm:h-80"
+                class="mt-3 aspect-[4/5] w-full rounded-[0.8rem] bg-[var(--surface-primary)] object-cover sm:aspect-[1.91/1]"
               />
             </div>
           </div>
         </div>
 
-        <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-4 sm:px-6">
+        <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 sm:px-5">
           <div class="flex justify-end">
             <button
               type="button"
-              class="inline-flex min-w-[9rem] items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+              class="inline-flex min-w-[7rem] items-center justify-center gap-1.5 rounded-[0.8rem] bg-[var(--accent)] px-4 py-2.5 text-[0.86rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
               @click="submitShare"
             >
               <span>Share</span>
@@ -831,43 +1344,45 @@ const submitCommentReply = (comment: PostComment) => {
 
     <div
       v-if="isReportModalOpen"
-      class="fixed inset-0 z-[120] flex items-center justify-center bg-[color:rgba(12,12,27,0.58)] px-4 py-6 backdrop-blur-sm"
+      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/80 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
+      @click.self="closeReportModal"
     >
       <div
-        class="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[0_32px_90px_rgba(12,12,27,0.28)]"
+        class="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)] sm:max-h-[92vh] sm:rounded-[1rem]"
       >
-        <div class="flex items-center justify-between border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
-          <h2 class="text-[1.4rem] font-semibold text-[var(--text-primary)] sm:text-[1.5rem]">Submit A Report</h2>
+        <div class="mx-auto mt-3 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
+        <div class="flex items-center justify-between border-b border-[color:var(--border-soft)] px-4 py-3 sm:px-5">
+          <h2 class="text-lg font-semibold text-[var(--text-primary)]">Submit A Report</h2>
           <button
             type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             @click="closeReportModal"
           >
-            <X class="h-5 w-5" />
+            <X class="h-4 w-4" />
           </button>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-          <p class="max-w-3xl text-[1.15rem] leading-9 text-[var(--text-primary)]">
+        <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <p class="max-w-3xl text-[0.92rem] leading-6 text-[var(--text-primary)]">
             Thank you for reporting to us posts that break the rules. Let us know which of the rules applies.
           </p>
 
           <button
             type="button"
-            class="mt-4 inline-flex items-center rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="mt-3 inline-flex items-center rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 text-[0.84rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
           >
             Review community rules
           </button>
 
-          <div class="mt-8 flex flex-wrap gap-3">
+          <div class="mt-5 flex flex-wrap gap-2">
             <button
               v-for="reason in reportReasons"
               :key="reason"
               type="button"
-              class="inline-flex items-center rounded-[0.9rem] border px-4 py-2.5 text-sm font-semibold transition"
+              class="inline-flex items-center rounded-[0.75rem] border px-3 py-2 text-[0.82rem] font-semibold transition"
               :class="
                 selectedReportReason === reason
-                  ? 'border-[color:color-mix(in_srgb,var(--warning,#f59e0b)_45%,transparent)] bg-[color:rgba(245,158,11,0.14)] text-[var(--text-primary)]'
+                  ? 'border-[var(--warning)] bg-[#fef3c7] text-[var(--text-primary)]'
                   : 'border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
               "
               @click="selectedReportReason = reason"
@@ -876,22 +1391,31 @@ const submitCommentReply = (comment: PostComment) => {
             </button>
           </div>
 
-          <div class="mt-8 rounded-[1.2rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5">
+          <div
+            v-if="selectedReportReason"
+            class="mt-5 rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          >
             <div class="flex items-center gap-2">
-              <Check class="h-5 w-5 text-[var(--accent-strong)]" />
-              <h3 class="text-[1.35rem] font-semibold text-[var(--text-primary)]">{{ selectedReportReason }}:</h3>
+              <Check class="h-4 w-4 text-[var(--accent-strong)]" />
+              <h3 class="text-base font-semibold text-[var(--text-primary)]">{{ selectedReportReason }}:</h3>
             </div>
-            <p class="mt-3 text-base leading-8 text-[var(--text-secondary)]">
+            <p class="mt-2 text-[0.86rem] leading-6 text-[var(--text-secondary)]">
               {{ reportReasonDescriptions[selectedReportReason] }}
             </p>
           </div>
         </div>
 
-        <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-4 sm:px-6">
+        <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 sm:px-5">
           <div class="flex justify-end">
             <button
               type="button"
-              class="inline-flex min-w-[9rem] items-center justify-center rounded-[1rem] bg-[#e23a47] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#c9313d]"
+              class="inline-flex min-w-[7rem] items-center justify-center rounded-[0.8rem] px-4 py-2.5 text-[0.86rem] font-semibold text-white transition"
+              :class="
+                selectedReportReason
+                  ? 'bg-[#e23a47] hover:bg-[#c9313d]'
+                  : 'cursor-not-allowed bg-[var(--text-tertiary)]'
+              "
+              :disabled="!selectedReportReason"
               @click="submitReport"
             >
               Submit

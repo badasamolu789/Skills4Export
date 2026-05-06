@@ -3,6 +3,7 @@ import CreateAlertView from '@/views/CreateAlertView.vue'
 import CreatePageView from '@/views/CreatePageView.vue'
 import CommunityDetailView from '@/views/CommunityDetailView.vue'
 import ExploreCommunitiesView from '@/views/ExploreCommunitiesView.vue'
+import FreelancersView from '@/views/FreelancersView.vue'
 import HomeView from '@/views/HomeView.vue'
 import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
 import GoogleCallbackView from '@/views/GoogleCallbackView.vue'
@@ -16,6 +17,7 @@ import MobileAccountView from '@/views/MobileAccountView.vue'
 import MobileSearchView from '@/views/MobileSearchView.vue'
 import PageDetailView from '@/views/PageDetailView.vue'
 import PostDetailView from '@/views/PostDetailView.vue'
+import QuestionDetailView from '@/views/QuestionDetailView.vue'
 import NotFoundView from '@/views/NotFoundView.vue'
 import EditProfileView from '@/views/EditProfileView.vue'
 import ProfileView from '@/views/ProfileView.vue'
@@ -56,6 +58,8 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
       },
     },
     {
@@ -164,6 +168,19 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
+      },
+    },
+    {
+      path: '/questions/:slug',
+      name: 'question-detail',
+      component: QuestionDetailView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
       },
     },
     {
@@ -225,6 +242,15 @@ const router = createRouter({
       path: '/referrals',
       name: 'referrals',
       component: ReferralsView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+      },
+    },
+    {
+      path: '/freelancers',
+      name: 'freelancers',
+      component: FreelancersView,
       meta: {
         layout: 'app',
         requiresAuth: true,

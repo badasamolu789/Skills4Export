@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Globe, Mail, MapPin, Phone, ShieldCheck, Sparkles, UserRound, Plus, Trash2, Award, BookOpen, GraduationCap, Briefcase } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Briefcase, Camera, Globe, Mail, MapPin, Phone, ShieldCheck, Sparkles, UserRound, Plus, Trash2, Award, BookOpen, GraduationCap } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
 import { usersService } from '@/services/users'
@@ -10,7 +10,6 @@ import type { UserPortfolio, UserSkill, UserCertification, UserEducation, UserEx
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
-const router = useRouter()
 const isLoadingProfile = ref(false)
 const isSavingContact = ref(false)
 const isSavingProfessional = ref(false)
@@ -34,6 +33,13 @@ const isUploadingAvatar = ref(false)
 const isUploadingBanner = ref(false)
 const avatarFile = ref<File | null>(null)
 const bannerFile = ref<File | null>(null)
+const avatarFileInput = ref<HTMLInputElement | null>(null)
+const bannerFileInput = ref<HTMLInputElement | null>(null)
+const avatarObjectUrl = ref('')
+const bannerObjectUrl = ref('')
+const activeProfileModal = ref<'education' | 'experience' | 'skills' | 'project' | 'certificate' | null>(null)
+const currentWorkplace = ref('Amaka Global')
+const currentJobTitle = ref('Software Developer')
 
 // Skills
 const skills = ref<Array<{ id: string; name: string; level?: string }>>([])
@@ -107,21 +113,73 @@ const displayName = computed(() => {
   return form.value.name || authStore.signUpDraft.name || 'Samuel Bada'
 })
 
-const avatarPreviewUrl = computed(() => {
-  if (avatarFile.value) {
-    return URL.createObjectURL(avatarFile.value)
+const avatarPreviewUrl = computed(() => avatarObjectUrl.value || form.value.avatar || authStore.userProfile?.avatar || '')
+
+const bannerPreviewUrl = computed(() => bannerObjectUrl.value || form.value.banner || authStore.userProfile?.banner || '')
+
+const optionalField = (value?: string | null) => {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
+const syncProfileImage = (kind: 'avatar' | 'banner', url: string) => {
+  if (!url) {
+    return
   }
 
-  return form.value.avatar || authStore.userProfile?.avatar || ''
-})
-
-const bannerPreviewUrl = computed(() => {
-  if (bannerFile.value) {
-    return URL.createObjectURL(bannerFile.value)
+  if (kind === 'avatar') {
+    form.value.avatar = url
+    authStore.signUpDraft.avatar = url
+    authStore.setUserProfile({
+      ...(authStore.userProfile ?? {}),
+      avatar: url,
+    })
+    return
   }
 
-  return form.value.banner || authStore.userProfile?.banner || ''
-})
+  form.value.banner = url
+  authStore.signUpDraft.banner = url
+  authStore.setUserProfile({
+    ...(authStore.userProfile ?? {}),
+    banner: url,
+  })
+}
+
+const clearAvatarSelection = () => {
+  avatarFile.value = null
+
+  if (avatarFileInput.value) {
+    avatarFileInput.value.value = ''
+  }
+}
+
+const clearBannerSelection = () => {
+  bannerFile.value = null
+
+  if (bannerFileInput.value) {
+    bannerFileInput.value.value = ''
+  }
+}
+
+const waitForProfileImageRefresh = async (
+  kind: 'avatar' | 'banner',
+  previousUrl: string,
+) => {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    await loadProfile()
+
+    const nextUrl = kind === 'avatar'
+      ? authStore.userProfile?.avatar
+      : authStore.userProfile?.banner
+
+    if (nextUrl && nextUrl !== previousUrl) {
+      return nextUrl
+    }
+  }
+
+  return ''
+}
 
 const loadProfile = async () => {
   if (!authStore.isAuthenticated) {
@@ -224,42 +282,55 @@ const uploadAvatarFile = async () => {
   const loadingToastId = toast.loading('Uploading avatar...')
 
   try {
+    const previousAvatar = authStore.userProfile?.avatar || ''
     const response = await mediaService.uploadAvatarFile(authStore.userId, avatarFile.value, {
       kind: 'avatar',
       replace: true,
       token: authStore.authToken,
     })
-
     const jobId = response.data?.jobId
-    toast.dismiss(loadingToastId)
 
-    // Poll for server confirmation (up to 10 seconds)
-    let confirmed = false
-    for (let i = 0; i < 20; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      await loadProfile()
-      
-      if (authStore.userProfile?.avatar) {
-        confirmed = true
-        break
-      }
+    if (!jobId) {
+      throw new Error('The server did not return a media processing job ID.')
     }
 
-    if (confirmed) {
+    toast.loading('Processing avatar...', { id: loadingToastId })
+    const processedMedia = await mediaService.waitForProcessedMediaResult(jobId, {
+      token: authStore.authToken,
+      attempts: 45,
+      intervalMs: 1000,
+    })
+
+    const refreshedAvatar = await waitForProfileImageRefresh('avatar', previousAvatar)
+
+    if (refreshedAvatar) {
+      syncProfileImage('avatar', refreshedAvatar)
+      clearAvatarSelection()
       toast.success('Avatar uploaded successfully!', {
+        id: loadingToastId,
         description: 'Your profile image is now live.',
       })
-    } else {
-      toast.success('Avatar upload in progress', {
-        description: `Job ID: ${jobId}. The image will appear shortly.`,
-      })
+      return
     }
 
-    avatarFile.value = null
+    if (processedMedia.url) {
+      syncProfileImage('avatar', processedMedia.url)
+    }
+
+    if (import.meta.env.DEV) {
+      console.info('[profile] avatar job completed but profile.avatar was not updated', processedMedia.job)
+    }
+
+    toast.error('Avatar processed, but not attached', {
+      id: loadingToastId,
+      description: 'The backend accepted the image job, but /user/profile/me did not return the new avatar.',
+    })
   } catch (error) {
     const message = error instanceof ApiError || error instanceof Error ? error.message : 'Avatar upload failed.'
-    toast.dismiss(loadingToastId)
-    toast.error(message)
+    toast.error('Avatar upload failed', {
+      id: loadingToastId,
+      description: message,
+    })
   } finally {
     isUploadingAvatar.value = false
   }
@@ -275,42 +346,55 @@ const uploadBannerFile = async () => {
   const loadingToastId = toast.loading('Uploading banner...')
 
   try {
+    const previousBanner = authStore.userProfile?.banner || ''
     const response = await mediaService.uploadAvatarFile(authStore.userId, bannerFile.value, {
       kind: 'banner',
       replace: true,
       token: authStore.authToken,
     })
-
     const jobId = response.data?.jobId
-    toast.dismiss(loadingToastId)
 
-    // Poll for server confirmation (up to 10 seconds)
-    let confirmed = false
-    for (let i = 0; i < 20; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      await loadProfile()
-      
-      if (authStore.userProfile?.banner) {
-        confirmed = true
-        break
-      }
+    if (!jobId) {
+      throw new Error('The server did not return a media processing job ID.')
     }
 
-    if (confirmed) {
+    toast.loading('Processing banner...', { id: loadingToastId })
+    const processedMedia = await mediaService.waitForProcessedMediaResult(jobId, {
+      token: authStore.authToken,
+      attempts: 45,
+      intervalMs: 1000,
+    })
+
+    const refreshedBanner = await waitForProfileImageRefresh('banner', previousBanner)
+
+    if (refreshedBanner) {
+      syncProfileImage('banner', refreshedBanner)
+      clearBannerSelection()
       toast.success('Banner uploaded successfully!', {
+        id: loadingToastId,
         description: 'Your profile banner is now live.',
       })
-    } else {
-      toast.success('Banner upload in progress', {
-        description: `Job ID: ${jobId}. The image will appear shortly.`,
-      })
+      return
     }
 
-    bannerFile.value = null
+    if (processedMedia.url) {
+      syncProfileImage('banner', processedMedia.url)
+    }
+
+    if (import.meta.env.DEV) {
+      console.info('[profile] banner job completed but profile.banner was not updated', processedMedia.job)
+    }
+
+    toast.error('Banner processed, but not attached', {
+      id: loadingToastId,
+      description: 'The backend accepted the image job, but /user/profile/me did not return the new banner.',
+    })
   } catch (error) {
     const message = error instanceof ApiError || error instanceof Error ? error.message : 'Banner upload failed.'
-    toast.dismiss(loadingToastId)
-    toast.error(message)
+    toast.error('Banner upload failed', {
+      id: loadingToastId,
+      description: message,
+    })
   } finally {
     isUploadingBanner.value = false
   }
@@ -325,6 +409,38 @@ const handleBannerFileChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   bannerFile.value = target.files?.[0] ?? null
 }
+
+watch(avatarFile, (file) => {
+  if (avatarObjectUrl.value) {
+    URL.revokeObjectURL(avatarObjectUrl.value)
+    avatarObjectUrl.value = ''
+  }
+
+  if (file) {
+    avatarObjectUrl.value = URL.createObjectURL(file)
+  }
+})
+
+watch(bannerFile, (file) => {
+  if (bannerObjectUrl.value) {
+    URL.revokeObjectURL(bannerObjectUrl.value)
+    bannerObjectUrl.value = ''
+  }
+
+  if (file) {
+    bannerObjectUrl.value = URL.createObjectURL(file)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (avatarObjectUrl.value) {
+    URL.revokeObjectURL(avatarObjectUrl.value)
+  }
+
+  if (bannerObjectUrl.value) {
+    URL.revokeObjectURL(bannerObjectUrl.value)
+  }
+})
 
 const loadSkills = async () => {
   if (!authStore.isAuthenticated || !authStore.userId) {
@@ -460,6 +576,7 @@ onMounted(() => {
     void loadSkills()
     void loadPortfolios()
     void loadCertifications()
+    void loadEducations()
     void loadExperiences()
   }
 })
@@ -476,7 +593,7 @@ const addSkill = async () => {
     const response = await usersService.addUserSkill(
       authStore.userId,
       {
-        skill: newSkill.value.skill,
+        skill: newSkill.value.skill.trim(),
         level: newSkill.value.level,
       },
       authStore.authToken,
@@ -493,8 +610,8 @@ const addSkill = async () => {
     ]
     toast.success('Skill added successfully!')
     newSkill.value = { skill: '', level: 'intermediate' }
+    await loadSkills()
     await loadProfile()
-    router.push('/profile#skills')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -541,12 +658,14 @@ const addPortfolio = async () => {
   isAddingPortfolio.value = true
 
   try {
+    const description = optionalField(newPortfolio.value.description)
+    const link = optionalField(newPortfolio.value.link)
     const response = await usersService.addUserPortfolio(
       authStore.userId,
       {
-        title: newPortfolio.value.title,
-        description: newPortfolio.value.description,
-        link: newPortfolio.value.link,
+        title: newPortfolio.value.title.trim(),
+        ...(description ? { description } : {}),
+        ...(link ? { link } : {}),
       },
       authStore.authToken,
     )
@@ -564,8 +683,8 @@ const addPortfolio = async () => {
     }
     toast.success('Portfolio item added successfully!')
     newPortfolio.value = { title: '', description: '', link: '' }
+    await loadPortfolios()
     await loadProfile()
-    router.push('/profile#portfolio')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -612,12 +731,14 @@ const addCertification = async () => {
   isAddingCertification.value = true
 
   try {
+    const issuer = optionalField(newCertification.value.issuer)
+    const issueDate = optionalField(newCertification.value.issueDate)
     const response = await usersService.addUserCertification(
       authStore.userId,
       {
-        name: newCertification.value.name,
-        issuer: newCertification.value.issuer,
-        issueDate: newCertification.value.issueDate,
+        name: newCertification.value.name.trim(),
+        ...(issuer ? { issuer } : {}),
+        ...(issueDate ? { issueDate } : {}),
       },
       authStore.authToken,
     )
@@ -635,8 +756,8 @@ const addCertification = async () => {
     }
     toast.success('Certification added successfully!')
     newCertification.value = { name: '', issuer: '', issueDate: '' }
+    await loadCertifications()
     await loadProfile()
-    router.push('/profile#certifications')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -683,17 +804,18 @@ const addEducation = async () => {
   isAddingEducation.value = true
 
   try {
-    const response = await usersService.addUserEducation(
-      authStore.userId,
-      {
-        school: newEducation.value.school,
-        degree: newEducation.value.degree,
-        field: newEducation.value.field,
-        startDate: newEducation.value.startDate,
-        endDate: newEducation.value.endDate || null,
-      },
-      authStore.authToken,
-    )
+    const degree = optionalField(newEducation.value.degree)
+    const field = optionalField(newEducation.value.field)
+    const startDate = optionalField(newEducation.value.startDate)
+    const endDate = optionalField(newEducation.value.endDate)
+    const payload = {
+      school: newEducation.value.school.trim(),
+      ...(degree ? { degree } : {}),
+      ...(field ? { field } : {}),
+      ...(startDate ? { startDate } : {}),
+      ...(endDate ? { endDate } : {}),
+    }
+    const response = await usersService.addUserEducation(authStore.userId, payload, authStore.authToken)
 
     if (response.data) {
       educations.value = [
@@ -710,8 +832,8 @@ const addEducation = async () => {
     }
     toast.success('Education record added successfully!')
     newEducation.value = { school: '', degree: '', field: '', startDate: '', endDate: '' }
+    await loadEducations()
     await loadProfile()
-    router.push('/profile#education')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -758,19 +880,20 @@ const addExperience = async () => {
   isAddingExperience.value = true
 
   try {
-    const response = await usersService.addUserExperience(
-      authStore.userId,
-      {
-        company: newExperience.value.company,
-        title: newExperience.value.title,
-        employmentType: newExperience.value.employmentType,
-        startDate: newExperience.value.startDate,
-        endDate: newExperience.value.isCurrent ? null : newExperience.value.endDate || null,
-        isCurrent: newExperience.value.isCurrent,
-        description: newExperience.value.description,
-      },
-      authStore.authToken,
-    )
+    const employmentType = optionalField(newExperience.value.employmentType)
+    const startDate = optionalField(newExperience.value.startDate)
+    const endDate = optionalField(newExperience.value.endDate)
+    const description = optionalField(newExperience.value.description)
+    const payload = {
+      company: newExperience.value.company.trim(),
+      title: newExperience.value.title.trim(),
+      isCurrent: newExperience.value.isCurrent,
+      ...(employmentType ? { employmentType } : {}),
+      ...(startDate ? { startDate } : {}),
+      ...(description ? { description } : {}),
+      ...(!newExperience.value.isCurrent && endDate ? { endDate } : {}),
+    }
+    const response = await usersService.addUserExperience(authStore.userId, payload, authStore.authToken)
 
     if (response.data) {
       experiences.value = [
@@ -781,7 +904,7 @@ const addExperience = async () => {
           employmentType: response.data.employmentType,
           startDate: response.data.startDate || newExperience.value.startDate,
           endDate: response.data.endDate,
-          isCurrent: response.data.isCurrent === 1,
+          isCurrent: Boolean(response.data.isCurrent),
           description: response.data.description,
         },
         ...experiences.value,
@@ -789,8 +912,8 @@ const addExperience = async () => {
     }
     toast.success('Experience record added successfully!')
     newExperience.value = { company: '', title: '', employmentType: '', startDate: '', endDate: '', isCurrent: false, description: '' }
+    await loadExperiences()
     await loadProfile()
-    router.push('/profile#experience')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -832,6 +955,8 @@ const upsertProfile = async (payload: {
   username?: string
   bio?: string
   location?: string
+  avatar?: string | null
+  banner?: string | null
   website?: string
   linkedin?: string
   github?: string
@@ -842,14 +967,20 @@ const upsertProfile = async (payload: {
     throw new Error('No authenticated user ID is available for this profile update.')
   }
 
+  if (!authStore.userProfile?.id) {
+    return usersService.createUserProfile(id, payload, authStore.authToken)
+  }
+
   try {
     return await usersService.updateUserProfile(id, payload, authStore.authToken)
   } catch (error) {
-    if (!(error instanceof ApiError && error.status === 404)) {
-      throw error
+    if (error instanceof ApiError && error.status === 404) {
+      throw new Error(
+        'The backend does not expose a profile update route for existing profiles. Please ask the backend team to enable profile updates for /api/users/:id/profile or make POST /api/users/:id/profile update existing profiles.',
+      )
     }
 
-    return usersService.createUserProfile(id, payload, authStore.authToken)
+    throw error
   }
 }
 
@@ -938,6 +1069,61 @@ const saveProfessionalSection = async () => {
     isSavingProfessional.value = false
   }
 }
+
+const profileModalTitle = computed(() => {
+  const titles = {
+    education: 'Add Education',
+    experience: 'Add Experience',
+    skills: 'Add Skills',
+    project: 'Add Project',
+    certificate: 'Add Professional Certificate',
+  }
+
+  return activeProfileModal.value ? titles[activeProfileModal.value] : 'Profile update'
+})
+
+const openProfileModal = (modal: NonNullable<typeof activeProfileModal.value>) => {
+  activeProfileModal.value = modal
+}
+
+const closeProfileModal = () => {
+  activeProfileModal.value = null
+}
+
+const addSkillFromModal = async () => {
+  await addSkill()
+  if (!newSkill.value.skill.trim()) {
+    closeProfileModal()
+  }
+}
+
+const addPortfolioFromModal = async () => {
+  await addPortfolio()
+  if (!newPortfolio.value.title.trim()) {
+    closeProfileModal()
+  }
+}
+
+const addCertificationFromModal = async () => {
+  await addCertification()
+  if (!newCertification.value.name.trim()) {
+    closeProfileModal()
+  }
+}
+
+const addEducationFromModal = async () => {
+  await addEducation()
+  if (!newEducation.value.school.trim()) {
+    closeProfileModal()
+  }
+}
+
+const addExperienceFromModal = async () => {
+  await addExperience()
+  if (!newExperience.value.company.trim() && !newExperience.value.title.trim()) {
+    closeProfileModal()
+  }
+}
 </script>
 
 <template>
@@ -959,22 +1145,204 @@ const saveProfessionalSection = async () => {
       </div>
     </div>
 
-    <div v-if="isLoadingProfile" class="rounded-[1.25rem] border border-dashed border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
-      Loading profile data...
+    <div v-if="isLoadingProfile" class="animate-pulse rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
+      <div class="h-4 w-40 rounded-full bg-[var(--surface-muted)]" />
+      <div class="mt-3 h-3 w-64 max-w-full rounded-full bg-[var(--surface-muted)]" />
     </div>
 
-    <div class="space-y-6 rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-6">
+    <section class="overflow-hidden rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
+      <div class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
+        <img
+          v-if="bannerPreviewUrl"
+          :src="bannerPreviewUrl"
+          alt="Banner preview"
+          class="h-full w-full object-cover"
+        />
+        <div
+          v-else
+          class="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_16%,white),color-mix(in_srgb,var(--surface-secondary)_80%,white))] text-sm font-semibold text-[var(--text-secondary)]"
+        >
+          Banner preview
+        </div>
+        <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.36))]" />
+
+        <label
+          class="absolute right-4 top-4 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-[var(--text-primary)] shadow-[var(--shadow-soft)] transition hover:bg-white hover:text-[var(--accent-strong)]"
+          aria-label="Upload banner image"
+          title="Upload banner image"
+        >
+          <Camera class="h-4 w-4" />
+          <input ref="bannerFileInput" type="file" accept="image/*" class="sr-only" @change="handleBannerFileChange" />
+        </label>
+
+        <div
+          v-if="bannerFile"
+          class="absolute bottom-4 right-4 flex flex-wrap items-center justify-end gap-2"
+        >
+          <button
+            type="button"
+            :disabled="isUploadingBanner"
+            class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+            @click="uploadBannerFile"
+          >
+            {{ isUploadingBanner ? 'Saving...' : 'Save banner' }}
+          </button>
+          <button
+            type="button"
+            :disabled="isUploadingBanner"
+            class="inline-flex h-10 items-center rounded-[0.75rem] bg-white/90 px-4 text-sm font-semibold text-[var(--text-primary)] shadow-[var(--shadow-soft)] transition hover:bg-white hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60"
+            @click="clearBannerSelection"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+
+      <div class="relative px-5 pb-5 pt-28 sm:px-7 sm:pb-7 sm:pl-52 sm:pt-6">
+        <div class="absolute -top-16 left-5 sm:left-7">
+          <div class="relative h-32 w-32 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
+            <img
+              v-if="avatarPreviewUrl"
+              :src="avatarPreviewUrl"
+              alt="Profile image preview"
+              class="h-full w-full object-cover"
+            />
+            <span
+              v-else
+              class="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_84%,white),color-mix(in_srgb,var(--accent-strong)_72%,white))] text-3xl font-semibold text-white"
+            >
+              {{ profileInitials }}
+            </span>
+            <label
+              class="absolute bottom-2 right-2 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/95 text-[var(--text-primary)] shadow-[var(--shadow-soft)] transition hover:text-[var(--accent-strong)]"
+              aria-label="Upload profile image"
+              title="Upload profile image"
+            >
+              <Camera class="h-4 w-4" />
+              <input ref="avatarFileInput" type="file" accept="image/*" class="sr-only" @change="handleAvatarFileChange" />
+            </label>
+          </div>
+        </div>
+
+        <div class="flex min-h-[9.5rem] flex-col justify-end gap-4 sm:min-h-32 sm:flex-row sm:items-end sm:justify-between">
+          <div class="min-w-0 pt-3 sm:pt-0">
+            <h2 class="text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">{{ displayName }}</h2>
+            <p class="mt-1 text-sm text-[var(--text-secondary)]">
+              {{ currentJobTitle || 'Add your role' }} <span class="text-[var(--border-strong,var(--border-soft))]">-</span> {{ currentWorkplace || 'Add your workplace' }}
+            </p>
+            <p v-if="avatarFile || bannerFile" class="mt-2 text-xs font-semibold text-[var(--accent-strong)]">
+              Preview updated. Save the selected image to publish it.
+            </p>
+          </div>
+
+          <div v-if="avatarFile" class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              :disabled="isUploadingAvatar"
+              class="inline-flex h-10 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+              @click="uploadAvatarFile"
+            >
+              {{ isUploadingAvatar ? 'Saving...' : 'Save photo' }}
+            </button>
+            <button
+              type="button"
+              :disabled="isUploadingAvatar"
+              class="inline-flex h-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60"
+              @click="clearAvatarSelection"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <button
+        v-for="item in [
+          { label: 'ADD EDUCATION', modal: 'education' },
+          { label: 'ADD EXPERIENCE', modal: 'experience' },
+          { label: 'ADD SKILLS', modal: 'skills' },
+          { label: 'ADD PROJECT', modal: 'project' },
+          { label: 'ADD PROFESSIONAL CERTIFICATE', modal: 'certificate' },
+        ]"
+        :key="item.label"
+        type="button"
+        class="rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-left text-[0.82rem] font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent-soft)] hover:bg-[var(--surface-secondary)]"
+        @click="openProfileModal(item.modal as NonNullable<typeof activeProfileModal>)"
+      >
+        {{ item.label }}
+      </button>
+    </div>
+
+    <section class="space-y-6">
+      <div class="border-b border-[color:var(--border-soft)] pb-2">
+        <h2 class="inline-flex border-b-2 border-[color:var(--accent)] pb-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+          Public Information
+        </h2>
+      </div>
+
+      <div class="grid gap-5 lg:grid-cols-2">
+        <div class="space-y-5">
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Display name</span>
+            <input v-model="form.name" type="text" class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]" />
+          </label>
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
+            <input v-model="form.location" type="text" class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]" />
+          </label>
+        </div>
+        <div class="space-y-5">
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Current Workplace</span>
+            <input v-model="currentWorkplace" type="text" class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]" />
+          </label>
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Current Job Title</span>
+            <input v-model="currentJobTitle" type="text" class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]" />
+          </label>
+        </div>
+      </div>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">About me</span>
+        <div class="mt-2 overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
+          <div class="flex flex-wrap gap-2 border-b border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 text-[0.78rem] font-semibold text-[var(--text-secondary)]">
+            <span>Paragraph</span>
+            <span>B</span>
+            <span>I</span>
+            <span>U</span>
+            <span>•</span>
+            <span>1.</span>
+            <span>Link</span>
+          </div>
+          <textarea v-model="form.bio" rows="9" class="w-full resize-y bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] outline-none" />
+        </div>
+      </label>
+
+      <button
+        type="button"
+        :disabled="isSavingProfessional"
+        class="inline-flex h-11 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+        @click="saveProfessionalSection"
+      >
+        {{ isSavingProfessional ? 'Saving...' : 'Save changes' }}
+      </button>
+    </section>
+
+    <div v-if="false" class="space-y-6 rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-6">
       <!-- Public Identity Section -->
       <section class="overflow-hidden rounded-[1.35rem] border border-[color:var(--border-soft)]">
         <div class="relative h-[18rem] overflow-hidden bg-[var(--surface-secondary)]">
           <div v-if="bannerPreviewUrl" class="absolute inset-0">
             <img :src="bannerPreviewUrl" alt="Banner preview" class="h-full w-full object-cover" />
           </div>
-          <div v-else class="absolute inset-0 bg-[linear-gradient(135deg,rgba(66,63,151,0.12),rgba(211,154,69,0.08))]" />
-          <div class="absolute inset-0 bg-[rgba(0,0,0,0.35)]" />
+          <div v-else class="absolute inset-0 bg-[linear-gradient(135deg,#e8e9ff,#fef3c7)]" />
+          <div class="absolute inset-0 bg-[#12121f]" />
 
           <div class="absolute left-5 bottom-5 flex items-center gap-4">
-            <div class="relative h-20 w-20 overflow-hidden rounded-[1.75rem] border border-white/20 bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
+            <div class="relative h-20 w-20 overflow-hidden rounded-full border border-white bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
               <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Avatar preview" class="h-full w-full object-cover" />
               <span v-else class="flex h-full w-full items-center justify-center text-xl font-semibold text-white">
                 {{ profileInitials }}
@@ -1002,7 +1370,7 @@ const saveProfessionalSection = async () => {
                   class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
                 <div class="w-full text-sm text-[var(--text-secondary)] p-3 rounded-lg border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-primary)] transition-colors cursor-pointer">
-                  {{ avatarFile ? avatarFile.name : 'Click to select avatar image' }}
+                  {{ avatarFile?.name || 'Click to select avatar image' }}
                 </div>
               </div>
               <button
@@ -1027,7 +1395,7 @@ const saveProfessionalSection = async () => {
                   class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
                 <div class="w-full text-sm text-[var(--text-secondary)] p-3 rounded-lg border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] hover:bg-[var(--surface-primary)] transition-colors cursor-pointer">
-                  {{ bannerFile ? bannerFile.name : 'Click to select banner image' }}
+                  {{ bannerFile?.name || 'Click to select banner image' }}
                 </div>
               </div>
               <button
@@ -1180,7 +1548,6 @@ const saveProfessionalSection = async () => {
               >
                 <option value="beginner">Beginner</option>
                 <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
                 <option value="expert">Expert</option>
               </select>
             </div>
@@ -1460,7 +1827,7 @@ const saveProfessionalSection = async () => {
                     v-model="newExperience.endDate"
                     type="date"
                     :disabled="newExperience.isCurrent"
-                    class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-70"
+                  class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:bg-[var(--surface-muted)]"
                   />
                 </div>
               </div>
@@ -1487,7 +1854,7 @@ const saveProfessionalSection = async () => {
 
               <button
                 type="button"
-                :disabled="isAddingExperience || !newExperience.company.trim() || !newExperience.title.trim() || !newExperience.startDate"
+                :disabled="isAddingExperience || !newExperience.company.trim() || !newExperience.title.trim()"
                 class="inline-flex items-center justify-center gap-2 rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)] w-full"
                 @click="addExperience"
               >
@@ -1499,4 +1866,139 @@ const saveProfessionalSection = async () => {
       </section>
     </div>
   </section>
+
+  <ResponsiveOverlay
+    :model-value="activeProfileModal !== null"
+    :title="profileModalTitle"
+    label="Profile section"
+    max-width-class="sm:max-w-2xl"
+    @update:model-value="(value) => { if (!value) closeProfileModal() }"
+  >
+    <div v-if="activeProfileModal === 'education'" class="space-y-4">
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label class="sm:col-span-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">School/University</span>
+          <input v-model="newEducation.school" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Degree</span>
+          <input v-model="newEducation.degree" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Field of study</span>
+          <input v-model="newEducation.field" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Start date</span>
+          <input v-model="newEducation.startDate" type="date" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">End date</span>
+          <input v-model="newEducation.endDate" type="date" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+      </div>
+      <button type="button" :disabled="isAddingEducation || !newEducation.school.trim()" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-60" @click="addEducationFromModal">
+        {{ isAddingEducation ? 'Adding...' : 'Add Education' }}
+      </button>
+    </div>
+
+    <div v-else-if="activeProfileModal === 'experience'" class="space-y-4">
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Company</span>
+          <input v-model="newExperience.company" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Job title</span>
+          <input v-model="newExperience.title" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label class="sm:col-span-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Employment type</span>
+          <select v-model="newExperience.employmentType" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+            <option value="">Select type</option>
+            <option value="full-time">Full-time</option>
+            <option value="part-time">Part-time</option>
+            <option value="contract">Contract</option>
+            <option value="freelance">Freelance</option>
+          </select>
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Start date</span>
+          <input v-model="newExperience.startDate" type="date" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">End date</span>
+          <input v-model="newExperience.endDate" type="date" :disabled="newExperience.isCurrent" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)] disabled:opacity-60" />
+        </label>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+        <input v-model="newExperience.isCurrent" type="checkbox" class="h-4 w-4 rounded border-[color:var(--border-soft)]" />
+        I currently work here
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Description</span>
+        <textarea v-model="newExperience.description" rows="3" class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+      </label>
+      <button type="button" :disabled="isAddingExperience || !newExperience.company.trim() || !newExperience.title.trim()" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-60" @click="addExperienceFromModal">
+        {{ isAddingExperience ? 'Adding...' : 'Add Experience' }}
+      </button>
+    </div>
+
+    <div v-else-if="activeProfileModal === 'skills'" class="space-y-4">
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Skill name</span>
+        <input v-model="newSkill.skill" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Level</span>
+        <select v-model="newSkill.level" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="expert">Expert</option>
+        </select>
+      </label>
+      <button type="button" :disabled="isAddingSkill || !newSkill.skill.trim()" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-60" @click="addSkillFromModal">
+        {{ isAddingSkill ? 'Adding...' : 'Add Skill' }}
+      </button>
+    </div>
+
+    <div v-else-if="activeProfileModal === 'project'" class="space-y-4">
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Project title</span>
+        <input v-model="newPortfolio.title" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Description</span>
+        <textarea v-model="newPortfolio.description" rows="3" class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+      </label>
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Link</span>
+        <input v-model="newPortfolio.link" type="url" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+      </label>
+      <button type="button" :disabled="isAddingPortfolio || !newPortfolio.title.trim()" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-60" @click="addPortfolioFromModal">
+        {{ isAddingPortfolio ? 'Adding...' : 'Add Project' }}
+      </button>
+    </div>
+
+    <div v-else-if="activeProfileModal === 'certificate'" class="space-y-4">
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Certificate name</span>
+        <input v-model="newCertification.name" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+      </label>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Issuer</span>
+          <input v-model="newCertification.issuer" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Issue date</span>
+          <input v-model="newCertification.issueDate" type="date" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+      </div>
+      <button type="button" :disabled="isAddingCertification || !newCertification.name.trim()" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-60" @click="addCertificationFromModal">
+        {{ isAddingCertification ? 'Adding...' : 'Add Certificate' }}
+      </button>
+    </div>
+
+  </ResponsiveOverlay>
 </template>

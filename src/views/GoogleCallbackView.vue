@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
-import { authService, extractAuthSession } from '@/services/auth'
+import { authService, extractAuthSession, extractUserIdFromToken } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
@@ -69,7 +69,7 @@ const finishSignIn = async () => {
 
   if (directToken) {
     clearAuthFragment()
-    authStore.setAuthenticatedSession(directToken)
+    authStore.setAuthenticatedSession(directToken, extractUserIdFromToken(directToken))
     return directToken
   }
 
@@ -150,7 +150,7 @@ onMounted(async () => {
     <div class="mx-auto flex w-full max-w-md flex-col items-center rounded-[1.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-6 py-10 text-center shadow-[var(--shadow-elevated)]">
       <div class="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--surface-secondary)]">
         <span
-          class="h-6 w-6 rounded-full border-2 border-[var(--accent)] border-t-transparent"
+          class="h-6 w-6 rounded-full border-2 border-[var(--accent)] border-t-[var(--surface-primary)]"
           :class="isProcessing ? 'animate-spin' : ''"
         />
       </div>

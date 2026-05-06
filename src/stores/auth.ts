@@ -76,9 +76,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const setAuthenticatedSession = (token: string, id = '') => {
     persistToken(token)
-    if (id) {
-      persistUserId(id)
-    }
+    persistUserId(id)
   }
 
   const clearAuthenticatedSession = () => {
