@@ -29,6 +29,11 @@ export const useAppStore = defineStore('app', {
       status: '',
       payload: '',
     },
+    networkStatus: {
+      offline: false,
+      backendUnreachable: false,
+      lastIssueAt: '',
+    },
   }),
   actions: {
     showApiError(details: {
@@ -54,6 +59,20 @@ export const useAppStore = defineStore('app', {
     },
     hideApiError() {
       this.apiErrorModal.open = false
+    },
+    setOfflineStatus(isOffline: boolean) {
+      this.networkStatus.offline = isOffline
+      if (isOffline) {
+        this.networkStatus.lastIssueAt = new Date().toISOString()
+      }
+    },
+    reportBackendUnreachable() {
+      this.networkStatus.backendUnreachable = true
+      this.networkStatus.lastIssueAt = new Date().toISOString()
+    },
+    clearNetworkIssue() {
+      this.networkStatus.offline = false
+      this.networkStatus.backendUnreachable = false
     },
   },
 })

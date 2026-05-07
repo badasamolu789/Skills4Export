@@ -41,7 +41,7 @@ const panelClasses = computed(() =>
 
 const containerClasses = computed(() =>
   props.mobileAside
-    ? 'fixed inset-0 z-50 flex items-start justify-start overflow-hidden bg-[#0c121e]'
+    ? 'fixed inset-0 z-50 flex items-start justify-start overflow-hidden bg-[#0c121e]/50'
     : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-(--overlay-bg) px-3 py-3 sm:items-center sm:px-6 sm:py-6',
 )
 

@@ -1,35 +1,36 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import CreateAlertView from '@/views/CreateAlertView.vue'
-import CreatePageView from '@/views/CreatePageView.vue'
-import CommunityDetailView from '@/views/CommunityDetailView.vue'
-import ExploreCommunitiesView from '@/views/ExploreCommunitiesView.vue'
-import FreelancersView from '@/views/FreelancersView.vue'
-import HomeView from '@/views/HomeView.vue'
-import ForgotPasswordView from '@/views/ForgotPasswordView.vue'
-import GoogleCallbackView from '@/views/GoogleCallbackView.vue'
-import LandingView from '@/views/LandingView.vue'
-import JobDetailView from '@/views/JobDetailView.vue'
-import JobFeedView from '@/views/JobFeedView.vue'
-import JobsView from '@/views/JobsView.vue'
-import LoginView from '@/views/LoginView.vue'
-import MobileNotificationsView from '@/views/MobileNotificationsView.vue'
-import MobileAccountView from '@/views/MobileAccountView.vue'
-import MobileSearchView from '@/views/MobileSearchView.vue'
-import PageDetailView from '@/views/PageDetailView.vue'
-import PostDetailView from '@/views/PostDetailView.vue'
-import QuestionDetailView from '@/views/QuestionDetailView.vue'
-import NotFoundView from '@/views/NotFoundView.vue'
-import EditProfileView from '@/views/EditProfileView.vue'
-import ProfileView from '@/views/ProfileView.vue'
-import PublicProfileView from '@/views/PublicProfileView.vue'
-import FollowersView from '@/views/FollowersView.vue'
-import LoginHistoryView from '@/views/LoginHistoryView.vue'
-import QuestionAnswerView from '@/views/QuestionAnswerView.vue'
-import ReferralsView from '@/views/ReferralsView.vue'
-import SettingsView from '@/views/SettingsView.vue'
-import SignUpSuccessView from '@/views/SignUpSuccessView.vue'
-import SignUpView from '@/views/SignUpView.vue'
-import VerifyEmailView from '@/views/VerifyEmailView.vue'
+
+const CreateAlertView = () => import('@/views/CreateAlertView.vue')
+const CreatePageView = () => import('@/views/CreatePageView.vue')
+const CommunityDetailView = () => import('@/views/CommunityDetailView.vue')
+const ExploreCommunitiesView = () => import('@/views/ExploreCommunitiesView.vue')
+const FreelancersView = () => import('@/views/FreelancersView.vue')
+const HomeView = () => import('@/views/HomeView.vue')
+const ForgotPasswordView = () => import('@/views/ForgotPasswordView.vue')
+const GoogleCallbackView = () => import('@/views/GoogleCallbackView.vue')
+const LandingView = () => import('@/views/LandingView.vue')
+const JobDetailView = () => import('@/views/JobDetailView.vue')
+const JobFeedView = () => import('@/views/JobFeedView.vue')
+const JobsView = () => import('@/views/JobsView.vue')
+const LoginView = () => import('@/views/LoginView.vue')
+const MobileNotificationsView = () => import('@/views/MobileNotificationsView.vue')
+const MobileAccountView = () => import('@/views/MobileAccountView.vue')
+const MobileSearchView = () => import('@/views/MobileSearchView.vue')
+const PageDetailView = () => import('@/views/PageDetailView.vue')
+const PostDetailView = () => import('@/views/PostDetailView.vue')
+const QuestionDetailView = () => import('@/views/QuestionDetailView.vue')
+const NotFoundView = () => import('@/views/NotFoundView.vue')
+const EditProfileView = () => import('@/views/EditProfileView.vue')
+const ProfileView = () => import('@/views/ProfileView.vue')
+const PublicProfileView = () => import('@/views/PublicProfileView.vue')
+const FollowersView = () => import('@/views/FollowersView.vue')
+const LoginHistoryView = () => import('@/views/LoginHistoryView.vue')
+const QuestionAnswerView = () => import('@/views/QuestionAnswerView.vue')
+const ReferralsView = () => import('@/views/ReferralsView.vue')
+const SettingsView = () => import('@/views/SettingsView.vue')
+const SignUpSuccessView = () => import('@/views/SignUpSuccessView.vue')
+const SignUpView = () => import('@/views/SignUpView.vue')
+const VerifyEmailView = () => import('@/views/VerifyEmailView.vue')
 
 const router = createRouter({
   history: createWebHistory(),

@@ -133,7 +133,7 @@ watch(
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-[120] flex items-center justify-center bg-[#0c0c1b] px-4 py-5"
+      class="fixed inset-0 z-[120] flex items-center justify-center bg-[#0c0c1b]/50 px-4 py-5"
     >
       <div
         class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"

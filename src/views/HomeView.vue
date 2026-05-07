@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import FeedAdvertCard from '@/components/FeedAdvertCard.vue'
+import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { postsService, type PostRecord } from '@/services/posts'
@@ -15,6 +17,20 @@ type FeedItem = {
   post: FeedPost
 }
 
+type FeedAdvertItem = {
+  id: string
+  type: 'advert'
+  variant: 'campaign' | 'jobs'
+}
+
+type FeedRenderItem =
+  | {
+      id: string
+      type: 'post'
+      post: FeedPost
+    }
+  | FeedAdvertItem
+
 const INITIAL_POST_COUNT = 4
 const LOAD_BATCH_SIZE = 3
 
@@ -25,6 +41,20 @@ const isLoadingFeed = ref(false)
 const feedError = ref('')
 const apiPosts = ref<FeedPost[]>([])
 const authStore = useAuthStore()
+const currentUser = useCurrentUserIdentity()
+
+const shuffleFeedPosts = (items: FeedPost[]) => {
+  const shuffled = [...items]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    const current = shuffled[index]
+    shuffled[index] = shuffled[swapIndex]
+    shuffled[swapIndex] = current
+  }
+
+  return shuffled
+}
 
 const feedItems = computed<FeedItem[]>(() => {
   return apiPosts.value.map((post) => ({
@@ -34,6 +64,27 @@ const feedItems = computed<FeedItem[]>(() => {
 })
 
 const visiblePosts = computed(() => feedItems.value.slice(0, visiblePostCount.value))
+const visibleFeedItems = computed<FeedRenderItem[]>(() => {
+  const entries: FeedRenderItem[] = []
+
+  visiblePosts.value.forEach((item, index) => {
+    entries.push({
+      id: item.id,
+      type: 'post',
+      post: item.post,
+    })
+
+    if ((index + 1) % 4 === 0) {
+      entries.push({
+        id: `advert-${index + 1}`,
+        type: 'advert',
+        variant: ((index + 1) / 4) % 2 === 0 ? 'jobs' : 'campaign',
+      })
+    }
+  })
+
+  return entries
+})
 const hasMorePosts = computed(() => visiblePostCount.value < feedItems.value.length)
 
 let observer: IntersectionObserver | null = null
@@ -88,28 +139,10 @@ const loadFeedQuestion = async (question: QuestionRecord) => {
   const authorData =
     authorResponse?.data ??
     (userId && userId === authStore.userId
-      ? {
-          user: {
-            id: authStore.userId,
-            username:
-              authStore.userProfile?.username ||
-              authStore.signUpDraft.username ||
-              authStore.signUpDraft.name ||
-              'You',
-            email: authStore.signUpDraft.email,
-          },
-          profile: authStore.userProfile,
-        }
+      ? currentUser.profileData.value
       : null)
 
   return mapApiQuestionToFeedPost(question, authorData)
-}
-
-const getFeedSortTime = (post: FeedPost) => {
-  const value = post.createdAt || ('updatedAt' in post ? post.updatedAt : '') || ''
-  const timestamp = new Date(value).getTime()
-
-  return Number.isNaN(timestamp) ? 0 : timestamp
 }
 
 const setupObserver = () => {
@@ -157,7 +190,7 @@ const loadFeed = async () => {
         ? await Promise.all(questionsResult.value.data.map((question) => loadFeedQuestion(question)))
         : []
 
-    apiPosts.value = [...posts, ...questions].sort((a, b) => getFeedSortTime(b) - getFeedSortTime(a))
+    apiPosts.value = shuffleFeedPosts([...posts, ...questions])
     visiblePostCount.value = INITIAL_POST_COUNT
 
     if (postsResult.status === 'rejected' && questionsResult.status === 'rejected') {
@@ -249,11 +282,16 @@ onBeforeUnmount(() => {
       v-else
       class="space-y-6"
     >
-      <AppFeedPost
-        v-for="item in visiblePosts"
-        :key="item.id"
-        :post="item.post"
-      />
+      <template v-for="item in visibleFeedItems" :key="item.id">
+        <AppFeedPost
+          v-if="item.type === 'post'"
+          :post="item.post"
+        />
+        <FeedAdvertCard
+          v-else
+          :variant="item.variant"
+        />
+      </template>
     </div>
 
     <div

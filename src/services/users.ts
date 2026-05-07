@@ -1,7 +1,9 @@
 import { api } from '@/lib/api'
+import type { ApiRequestOptions } from '@/lib/api'
 
 export type UserRecord = {
   id?: string
+  name?: string | null
   email?: string
   username?: string | null
   role?: string | null
@@ -16,11 +18,20 @@ export type UserProfile = {
   bio?: string
   location?: string
   avatar?: string | null
+  avatarUrl?: string | null
+  avatar_url?: string | null
   banner?: string | null
+  bannerUrl?: string | null
+  banner_url?: string | null
+  coverImage?: string | null
+  cover_image?: string | null
+  coverUrl?: string | null
+  cover_url?: string | null
   website?: string
   linkedin?: string
   github?: string
   createdAt?: string
+  [key: string]: unknown
 }
 
 export type UserSkill = {
@@ -64,7 +75,7 @@ export type UserExperience = {
   employmentType?: string
   startDate?: string
   endDate?: string | null
-  isCurrent?: number
+  isCurrent?: number | boolean
   description?: string
 }
 
@@ -113,6 +124,97 @@ export type MyStatsResponse = {
   success?: boolean
   data?: MyStats | null
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const getStringFromRecord = (record: Record<string, unknown>, keys: string[]): string => {
+  for (const key of keys) {
+    const value = record[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+
+    if (isRecord(value)) {
+      const nested: string = getStringFromRecord(value, [
+        'url',
+        'secure_url',
+        'secureUrl',
+        'imageUrl',
+        'image_url',
+        'path',
+      ])
+
+      if (nested) {
+        return nested
+      }
+    }
+  }
+
+  return ''
+}
+
+const normalizeUserProfile = (profile?: UserProfile | null): UserProfile | null => {
+  if (!profile) {
+    return profile ?? null
+  }
+
+  const record = profile as Record<string, unknown>
+  const avatar = getStringFromRecord(record, [
+    'avatar',
+    'avatarUrl',
+    'avatar_url',
+    'avatarImage',
+    'avatar_image',
+    'profileImage',
+    'profile_image',
+    'profilePhoto',
+    'profile_photo',
+  ])
+  const banner = getStringFromRecord(record, [
+    'banner',
+    'bannerUrl',
+    'banner_url',
+    'coverImage',
+    'cover_image',
+    'coverUrl',
+    'cover_url',
+    'cover',
+    'headerImage',
+    'header_image',
+  ])
+
+  return {
+    ...profile,
+    avatar: avatar || profile.avatar || null,
+    banner: banner || profile.banner || null,
+  }
+}
+
+const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileResponse => ({
+  ...response,
+  data: response.data
+    ? {
+        ...response.data,
+        profile: normalizeUserProfile(response.data.profile),
+      }
+    : response.data,
+})
+
+const normalizeUserProfileResponse = <T extends { data?: UserProfile | null }>(response: T): T => ({
+  ...response,
+  data: normalizeUserProfile(response.data) as T['data'],
+})
+
+type UserRequestOptions = Pick<ApiRequestOptions, 'suppressErrorModal' | 'signal'>
+type ProfileImageUploadOptions = UserRequestOptions & {
+  replace?: boolean
+}
+type ProfileImageUploadRequest =
+  | { publicId: string; imageUrl?: string }
+  | { public_id: string; imageUrl?: string }
+  | { imageUrl: string }
 
 export type BackgroundUploadResponse = {
   success?: boolean
@@ -340,10 +442,10 @@ const USER_ROUTES = {
 
 export const usersService = {
   getMyProfile(token?: string | null) {
-    return api.get<MyProfileResponse>(USER_ROUTES.myProfile, { token })
+    return api.get<MyProfileResponse>(USER_ROUTES.myProfile, { token }).then(normalizeMyProfileResponse)
   },
-  getMyStats(token?: string | null) {
-    return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token })
+  getMyStats(token?: string | null, options?: UserRequestOptions) {
+    return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token, ...options })
   },
   getUser(id: string, token?: string | null) {
     return api.get<UserResponse>(USER_ROUTES.userById(id), { token })
@@ -352,37 +454,51 @@ export const usersService = {
     return api.post<UserResponse>(USER_ROUTES.users, payload, { token })
   },
   getUserProfile(id: string, token?: string | null) {
-    return api.get<UserProfileResponse>(USER_ROUTES.userProfile(id), { token })
+    return api
+      .get<UserProfileResponse>(USER_ROUTES.userProfile(id), { token })
+      .then(normalizeUserProfileResponse)
   },
   createUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
-    return api.post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+    return api
+      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+      .then(normalizeUserProfileResponse)
   },
   updateUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
-    return api.put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+    return api
+      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+      .then(normalizeUserProfileResponse)
   },
   uploadUserAvatar(
     id: string,
-    body: { url: string },
+    body: ProfileImageUploadRequest,
     token?: string | null,
-    options?: { replace?: boolean },
+    options?: ProfileImageUploadOptions,
   ) {
     const endpoint = options?.replace
       ? `${USER_ROUTES.userAvatar(id)}?replace=true`
       : USER_ROUTES.userAvatar(id)
 
-    return api.post<BackgroundUploadResponse>(endpoint, body, { token })
+    return api.post<BackgroundUploadResponse>(endpoint, body, {
+      token,
+      suppressErrorModal: options?.suppressErrorModal,
+      signal: options?.signal,
+    })
   },
   uploadUserBanner(
     id: string,
-    body: { url: string },
+    body: ProfileImageUploadRequest,
     token?: string | null,
-    options?: { replace?: boolean },
+    options?: ProfileImageUploadOptions,
   ) {
     const endpoint = options?.replace
       ? `${USER_ROUTES.userBanner(id)}?replace=true`
       : USER_ROUTES.userBanner(id)
 
-    return api.post<BackgroundUploadResponse>(endpoint, body, { token })
+    return api.post<BackgroundUploadResponse>(endpoint, body, {
+      token,
+      suppressErrorModal: options?.suppressErrorModal,
+      signal: options?.signal,
+    })
   },
 
   // ========================================================================

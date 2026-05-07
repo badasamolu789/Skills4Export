@@ -2181,6 +2181,12 @@
                                                             },
                                                             "link": {
                                                                 "type": "string"
+                                                            },
+                                                            "pictures": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
                                                             }
                                                         },
                                                         "example": {
@@ -2188,7 +2194,10 @@
                                                             "userId": "user-uuid",
                                                             "title": "Personal Website",
                                                             "description": "Portfolio site",
-                                                            "link": "https://janedoe.dev"
+                                                            "link": "https://janedoe.dev",
+                                                            "pictures": [
+                                                                "https://cdn.example.com/portfolio/homepage.png"
+                                                            ]
                                                         }
                                                     }
                                                 },
@@ -2753,6 +2762,12 @@
                                                             },
                                                             "link": {
                                                                 "type": "string"
+                                                            },
+                                                            "pictures": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "string"
+                                                                }
                                                             }
                                                         },
                                                         "example": {
@@ -2760,7 +2775,10 @@
                                                             "userId": "user-uuid",
                                                             "title": "Personal Website",
                                                             "description": "Portfolio site",
-                                                            "link": "https://janedoe.dev"
+                                                            "link": "https://janedoe.dev",
+                                                            "pictures": [
+                                                                "https://cdn.example.com/portfolio/homepage.png"
+                                                            ]
                                                         }
                                                     }
                                                 },
@@ -3048,7 +3066,7 @@
                 "tags": [
                     "Users"
                 ],
-                "description": "Upload a profile avatar by URL; validation and Cloudinary upload happen in background. If avatar already exists, pass ?replace=true or clear it first using PUT /users/:id/profile with { avatar: null }.",
+                "description": "Upload a profile avatar by URL, Cloudinary publicId, or multipart file; validation and profile update happen in background. If avatar already exists, pass ?replace=true or clear it first using PUT /users/:id/profile with { avatar: null }.",
                 "parameters": [
                     {
                         "schema": {
@@ -3145,7 +3163,7 @@
                 "tags": [
                     "Users"
                 ],
-                "description": "Upload a profile banner by URL or multipart file; validation and Cloudinary upload happen in background. If banner already exists, pass ?replace=true or clear it first using PUT /users/:id/profile with { banner: null }.",
+                "description": "Upload a profile banner by URL, Cloudinary publicId, or multipart file; validation and profile update happen in background. If banner already exists, pass ?replace=true or clear it first using PUT /users/:id/profile with { banner: null }.",
                 "parameters": [
                     {
                         "schema": {
@@ -3898,6 +3916,12 @@
                                                     },
                                                     "link": {
                                                         "type": "string"
+                                                    },
+                                                    "pictures": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
                                                     }
                                                 },
                                                 "example": {
@@ -3905,7 +3929,10 @@
                                                     "userId": "user-uuid",
                                                     "title": "Personal Website",
                                                     "description": "Portfolio site",
-                                                    "link": "https://janedoe.dev"
+                                                    "link": "https://janedoe.dev",
+                                                    "pictures": [
+                                                        "https://cdn.example.com/portfolio/homepage.png"
+                                                    ]
                                                 }
                                             }
                                         }
@@ -3918,7 +3945,10 @@
                                                 "userId": "user-uuid",
                                                 "title": "Personal Website",
                                                 "description": "Portfolio site",
-                                                "link": "https://janedoe.dev"
+                                                "link": "https://janedoe.dev",
+                                                "pictures": [
+                                                    "https://cdn.example.com/portfolio/homepage.png"
+                                                ]
                                             }
                                         ]
                                     }
@@ -3952,12 +3982,21 @@
                                     },
                                     "link": {
                                         "type": "string"
+                                    },
+                                    "pictures": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
                                     }
                                 },
                                 "example": {
                                     "title": "Personal Website",
                                     "description": "Portfolio site",
-                                    "link": "https://janedoe.dev"
+                                    "link": "https://janedoe.dev",
+                                    "pictures": [
+                                        "https://cdn.example.com/portfolio/homepage.png"
+                                    ]
                                 }
                             }
                         }
@@ -4001,6 +4040,12 @@
                                                 },
                                                 "link": {
                                                     "type": "string"
+                                                },
+                                                "pictures": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
                                                 }
                                             },
                                             "example": {
@@ -4008,7 +4053,10 @@
                                                 "userId": "user-uuid",
                                                 "title": "Personal Website",
                                                 "description": "Portfolio site",
-                                                "link": "https://janedoe.dev"
+                                                "link": "https://janedoe.dev",
+                                                "pictures": [
+                                                    "https://cdn.example.com/portfolio/homepage.png"
+                                                ]
                                             }
                                         }
                                     },
@@ -4019,7 +4067,10 @@
                                             "userId": "user-uuid",
                                             "title": "Personal Website",
                                             "description": "Portfolio site",
-                                            "link": "https://janedoe.dev"
+                                            "link": "https://janedoe.dev",
+                                            "pictures": [
+                                                "https://cdn.example.com/portfolio/homepage.png"
+                                            ]
                                         }
                                     }
                                 }
@@ -4533,12 +4584,17 @@
                                                 },
                                                 "description": {
                                                     "type": "string"
+                                                },
+                                                "total_communities": {
+                                                    "type": "number",
+                                                    "description": "Total number of communities under this category"
                                                 }
                                             },
                                             "example": {
                                                 "id": "community-category-uuid",
                                                 "name": "Sports",
-                                                "description": "Groups for sports fans"
+                                                "description": "Groups for sports fans",
+                                                "total_communities": 8
                                             }
                                         }
                                     },
@@ -4547,7 +4603,8 @@
                                         "data": {
                                             "id": "community-category-uuid",
                                             "name": "Sports",
-                                            "description": "Groups for sports fans"
+                                            "description": "Groups for sports fans",
+                                            "total_communities": 8
                                         }
                                     }
                                 }
@@ -4627,7 +4684,7 @@
                 "tags": [
                     "Communities"
                 ],
-                "description": "List all community categories",
+                "description": "List all community categories with the total number of communities under each category.",
                 "responses": {
                     "200": {
                         "description": "Default Response",
@@ -4652,15 +4709,31 @@
                                                     },
                                                     "description": {
                                                         "type": "string"
+                                                    },
+                                                    "total_communities": {
+                                                        "type": "number",
+                                                        "description": "Total number of communities under this category"
                                                     }
                                                 },
                                                 "example": {
                                                     "id": "community-category-uuid",
                                                     "name": "Sports",
-                                                    "description": "Groups for sports fans"
+                                                    "description": "Groups for sports fans",
+                                                    "total_communities": 8
                                                 }
                                             }
                                         }
+                                    },
+                                    "example": {
+                                        "success": true,
+                                        "data": [
+                                            {
+                                                "id": "community-category-uuid",
+                                                "name": "Sports",
+                                                "description": "Groups for sports fans",
+                                                "total_communities": 8
+                                            }
+                                        ]
                                     }
                                 }
                             }
@@ -4730,12 +4803,17 @@
                                                 },
                                                 "description": {
                                                     "type": "string"
+                                                },
+                                                "total_communities": {
+                                                    "type": "number",
+                                                    "description": "Total number of communities under this category"
                                                 }
                                             },
                                             "example": {
                                                 "id": "community-category-uuid",
                                                 "name": "Sports",
-                                                "description": "Groups for sports fans"
+                                                "description": "Groups for sports fans",
+                                                "total_communities": 8
                                             }
                                         }
                                     },
@@ -4744,7 +4822,8 @@
                                         "data": {
                                             "id": "community-category-uuid",
                                             "name": "Sports",
-                                            "description": "Groups for sports fans"
+                                            "description": "Groups for sports fans",
+                                            "total_communities": 8
                                         }
                                     }
                                 }
@@ -4969,6 +5048,27 @@
                                                         "string"
                                                     ]
                                                 },
+                                                "category_id": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "category": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "description": "Community category this community belongs to. Present on GET /communities list results.",
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
                                                 "name": {
                                                     "type": "string"
                                                 },
@@ -4985,6 +5085,22 @@
                                                     ],
                                                     "description": "Default visibility for new posts in this community"
                                                 },
+                                                "posts_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of posts under this community"
+                                                },
+                                                "post_likes_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of like reactions on posts under this community"
+                                                },
+                                                "post_reactions_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of all post reactions under this community"
+                                                },
+                                                "comments_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of comments on posts under this community"
+                                                },
                                                 "created_at": {
                                                     "type": "string"
                                                 }
@@ -4992,10 +5108,19 @@
                                             "example": {
                                                 "id": "community-uuid",
                                                 "categoryId": "community-category-uuid",
+                                                "category_id": "community-category-uuid",
+                                                "category": {
+                                                    "id": "community-category-uuid",
+                                                    "name": "Sports"
+                                                },
                                                 "name": "Local Chess Club",
                                                 "description": "We meet weekly to play chess",
                                                 "is_active": 1,
                                                 "default_post_visibility": "community",
+                                                "posts_count": 24,
+                                                "post_likes_count": 41,
+                                                "post_reactions_count": 58,
+                                                "comments_count": 103,
                                                 "created_at": "2026-04-12T10:00:00Z"
                                             }
                                         }
@@ -5005,10 +5130,19 @@
                                         "data": {
                                             "id": "community-uuid",
                                             "categoryId": "community-category-uuid",
+                                            "category_id": "community-category-uuid",
+                                            "category": {
+                                                "id": "community-category-uuid",
+                                                "name": "Sports"
+                                            },
                                             "name": "Local Chess Club",
                                             "description": "We meet weekly to play chess",
                                             "is_active": 1,
                                             "default_post_visibility": "community",
+                                            "posts_count": 24,
+                                            "post_likes_count": 41,
+                                            "post_reactions_count": 58,
+                                            "comments_count": 103,
                                             "created_at": "2026-04-12T10:00:00Z"
                                         }
                                     }
@@ -5085,7 +5219,7 @@
                 "tags": [
                     "Communities"
                 ],
-                "description": "List communities. Supports query params: page, per_page, q (search), categoryId, limit, offset.",
+                "description": "List communities with their category details and aggregate post, post reaction, post like, and post comment counts. Supports query params: page, per_page, q (search), categoryId, limit, offset.",
                 "responses": {
                     "200": {
                         "description": "Default Response",
@@ -5111,6 +5245,27 @@
                                                             "string"
                                                         ]
                                                     },
+                                                    "category_id": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "category": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "description": "Community category this community belongs to. Present on GET /communities list results.",
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    },
                                                     "name": {
                                                         "type": "string"
                                                     },
@@ -5127,6 +5282,22 @@
                                                         ],
                                                         "description": "Default visibility for new posts in this community"
                                                     },
+                                                    "posts_count": {
+                                                        "type": "number",
+                                                        "description": "Total number of posts under this community"
+                                                    },
+                                                    "post_likes_count": {
+                                                        "type": "number",
+                                                        "description": "Total number of like reactions on posts under this community"
+                                                    },
+                                                    "post_reactions_count": {
+                                                        "type": "number",
+                                                        "description": "Total number of all post reactions under this community"
+                                                    },
+                                                    "comments_count": {
+                                                        "type": "number",
+                                                        "description": "Total number of comments on posts under this community"
+                                                    },
                                                     "created_at": {
                                                         "type": "string"
                                                     }
@@ -5134,10 +5305,19 @@
                                                 "example": {
                                                     "id": "community-uuid",
                                                     "categoryId": "community-category-uuid",
+                                                    "category_id": "community-category-uuid",
+                                                    "category": {
+                                                        "id": "community-category-uuid",
+                                                        "name": "Sports"
+                                                    },
                                                     "name": "Local Chess Club",
                                                     "description": "We meet weekly to play chess",
                                                     "is_active": 1,
                                                     "default_post_visibility": "community",
+                                                    "posts_count": 24,
+                                                    "post_likes_count": 41,
+                                                    "post_reactions_count": 58,
+                                                    "comments_count": 103,
                                                     "created_at": "2026-04-12T10:00:00Z"
                                                 }
                                             }
@@ -5203,10 +5383,19 @@
                                             {
                                                 "id": "community-uuid",
                                                 "categoryId": "community-category-uuid",
+                                                "category_id": "community-category-uuid",
+                                                "category": {
+                                                    "id": "community-category-uuid",
+                                                    "name": "Sports"
+                                                },
                                                 "name": "Local Chess Club",
                                                 "description": "We meet weekly to play chess",
                                                 "is_active": 1,
                                                 "default_post_visibility": "community",
+                                                "posts_count": 24,
+                                                "post_likes_count": 41,
+                                                "post_reactions_count": 58,
+                                                "comments_count": 103,
                                                 "created_at": "2026-04-12T10:00:00Z"
                                             }
                                         ],
@@ -5269,6 +5458,27 @@
                                                         "string"
                                                     ]
                                                 },
+                                                "category_id": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "category": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "description": "Community category this community belongs to. Present on GET /communities list results.",
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
                                                 "name": {
                                                     "type": "string"
                                                 },
@@ -5285,6 +5495,22 @@
                                                     ],
                                                     "description": "Default visibility for new posts in this community"
                                                 },
+                                                "posts_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of posts under this community"
+                                                },
+                                                "post_likes_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of like reactions on posts under this community"
+                                                },
+                                                "post_reactions_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of all post reactions under this community"
+                                                },
+                                                "comments_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of comments on posts under this community"
+                                                },
                                                 "created_at": {
                                                     "type": "string"
                                                 }
@@ -5292,10 +5518,19 @@
                                             "example": {
                                                 "id": "community-uuid",
                                                 "categoryId": "community-category-uuid",
+                                                "category_id": "community-category-uuid",
+                                                "category": {
+                                                    "id": "community-category-uuid",
+                                                    "name": "Sports"
+                                                },
                                                 "name": "Local Chess Club",
                                                 "description": "We meet weekly to play chess",
                                                 "is_active": 1,
                                                 "default_post_visibility": "community",
+                                                "posts_count": 24,
+                                                "post_likes_count": 41,
+                                                "post_reactions_count": 58,
+                                                "comments_count": 103,
                                                 "created_at": "2026-04-12T10:00:00Z"
                                             }
                                         }
@@ -5305,10 +5540,19 @@
                                         "data": {
                                             "id": "community-uuid",
                                             "categoryId": "community-category-uuid",
+                                            "category_id": "community-category-uuid",
+                                            "category": {
+                                                "id": "community-category-uuid",
+                                                "name": "Sports"
+                                            },
                                             "name": "Local Chess Club",
                                             "description": "We meet weekly to play chess",
                                             "is_active": 1,
                                             "default_post_visibility": "community",
+                                            "posts_count": 24,
+                                            "post_likes_count": 41,
+                                            "post_reactions_count": 58,
+                                            "comments_count": 103,
                                             "created_at": "2026-04-12T10:00:00Z"
                                         }
                                     }
@@ -5425,6 +5669,27 @@
                                                         "string"
                                                     ]
                                                 },
+                                                "category_id": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "category": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "description": "Community category this community belongs to. Present on GET /communities list results.",
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                },
                                                 "name": {
                                                     "type": "string"
                                                 },
@@ -5441,6 +5706,22 @@
                                                     ],
                                                     "description": "Default visibility for new posts in this community"
                                                 },
+                                                "posts_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of posts under this community"
+                                                },
+                                                "post_likes_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of like reactions on posts under this community"
+                                                },
+                                                "post_reactions_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of all post reactions under this community"
+                                                },
+                                                "comments_count": {
+                                                    "type": "number",
+                                                    "description": "Total number of comments on posts under this community"
+                                                },
                                                 "created_at": {
                                                     "type": "string"
                                                 }
@@ -5448,10 +5729,19 @@
                                             "example": {
                                                 "id": "community-uuid",
                                                 "categoryId": "community-category-uuid",
+                                                "category_id": "community-category-uuid",
+                                                "category": {
+                                                    "id": "community-category-uuid",
+                                                    "name": "Sports"
+                                                },
                                                 "name": "Local Chess Club",
                                                 "description": "We meet weekly to play chess",
                                                 "is_active": 1,
                                                 "default_post_visibility": "community",
+                                                "posts_count": 24,
+                                                "post_likes_count": 41,
+                                                "post_reactions_count": 58,
+                                                "comments_count": 103,
                                                 "created_at": "2026-04-12T10:00:00Z"
                                             }
                                         }
@@ -5461,10 +5751,19 @@
                                         "data": {
                                             "id": "community-uuid",
                                             "categoryId": "community-category-uuid",
+                                            "category_id": "community-category-uuid",
+                                            "category": {
+                                                "id": "community-category-uuid",
+                                                "name": "Sports"
+                                            },
                                             "name": "Local Chess Club",
                                             "description": "We meet weekly to play chess",
                                             "is_active": 1,
                                             "default_post_visibility": "community",
+                                            "posts_count": 24,
+                                            "post_likes_count": 41,
+                                            "post_reactions_count": 58,
+                                            "comments_count": 103,
                                             "created_at": "2026-04-12T10:00:00Z"
                                         }
                                     }
@@ -8744,6 +9043,58 @@
                                                 "updatedAt": {
                                                     "type": "string"
                                                 },
+                                                "asker": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        },
+                                                        "email": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "community": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        },
+                                                        "description": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "totalAnswers": {
+                                                    "type": "number"
+                                                },
+                                                "totalAnswerers": {
+                                                    "type": "number"
+                                                },
                                                 "answers": {
                                                     "type": [
                                                         "null",
@@ -8765,6 +9116,18 @@
                                                 "acceptedAnswerId": null,
                                                 "createdAt": "2026-04-01T12:00:00Z",
                                                 "updatedAt": "2026-04-01T12:00:00Z",
+                                                "asker": {
+                                                    "id": "user-uuid",
+                                                    "name": "janedoe",
+                                                    "email": "jane@example.com"
+                                                },
+                                                "community": {
+                                                    "id": "community-uuid",
+                                                    "name": "Local Chess Club",
+                                                    "description": "We meet weekly to play chess"
+                                                },
+                                                "totalAnswers": 1,
+                                                "totalAnswerers": 1,
                                                 "answers": [
                                                     {
                                                         "id": "a-uuid",
@@ -8773,7 +9136,12 @@
                                                         "parentAnswerId": null,
                                                         "content": "This is how...",
                                                         "createdAt": "2026-04-01T13:00:00Z",
-                                                        "updatedAt": "2026-04-01T13:00:00Z"
+                                                        "updatedAt": "2026-04-01T13:00:00Z",
+                                                        "user": {
+                                                            "id": "user-uuid",
+                                                            "name": "janedoe",
+                                                            "email": "jane@example.com"
+                                                        }
                                                     }
                                                 ]
                                             }
@@ -8792,6 +9160,18 @@
                                             "acceptedAnswerId": null,
                                             "createdAt": "2026-04-01T12:00:00Z",
                                             "updatedAt": "2026-04-01T12:00:00Z",
+                                            "asker": {
+                                                "id": "user-uuid",
+                                                "name": "janedoe",
+                                                "email": "jane@example.com"
+                                            },
+                                            "community": {
+                                                "id": "community-uuid",
+                                                "name": "Local Chess Club",
+                                                "description": "We meet weekly to play chess"
+                                            },
+                                            "totalAnswers": 1,
+                                            "totalAnswerers": 1,
                                             "answers": [
                                                 {
                                                     "id": "a-uuid",
@@ -8800,7 +9180,12 @@
                                                     "parentAnswerId": null,
                                                     "content": "This is how...",
                                                     "createdAt": "2026-04-01T13:00:00Z",
-                                                    "updatedAt": "2026-04-01T13:00:00Z"
+                                                    "updatedAt": "2026-04-01T13:00:00Z",
+                                                    "user": {
+                                                        "id": "user-uuid",
+                                                        "name": "janedoe",
+                                                        "email": "jane@example.com"
+                                                    }
                                                 }
                                             ]
                                         }
@@ -8836,7 +9221,7 @@
                 "tags": [
                     "Questions"
                 ],
-                "description": "List questions. Returns a paginator payload at the root.",
+                "description": "List questions. Returns a paginator payload at the root and includes community details when a question belongs to a community.",
                 "responses": {
                     "200": {
                         "description": "Default Response",
@@ -8889,6 +9274,58 @@
                                                     "updatedAt": {
                                                         "type": "string"
                                                     },
+                                                    "asker": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": [
+                                                                    "null",
+                                                                    "string"
+                                                                ]
+                                                            },
+                                                            "email": {
+                                                                "type": [
+                                                                    "null",
+                                                                    "string"
+                                                                ]
+                                                            }
+                                                        }
+                                                    },
+                                                    "community": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": [
+                                                                    "null",
+                                                                    "string"
+                                                                ]
+                                                            },
+                                                            "description": {
+                                                                "type": [
+                                                                    "null",
+                                                                    "string"
+                                                                ]
+                                                            }
+                                                        }
+                                                    },
+                                                    "totalAnswers": {
+                                                        "type": "number"
+                                                    },
+                                                    "totalAnswerers": {
+                                                        "type": "number"
+                                                    },
                                                     "answers": {
                                                         "type": [
                                                             "null",
@@ -8910,6 +9347,18 @@
                                                     "acceptedAnswerId": null,
                                                     "createdAt": "2026-04-01T12:00:00Z",
                                                     "updatedAt": "2026-04-01T12:00:00Z",
+                                                    "asker": {
+                                                        "id": "user-uuid",
+                                                        "name": "janedoe",
+                                                        "email": "jane@example.com"
+                                                    },
+                                                    "community": {
+                                                        "id": "community-uuid",
+                                                        "name": "Local Chess Club",
+                                                        "description": "We meet weekly to play chess"
+                                                    },
+                                                    "totalAnswers": 1,
+                                                    "totalAnswerers": 1,
                                                     "answers": [
                                                         {
                                                             "id": "a-uuid",
@@ -8918,7 +9367,12 @@
                                                             "parentAnswerId": null,
                                                             "content": "This is how...",
                                                             "createdAt": "2026-04-01T13:00:00Z",
-                                                            "updatedAt": "2026-04-01T13:00:00Z"
+                                                            "updatedAt": "2026-04-01T13:00:00Z",
+                                                            "user": {
+                                                                "id": "user-uuid",
+                                                                "name": "janedoe",
+                                                                "email": "jane@example.com"
+                                                            }
                                                         }
                                                     ]
                                                 }
@@ -8993,6 +9447,18 @@
                                                 "acceptedAnswerId": null,
                                                 "createdAt": "2026-04-01T12:00:00Z",
                                                 "updatedAt": "2026-04-01T12:00:00Z",
+                                                "asker": {
+                                                    "id": "user-uuid",
+                                                    "name": "janedoe",
+                                                    "email": "jane@example.com"
+                                                },
+                                                "community": {
+                                                    "id": "community-uuid",
+                                                    "name": "Local Chess Club",
+                                                    "description": "We meet weekly to play chess"
+                                                },
+                                                "totalAnswers": 1,
+                                                "totalAnswerers": 1,
                                                 "answers": [
                                                     {
                                                         "id": "a-uuid",
@@ -9001,7 +9467,12 @@
                                                         "parentAnswerId": null,
                                                         "content": "This is how...",
                                                         "createdAt": "2026-04-01T13:00:00Z",
-                                                        "updatedAt": "2026-04-01T13:00:00Z"
+                                                        "updatedAt": "2026-04-01T13:00:00Z",
+                                                        "user": {
+                                                            "id": "user-uuid",
+                                                            "name": "janedoe",
+                                                            "email": "jane@example.com"
+                                                        }
                                                     }
                                                 ]
                                             }
@@ -9031,7 +9502,7 @@
                 "tags": [
                     "Questions"
                 ],
-                "description": "Get a single question by id. Set `includeAnswers=true` to include answers in the response.",
+                "description": "Get a single question by id with asker details, community details when available, answer aggregates, and answers by default. Set `includeAnswers=false` to omit answers.",
                 "parameters": [
                     {
                         "schema": {
@@ -9092,6 +9563,58 @@
                                                 "updatedAt": {
                                                     "type": "string"
                                                 },
+                                                "asker": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        },
+                                                        "email": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "community": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        },
+                                                        "description": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "totalAnswers": {
+                                                    "type": "number"
+                                                },
+                                                "totalAnswerers": {
+                                                    "type": "number"
+                                                },
                                                 "answers": {
                                                     "type": [
                                                         "null",
@@ -9113,6 +9636,18 @@
                                                 "acceptedAnswerId": null,
                                                 "createdAt": "2026-04-01T12:00:00Z",
                                                 "updatedAt": "2026-04-01T12:00:00Z",
+                                                "asker": {
+                                                    "id": "user-uuid",
+                                                    "name": "janedoe",
+                                                    "email": "jane@example.com"
+                                                },
+                                                "community": {
+                                                    "id": "community-uuid",
+                                                    "name": "Local Chess Club",
+                                                    "description": "We meet weekly to play chess"
+                                                },
+                                                "totalAnswers": 1,
+                                                "totalAnswerers": 1,
                                                 "answers": [
                                                     {
                                                         "id": "a-uuid",
@@ -9121,7 +9656,12 @@
                                                         "parentAnswerId": null,
                                                         "content": "This is how...",
                                                         "createdAt": "2026-04-01T13:00:00Z",
-                                                        "updatedAt": "2026-04-01T13:00:00Z"
+                                                        "updatedAt": "2026-04-01T13:00:00Z",
+                                                        "user": {
+                                                            "id": "user-uuid",
+                                                            "name": "janedoe",
+                                                            "email": "jane@example.com"
+                                                        }
                                                     }
                                                 ]
                                             }
@@ -9140,6 +9680,18 @@
                                             "acceptedAnswerId": null,
                                             "createdAt": "2026-04-01T12:00:00Z",
                                             "updatedAt": "2026-04-01T12:00:00Z",
+                                            "asker": {
+                                                "id": "user-uuid",
+                                                "name": "janedoe",
+                                                "email": "jane@example.com"
+                                            },
+                                            "community": {
+                                                "id": "community-uuid",
+                                                "name": "Local Chess Club",
+                                                "description": "We meet weekly to play chess"
+                                            },
+                                            "totalAnswers": 1,
+                                            "totalAnswerers": 1,
                                             "answers": [
                                                 {
                                                     "id": "a-uuid",
@@ -9148,7 +9700,12 @@
                                                     "parentAnswerId": null,
                                                     "content": "This is how...",
                                                     "createdAt": "2026-04-01T13:00:00Z",
-                                                    "updatedAt": "2026-04-01T13:00:00Z"
+                                                    "updatedAt": "2026-04-01T13:00:00Z",
+                                                    "user": {
+                                                        "id": "user-uuid",
+                                                        "name": "janedoe",
+                                                        "email": "jane@example.com"
+                                                    }
                                                 }
                                             ]
                                         }
@@ -9252,6 +9809,29 @@
                                                 },
                                                 "updatedAt": {
                                                     "type": "string"
+                                                },
+                                                "user": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "string"
+                                                        },
+                                                        "name": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        },
+                                                        "email": {
+                                                            "type": [
+                                                                "null",
+                                                                "string"
+                                                            ]
+                                                        }
+                                                    }
                                                 }
                                             },
                                             "example": {
@@ -9261,7 +9841,12 @@
                                                 "parentAnswerId": null,
                                                 "content": "This is how...",
                                                 "createdAt": "2026-04-01T13:00:00Z",
-                                                "updatedAt": "2026-04-01T13:00:00Z"
+                                                "updatedAt": "2026-04-01T13:00:00Z",
+                                                "user": {
+                                                    "id": "user-uuid",
+                                                    "name": "janedoe",
+                                                    "email": "jane@example.com"
+                                                }
                                             }
                                         }
                                     },
@@ -9274,7 +9859,12 @@
                                             "parentAnswerId": null,
                                             "content": "This is how...",
                                             "createdAt": "2026-04-01T13:00:00Z",
-                                            "updatedAt": "2026-04-01T13:00:00Z"
+                                            "updatedAt": "2026-04-01T13:00:00Z",
+                                            "user": {
+                                                "id": "user-uuid",
+                                                "name": "janedoe",
+                                                "email": "jane@example.com"
+                                            }
                                         }
                                     }
                                 }
@@ -9359,6 +9949,29 @@
                                                     },
                                                     "updatedAt": {
                                                         "type": "string"
+                                                    },
+                                                    "user": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "properties": {
+                                                            "id": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": [
+                                                                    "null",
+                                                                    "string"
+                                                                ]
+                                                            },
+                                                            "email": {
+                                                                "type": [
+                                                                    "null",
+                                                                    "string"
+                                                                ]
+                                                            }
+                                                        }
                                                     }
                                                 },
                                                 "example": {
@@ -9368,7 +9981,12 @@
                                                     "parentAnswerId": null,
                                                     "content": "This is how...",
                                                     "createdAt": "2026-04-01T13:00:00Z",
-                                                    "updatedAt": "2026-04-01T13:00:00Z"
+                                                    "updatedAt": "2026-04-01T13:00:00Z",
+                                                    "user": {
+                                                        "id": "user-uuid",
+                                                        "name": "janedoe",
+                                                        "email": "jane@example.com"
+                                                    }
                                                 }
                                             }
                                         },
@@ -9437,7 +10055,12 @@
                                                 "parentAnswerId": null,
                                                 "content": "This is how...",
                                                 "createdAt": "2026-04-01T13:00:00Z",
-                                                "updatedAt": "2026-04-01T13:00:00Z"
+                                                "updatedAt": "2026-04-01T13:00:00Z",
+                                                "user": {
+                                                    "id": "user-uuid",
+                                                    "name": "janedoe",
+                                                    "email": "jane@example.com"
+                                                }
                                             }
                                         ],
                                         "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
@@ -10462,6 +11085,489 @@
                 }
             }
         },
+        "/api/page-categories": {
+            "get": {
+                "operationId": "listPageCategories",
+                "tags": [
+                    "Pages",
+                    "Categories"
+                ],
+                "description": "List all page categories with the total number of pages under each category.",
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "description": {
+                                                        "type": "string"
+                                                    },
+                                                    "icon": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "is_active": {
+                                                        "type": "number"
+                                                    },
+                                                    "rules": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ]
+                                                    },
+                                                    "max_pages_per_user": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "requires_approval": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "validation_rules": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ]
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string"
+                                                    },
+                                                    "updated_at": {
+                                                        "type": "string"
+                                                    },
+                                                    "total_pages": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ],
+                                                        "description": "Total pages in this category"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "page-category-uuid",
+                                                    "name": "Community",
+                                                    "slug": "community",
+                                                    "description": "Community pages",
+                                                    "icon": "users",
+                                                    "is_active": 1,
+                                                    "rules": {
+                                                        "allowPosting": true
+                                                    },
+                                                    "max_pages_per_user": 5,
+                                                    "requires_approval": 1,
+                                                    "validation_rules": {
+                                                        "slugPattern": "^[a-z0-9-]+$"
+                                                    },
+                                                    "created_at": "2026-04-01T12:00:00Z",
+                                                    "updated_at": "2026-04-10T12:00:00Z",
+                                                    "total_pages": 12
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "page-category-uuid",
+                                                "name": "Community",
+                                                "slug": "community",
+                                                "description": "Community pages",
+                                                "icon": "users",
+                                                "is_active": 1,
+                                                "rules": {
+                                                    "allowPosting": true
+                                                },
+                                                "max_pages_per_user": 5,
+                                                "requires_approval": 1,
+                                                "validation_rules": {
+                                                    "slugPattern": "^[a-z0-9-]+$"
+                                                },
+                                                "created_at": "2026-04-01T12:00:00Z",
+                                                "updated_at": "2026-04-10T12:00:00Z",
+                                                "total_pages": 12
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createPageCategory",
+                "tags": [
+                    "Categories"
+                ],
+                "description": "Create a new page category (admin only).",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name",
+                                    "slug"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "slug": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "icon": {
+                                        "type": "string"
+                                    },
+                                    "is_active": {
+                                        "type": "number"
+                                    },
+                                    "rules": {
+                                        "type": [
+                                            "object",
+                                            "null"
+                                        ]
+                                    },
+                                    "max_pages_per_user": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "requires_approval": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "validation_rules": {
+                                        "type": [
+                                            "object",
+                                            "null"
+                                        ]
+                                    }
+                                },
+                                "example": {
+                                    "name": "Community",
+                                    "slug": "community",
+                                    "description": "Community pages for user groups, discussions and events.",
+                                    "icon": "users",
+                                    "is_active": 1,
+                                    "rules": {
+                                        "allowPosting": true,
+                                        "allowMedia": true,
+                                        "requireMembership": false,
+                                        "profanityFilter": true
+                                    },
+                                    "max_pages_per_user": 5,
+                                    "requires_approval": 1,
+                                    "validation_rules": {
+                                        "slugPattern": "^[a-z0-9-]+$",
+                                        "minNameLength": 3,
+                                        "maxNameLength": 60
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "description": {
+                                                    "type": "string"
+                                                },
+                                                "icon": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "is_active": {
+                                                    "type": "number"
+                                                },
+                                                "rules": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ]
+                                                },
+                                                "max_pages_per_user": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "requires_approval": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "validation_rules": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ]
+                                                },
+                                                "created_at": {
+                                                    "type": "string"
+                                                },
+                                                "updated_at": {
+                                                    "type": "string"
+                                                },
+                                                "total_pages": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ],
+                                                    "description": "Total pages in this category"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "page-category-uuid",
+                                                "name": "Community",
+                                                "slug": "community",
+                                                "description": "Community pages",
+                                                "icon": "users",
+                                                "is_active": 1,
+                                                "rules": {
+                                                    "allowPosting": true
+                                                },
+                                                "max_pages_per_user": 5,
+                                                "requires_approval": 1,
+                                                "validation_rules": {
+                                                    "slugPattern": "^[a-z0-9-]+$"
+                                                },
+                                                "created_at": "2026-04-01T12:00:00Z",
+                                                "updated_at": "2026-04-10T12:00:00Z",
+                                                "total_pages": 12
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": false,
+                                        "error": {
+                                            "code": "profile_already_exists",
+                                            "message": "Profile already exists"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                },
+                                "examples": {
+                                    "example1": {
+                                        "value": {
+                                            "summary": "Invalid slug format",
+                                            "value": {
+                                                "success": false,
+                                                "error": {
+                                                    "code": "invalid_slug_format",
+                                                    "message": "Slug must match ^[a-z0-9-]+$"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example2": {
+                                        "value": {
+                                            "summary": "Name too short",
+                                            "value": {
+                                                "success": false,
+                                                "error": {
+                                                    "code": "name_too_short",
+                                                    "message": "Name must be at least the minimum length"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example3": {
+                                        "value": {
+                                            "summary": "Invalid validation rules",
+                                            "value": {
+                                                "success": false,
+                                                "error": {
+                                                    "code": "invalid_validation_rules",
+                                                    "message": "validation_rules must be an object with valid fields"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/page-categories/{id}/pages": {
             "get": {
                 "operationId": "listPagesByCategoryId",
@@ -11072,7 +12178,7 @@
                                                         "null",
                                                         "number"
                                                     ],
-                                                    "description": "Total pages in this category (provided by GET /page-categories/:id)"
+                                                    "description": "Total pages in this category"
                                                 }
                                             },
                                             "example": {
@@ -11318,7 +12424,7 @@
                                                         "null",
                                                         "number"
                                                     ],
-                                                    "description": "Total pages in this category (provided by GET /page-categories/:id)"
+                                                    "description": "Total pages in this category"
                                                 }
                                             },
                                             "example": {
@@ -11525,290 +12631,6 @@
                             "application/json": {
                                 "schema": {
                                     "type": "object"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/page-categories": {
-            "post": {
-                "operationId": "createPageCategory",
-                "tags": [
-                    "Categories"
-                ],
-                "description": "Create a new page category (admin only).",
-                "requestBody": {
-                    "required": true,
-                    "content": {
-                        "application/json": {
-                            "schema": {
-                                "type": "object",
-                                "required": [
-                                    "name",
-                                    "slug"
-                                ],
-                                "properties": {
-                                    "name": {
-                                        "type": "string"
-                                    },
-                                    "slug": {
-                                        "type": "string"
-                                    },
-                                    "description": {
-                                        "type": "string"
-                                    },
-                                    "icon": {
-                                        "type": "string"
-                                    },
-                                    "is_active": {
-                                        "type": "number"
-                                    },
-                                    "rules": {
-                                        "type": [
-                                            "object",
-                                            "null"
-                                        ]
-                                    },
-                                    "max_pages_per_user": {
-                                        "type": [
-                                            "number",
-                                            "null"
-                                        ]
-                                    },
-                                    "requires_approval": {
-                                        "type": [
-                                            "number",
-                                            "null"
-                                        ]
-                                    },
-                                    "validation_rules": {
-                                        "type": [
-                                            "object",
-                                            "null"
-                                        ]
-                                    }
-                                },
-                                "example": {
-                                    "name": "Community",
-                                    "slug": "community",
-                                    "description": "Community pages for user groups, discussions and events.",
-                                    "icon": "users",
-                                    "is_active": 1,
-                                    "rules": {
-                                        "allowPosting": true,
-                                        "allowMedia": true,
-                                        "requireMembership": false,
-                                        "profanityFilter": true
-                                    },
-                                    "max_pages_per_user": 5,
-                                    "requires_approval": 1,
-                                    "validation_rules": {
-                                        "slugPattern": "^[a-z0-9-]+$",
-                                        "minNameLength": 3,
-                                        "maxNameLength": 60
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "responses": {
-                    "201": {
-                        "description": "Default Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean"
-                                        },
-                                        "data": {
-                                            "type": "object",
-                                            "properties": {
-                                                "id": {
-                                                    "type": "string"
-                                                },
-                                                "name": {
-                                                    "type": "string"
-                                                },
-                                                "slug": {
-                                                    "type": "string"
-                                                },
-                                                "description": {
-                                                    "type": "string"
-                                                },
-                                                "icon": {
-                                                    "type": [
-                                                        "null",
-                                                        "string"
-                                                    ]
-                                                },
-                                                "is_active": {
-                                                    "type": "number"
-                                                },
-                                                "rules": {
-                                                    "type": [
-                                                        "null",
-                                                        "object"
-                                                    ]
-                                                },
-                                                "max_pages_per_user": {
-                                                    "type": [
-                                                        "null",
-                                                        "number"
-                                                    ]
-                                                },
-                                                "requires_approval": {
-                                                    "type": [
-                                                        "null",
-                                                        "number"
-                                                    ]
-                                                },
-                                                "validation_rules": {
-                                                    "type": [
-                                                        "null",
-                                                        "object"
-                                                    ]
-                                                },
-                                                "created_at": {
-                                                    "type": "string"
-                                                },
-                                                "updated_at": {
-                                                    "type": "string"
-                                                },
-                                                "total_pages": {
-                                                    "type": [
-                                                        "null",
-                                                        "number"
-                                                    ],
-                                                    "description": "Total pages in this category (provided by GET /page-categories/:id)"
-                                                }
-                                            },
-                                            "example": {
-                                                "id": "page-category-uuid",
-                                                "name": "Community",
-                                                "slug": "community",
-                                                "description": "Community pages",
-                                                "icon": "users",
-                                                "is_active": 1,
-                                                "rules": {
-                                                    "allowPosting": true
-                                                },
-                                                "max_pages_per_user": 5,
-                                                "requires_approval": 1,
-                                                "validation_rules": {
-                                                    "slugPattern": "^[a-z0-9-]+$"
-                                                },
-                                                "created_at": "2026-04-01T12:00:00Z",
-                                                "updated_at": "2026-04-10T12:00:00Z",
-                                                "total_pages": 12
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Default Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "403": {
-                        "description": "Default Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object"
-                                }
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Default Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "success": {
-                                            "type": "boolean"
-                                        },
-                                        "error": {
-                                            "type": "object",
-                                            "properties": {
-                                                "code": {
-                                                    "type": "string"
-                                                },
-                                                "message": {
-                                                    "type": "string"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "example": {
-                                        "success": false,
-                                        "error": {
-                                            "code": "profile_already_exists",
-                                            "message": "Profile already exists"
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    "422": {
-                        "description": "Default Response",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object"
-                                },
-                                "examples": {
-                                    "example1": {
-                                        "value": {
-                                            "summary": "Invalid slug format",
-                                            "value": {
-                                                "success": false,
-                                                "error": {
-                                                    "code": "invalid_slug_format",
-                                                    "message": "Slug must match ^[a-z0-9-]+$"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "example2": {
-                                        "value": {
-                                            "summary": "Name too short",
-                                            "value": {
-                                                "success": false,
-                                                "error": {
-                                                    "code": "name_too_short",
-                                                    "message": "Name must be at least the minimum length"
-                                                }
-                                            }
-                                        }
-                                    },
-                                    "example3": {
-                                        "value": {
-                                            "summary": "Invalid validation rules",
-                                            "value": {
-                                                "success": false,
-                                                "error": {
-                                                    "code": "invalid_validation_rules",
-                                                    "message": "validation_rules must be an object with valid fields"
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }

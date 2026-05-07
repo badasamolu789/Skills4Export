@@ -23,6 +23,8 @@ const isPostJobModalOpen = ref(false)
 const agreedToTerms = ref(false)
 const freelancerTermsAgreed = ref(false)
 const passportFileName = ref('')
+const passportFile = ref<File | null>(null)
+const passportPreviewUrl = ref('')
 const visibleFreelancerCount = ref(2)
 const visibleJobCount = ref(1)
 const revealSentinel = ref<HTMLElement | null>(null)
@@ -182,6 +184,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   revealObserver?.disconnect()
+
+  if (passportPreviewUrl.value) {
+    URL.revokeObjectURL(passportPreviewUrl.value)
+  }
 })
 
 const submitFreelancerRegistration = () => {
@@ -210,7 +216,29 @@ const submitFreelanceJob = () => {
 
 const handlePassportUpload = (event: Event) => {
   const input = event.target as HTMLInputElement
-  passportFileName.value = input.files?.[0]?.name ?? ''
+  const file = input.files?.[0] ?? null
+
+  if (passportPreviewUrl.value) {
+    URL.revokeObjectURL(passportPreviewUrl.value)
+    passportPreviewUrl.value = ''
+  }
+
+  passportFile.value = file
+  passportFileName.value = file?.name ?? ''
+
+  if (file) {
+    passportPreviewUrl.value = URL.createObjectURL(file)
+  }
+}
+
+const clearPassportUpload = () => {
+  if (passportPreviewUrl.value) {
+    URL.revokeObjectURL(passportPreviewUrl.value)
+    passportPreviewUrl.value = ''
+  }
+
+  passportFile.value = null
+  passportFileName.value = ''
 }
 </script>
 
@@ -562,8 +590,14 @@ const handlePassportUpload = (event: Event) => {
 
         <div class="mt-6 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
           <div class="hidden sm:block" />
-          <div class="flex aspect-[10/9] w-full max-w-[14rem] items-center justify-center justify-self-center rounded-[0.85rem] bg-[var(--surface-secondary)] text-xl font-bold text-[var(--text-secondary)]">
-            300 x 270
+          <div class="flex aspect-[10/9] w-full max-w-[14rem] items-center justify-center overflow-hidden justify-self-center rounded-[0.85rem] bg-[var(--surface-secondary)] text-xl font-bold text-[var(--text-secondary)]">
+            <img
+              v-if="passportPreviewUrl"
+              :src="passportPreviewUrl"
+              alt="Passport preview"
+              class="h-full w-full object-cover"
+            />
+            <span v-else>300 x 270</span>
           </div>
           <div class="justify-self-start">
             <label class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]">
@@ -572,10 +606,19 @@ const handlePassportUpload = (event: Event) => {
               <input type="file" accept="image/*" class="sr-only" @change="handlePassportUpload" />
             </label>
             <p class="mt-2 text-[0.78rem] text-[var(--text-secondary)]">Maximum file size: 10 MB.</p>
-            <p v-if="passportFileName" class="mt-1 inline-flex items-center gap-1 text-[0.76rem] font-medium text-[var(--accent-strong)]">
-              <Upload class="h-3.5 w-3.5" />
-              {{ passportFileName }}
-            </p>
+            <div v-if="passportFileName" class="mt-2 flex flex-wrap items-center gap-2">
+              <p class="inline-flex items-center gap-1 text-[0.76rem] font-medium text-[var(--accent-strong)]">
+                <Upload class="h-3.5 w-3.5" />
+                {{ passportFileName }}
+              </p>
+              <button
+                type="button"
+                class="inline-flex h-8 items-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-3 text-[0.76rem] font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
+                @click="clearPassportUpload"
+              >
+                Remove
+              </button>
+            </div>
           </div>
         </div>
 

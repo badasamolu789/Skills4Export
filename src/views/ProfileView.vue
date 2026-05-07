@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, MoreHorizontal, Pencil, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
+import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, MoreHorizontal, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { usersService } from '@/services/users'
@@ -71,6 +71,8 @@ const optionalField = (value?: string | null) => {
   const trimmed = value?.trim()
   return trimmed || undefined
 }
+
+const toDateInputValue = (value?: string | null) => optionalField(value)?.slice(0, 10) || ''
 
 const toggleActionMenu = (type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience', id: string | undefined) => {
   if (!id) {
@@ -177,7 +179,7 @@ const openEditModal = (
     editCertificationForm.value = {
       name: item.name || '',
       issuer: item.issuer || '',
-      issueDate: item.issueDate || '',
+      issueDate: toDateInputValue(item.issueDate),
     }
   }
 
@@ -188,8 +190,8 @@ const openEditModal = (
       school: item.school || '',
       degree: item.degree || '',
       field: item.field || '',
-      startDate: item.startDate || '',
-      endDate: item.endDate || '',
+      startDate: toDateInputValue(item.startDate),
+      endDate: toDateInputValue(item.endDate),
     }
   }
 
@@ -200,9 +202,9 @@ const openEditModal = (
       company: item.company || '',
       title: item.title || '',
       employmentType: item.employmentType || '',
-      startDate: item.startDate || '',
-      endDate: item.endDate || '',
-      isCurrent: Boolean(item.isCurrent),
+      startDate: toDateInputValue(item.startDate),
+      endDate: toDateInputValue(item.endDate),
+      isCurrent: item.isCurrent === 1 || item.isCurrent === true,
       description: item.description || '',
     }
   }
@@ -385,10 +387,16 @@ const loadProfile = async () => {
   isLoadingProfile.value = true
 
   try {
-    const [profileResponse, statsResponse] = await Promise.all([
+    const [profileResult, statsResult] = await Promise.allSettled([
       usersService.getMyProfile(authStore.authToken),
-      usersService.getMyStats(authStore.authToken),
+      usersService.getMyStats(authStore.authToken, { suppressErrorModal: true }),
     ])
+
+    if (profileResult.status === 'rejected') {
+      throw profileResult.reason
+    }
+
+    const profileResponse = profileResult.value
 
     authStore.setUserProfile(profileResponse.data?.profile ?? null)
 
@@ -418,28 +426,66 @@ const loadProfile = async () => {
       }
     }
 
-    stats.value = {
-      pages: statsResponse.data?.pages ?? 0,
-      communities: statsResponse.data?.communities ?? 0,
-      posts: statsResponse.data?.posts ?? 0,
-      comments: statsResponse.data?.comments ?? 0,
-      followers: 0,
+    if (statsResult.status === 'fulfilled') {
+      stats.value = {
+        pages: statsResult.value.data?.pages ?? 0,
+        communities: statsResult.value.data?.communities ?? 0,
+        posts: statsResult.value.data?.posts ?? 0,
+        comments: statsResult.value.data?.comments ?? 0,
+        followers: 0,
+      }
+    } else {
+      stats.value = {
+        ...stats.value,
+        pages: 0,
+        communities: 0,
+        posts: 0,
+        comments: 0,
+      }
     }
 
-    // Load additional profile data
-    skills.value = (profileResponse.data?.skills || []).map((skill) => ({
+    const loadedUserId = profileResponse.data?.user?.id || authStore.userId
+
+    const [skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
+      loadedUserId
+        ? await Promise.allSettled([
+            usersService.listUserSkills(loadedUserId, authStore.authToken),
+            usersService.listUserPortfolios(loadedUserId, authStore.authToken),
+            usersService.listUserCertifications(loadedUserId, authStore.authToken),
+            usersService.listUserEducations(loadedUserId, authStore.authToken),
+            usersService.listUserExperiences(loadedUserId, authStore.authToken),
+          ])
+        : []
+
+    const sourceSkills = skillsResult?.status === 'fulfilled'
+      ? skillsResult.value.data
+      : profileResponse.data?.skills ?? []
+    const sourcePortfolios = portfoliosResult?.status === 'fulfilled'
+      ? portfoliosResult.value.data
+      : profileResponse.data?.portfolios ?? []
+    const sourceCertifications = certificationsResult?.status === 'fulfilled'
+      ? certificationsResult.value.data
+      : profileResponse.data?.certifications ?? []
+    const sourceEducations = educationsResult?.status === 'fulfilled'
+      ? educationsResult.value.data
+      : profileResponse.data?.education ?? []
+    const sourceExperiences = experiencesResult?.status === 'fulfilled'
+      ? experiencesResult.value.data
+      : profileResponse.data?.experiences ?? []
+
+    skills.value = sourceSkills.map((skill) => ({
       id: skill.id || '',
       name: skill.skill || skill.name || '',
       level: skill.level,
     }))
 
-    portfolios.value = profileResponse.data?.portfolios || []
+    portfolios.value = sourcePortfolios
 
-    certifications.value = profileResponse.data?.certifications || []
+    certifications.value = sourceCertifications
 
-    educations.value = profileResponse.data?.education || []
+    educations.value = sourceEducations
 
-    experiences.value = profileResponse.data?.experiences || []
+    experiences.value = sourceExperiences
 
     following.value = []
 
@@ -519,12 +565,8 @@ const upsertCurrentExperience = async () => {
   }
 
   if (existingExperience?.id) {
-    const response = await usersService.updateUserExperience(
-      authStore.userId,
-      existingExperience.id,
-      payload,
-      authStore.authToken,
-    )
+    const response = await usersService.addUserExperience(authStore.userId, payload, authStore.authToken)
+    await usersService.deleteUserExperience(authStore.userId, existingExperience.id, authStore.authToken)
     experiences.value = experiences.value.map((experience) =>
       experience.id === existingExperience.id ? response.data : experience,
     )
@@ -699,9 +741,9 @@ const replaceSectionItem = async () => {
       experiences.value = experiences.value.map((experience) => (experience.id === id ? response.data : experience))
     }
 
-    await loadProfile()
     editModal.value = { isOpen: false }
     toast.success('Updated successfully.')
+    void loadProfile()
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -744,7 +786,7 @@ const profile = computed(() => {
   const email = draft.email || 'samuel@example.com'
   const phone = draft.phone || '+234 800 000 0000'
   const location = apiProfile?.location || draft.location || 'Lagos, Nigeria'
-  const bio = apiProfile?.bio || draft.headline || 'Founder account'
+  const bio = apiProfile?.bio || ''
 
   return {
     name,
@@ -871,7 +913,7 @@ const editModalTitle = computed(() => {
         <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,12,27,0.04),rgba(12,12,27,0.28))]" />
       </div>
 
-      <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-0 sm:px-7 lg:px-9 lg:pb-7">
+      <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-4 sm:px-7 lg:px-9 lg:pb-7 lg:pt-5">
         <div class="absolute right-0 top-0 hidden h-full w-48 lg:block">
           <div class="absolute right-10 top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
           <div class="absolute right-20 top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
@@ -905,14 +947,6 @@ const editModalTitle = computed(() => {
                 <span>{{ profileCompanyLabel }}</span>
                 <span>-</span>
                 <span>{{ profileCountryLabel }}</span>
-                <button
-                  type="button"
-                  @click="openProfileDetailsModal"
-                  class="inline-flex h-9 w-9 items-center justify-center rounded-full text-[var(--text-primary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
-                  aria-label="Edit profile"
-                >
-                  <Pencil class="h-4 w-4" />
-                </button>
               </div>
               <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold leading-5 sm:justify-start sm:text-sm">
                 <button
@@ -944,7 +978,7 @@ const editModalTitle = computed(() => {
 
           <RouterLink
             to="/profile/edit"
-            class="inline-flex items-center justify-center gap-3 self-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-2.5 text-xs font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)] sm:self-start"
+            class="z-10 inline-flex items-center justify-center gap-3 self-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-2.5 text-xs font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)] sm:absolute sm:right-0 sm:top-4 sm:self-auto lg:top-1"
           >
             <Edit2 class="h-4 w-4" />
             Edit Profile
@@ -954,14 +988,14 @@ const editModalTitle = computed(() => {
 
       <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
         <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
-          <p>
-            {{ profile.bio || 'Add a short introduction to tell people what you do, what you care about, and the kind of opportunities or conversations you want to attract.' }}
+          <p v-if="profile.bio" class="whitespace-pre-line">
+            {{ profile.bio }}
           </p>
-          <p>
-            <span class="font-medium text-[var(--text-primary)]">{{ featuredExperience?.title || 'Community member' }}</span>
-            <span v-if="featuredExperience?.company"> at {{ featuredExperience.company }}</span>
-            <span v-else> building visibility through Skills4Export.</span>
-            <span v-if="profile.location"> Based in {{ profile.location }}.</span>
+          <p
+            v-else
+            class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-5 text-sm text-[var(--text-secondary)]"
+          >
+            No about information added yet.
           </p>
         </div>
 
@@ -1459,7 +1493,7 @@ const editModalTitle = computed(() => {
 
   <div
     v-if="isProfileDetailsModalOpen"
-    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-0 sm:items-center sm:p-4"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
     @click.self="closeProfileDetailsModal"
   >
     <form
@@ -1528,7 +1562,7 @@ const editModalTitle = computed(() => {
 
   <div
     v-if="profileModal"
-    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-4 sm:items-center"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-4 sm:items-center"
     @click.self="closeProfileModal"
   >
     <div class="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
@@ -1648,7 +1682,7 @@ const editModalTitle = computed(() => {
 
   <div
     v-if="editModal.isOpen"
-    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-0 sm:items-center sm:p-4"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
     @click.self="closeEditModal"
   >
     <form
@@ -1797,7 +1831,7 @@ const editModalTitle = computed(() => {
   </div>
 
   <!-- Delete Confirmation Modal -->
-  <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black p-4">
+  <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
     <div class="w-full max-w-sm overflow-hidden rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <div class="p-6">
         <h3 class="text-lg font-semibold text-[var(--text-primary)]">Delete {{ deleteModal.label }}?</h3>

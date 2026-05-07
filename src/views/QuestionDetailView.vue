@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowUp, BookOpen, Bookmark, Check, CloudUpload, MessageSquare, Share2, Users } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useCurrentUserIdentity, getInitials, getProfileDisplayName, getProfileSkills } from '@/composables/useCurrentUserIdentity'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { getFeedPostBySlug, type QuestionPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
@@ -13,6 +14,7 @@ import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMap
 
 const route = useRoute()
 const authStore = useAuthStore()
+const currentUser = useCurrentUserIdentity()
 
 type AnswerItem = {
   id: string
@@ -35,6 +37,7 @@ const answerInput = ref('')
 const isAnswerModalOpen = ref(false)
 const isSubmittingAnswer = ref(false)
 const answerAttachments = ref<File[]>([])
+const answerAttachmentPreviews = ref<Array<{ key: string; name: string; url: string; kind: 'image' | 'video' }>>([])
 const answererProfile = ref<MyProfileData | null>(null)
 const isLoadingAnswererProfile = ref(false)
 
@@ -65,38 +68,12 @@ const formatTime = (value?: string) => {
   }).format(date)
 }
 
-const getInitials = (value: string) =>
-  value
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || 'CM'
-
-const getProfileName = (profile?: MyProfileData | null) =>
-  profile?.profile?.username?.trim() ||
-  profile?.user?.username?.trim() ||
-  profile?.user?.email?.split('@')[0]?.trim() ||
-  ''
-
-const getProfileSkills = (profile?: MyProfileData | null) =>
-  profile?.skills
-    ?.map((skill) => (skill.name || skill.skill || '').trim())
-    .filter(Boolean)
-    .slice(0, 3) ?? []
-
 const currentAnswerAuthor = () => {
-  const name =
-    authStore.userProfile?.username ||
-    authStore.signUpDraft.username ||
-    authStore.signUpDraft.name ||
-    'You'
-
   return {
-    name,
-    to: authStore.userId ? `/profile/view/${authStore.userId}` : '/profile',
-    avatarSrc: authStore.userProfile?.avatar || authStore.signUpDraft.avatar || null,
-    skills: authStore.signUpDraft.interests.slice(0, 3),
+    name: currentUser.displayName.value,
+    to: currentUser.profilePath.value,
+    avatarSrc: currentUser.avatarSrc.value || null,
+    skills: currentUser.skills.value,
   }
 }
 
@@ -108,6 +85,7 @@ const questionAuthor = computed(() => {
   return {
     name: question.value.authorName,
     to: question.value.authorTo,
+    avatarSrc: question.value.authorAvatarSrc || null,
     avatarText: question.value.authorName
       .split(/\s+/)
       .map((part) => part[0])
@@ -135,20 +113,18 @@ const sortedAnswers = computed(() => {
 
 const answererName = computed(
   () =>
+    currentUser.displayName.value ||
     answererProfile.value?.profile?.username ||
     answererProfile.value?.user?.username ||
     answererProfile.value?.user?.email?.split('@')[0] ||
-    authStore.userProfile?.username ||
-    authStore.signUpDraft.username ||
-    authStore.signUpDraft.name ||
-    'You',
+    'Member',
 )
 
 const answererAvatar = computed(
-  () => answererProfile.value?.profile?.avatar || authStore.userProfile?.avatar || authStore.signUpDraft.avatar || '',
+  () => answererProfile.value?.profile?.avatar || currentUser.avatarSrc.value || '',
 )
 
-const answererProfilePath = computed(() => (authStore.userId ? `/profile/view/${authStore.userId}` : '/profile'))
+const answererProfilePath = computed(() => currentUser.profilePath.value)
 
 const answererSkills = computed(() => {
   const profileSkills =
@@ -161,8 +137,8 @@ const answererSkills = computed(() => {
     return profileSkills
   }
 
-  return authStore.signUpDraft.interests.slice(0, 3).length
-    ? authStore.signUpDraft.interests.slice(0, 3)
+  return currentUser.skills.value.length
+    ? currentUser.skills.value
     : ['Skills4Export member']
 })
 
@@ -175,6 +151,9 @@ const answererInitials = computed(() =>
     .toUpperCase(),
 )
 
+const mapAnswerContent = (answer: QuestionAnswerRecord) =>
+  answer.content || answer.body || answer.answer || answer.text || answer.message || ''
+
 const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> => {
   const userId = answer.userId || answer.user_id || ''
   const author =
@@ -185,7 +164,7 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
             .getUserProfile(userId, authStore.authToken)
             .then((response) => {
               const profile = response.data
-              const name = getProfileName(profile) || 'Community member'
+              const name = getProfileDisplayName(profile) || 'Community member'
 
               return {
                 name,
@@ -215,7 +194,7 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
     avatarText: getInitials(author.name),
     authorMeta: author.skills,
     time: formatTime(answer.createdAt || answer.created_at),
-    content: answer.content,
+    content: mapAnswerContent(answer),
     score: 0,
   }
 }
@@ -246,27 +225,14 @@ const loadQuestion = async (id: string) => {
     const userId = getQuestionUserId(response.data)
     const [authorResponse, answersResponse] = await Promise.all([
       userId ? usersService.getUserProfile(userId, authStore.authToken).catch(() => null) : Promise.resolve(null),
-      response.data.answers?.length
-        ? Promise.resolve(null)
-        : questionsService.listAnswers(response.data.id, authStore.authToken).catch(() => null),
+      questionsService.listAnswers(response.data.id, authStore.authToken).catch(() => null),
     ])
     const authorData =
       authorResponse?.data ??
-      (userId && userId === authStore.userId
-        ? {
-            user: {
-              id: authStore.userId,
-              username:
-                authStore.userProfile?.username ||
-                authStore.signUpDraft.username ||
-                authStore.signUpDraft.name ||
-                'You',
-              email: authStore.signUpDraft.email,
-            },
-            profile: authStore.userProfile,
-          }
-        : null)
-    const answers = response.data.answers ?? answersResponse?.data ?? []
+      (userId && userId === authStore.userId ? currentUser.profileData.value : null)
+    const embeddedAnswers = Array.isArray(response.data.answers) ? response.data.answers : []
+    const listedAnswers = answersResponse?.data ?? []
+    const answers = listedAnswers.length ? listedAnswers : embeddedAnswers
 
     apiQuestion.value = mapApiQuestionToFeedPost({ ...response.data, answers }, authorData)
     answerItems.value = await Promise.all(answers.map(mapAnswerItem))
@@ -289,12 +255,20 @@ const openAnswerModal = () => {
 const closeAnswerModal = () => {
   isAnswerModalOpen.value = false
   answerInput.value = ''
-  answerAttachments.value = []
+  clearAnswerAttachments()
 }
 
 const handleAnswerAttachmentChange = (event: Event) => {
   const input = event.target as HTMLInputElement
   answerAttachments.value = Array.from(input.files ?? [])
+}
+
+const clearAnswerAttachments = () => {
+  answerAttachments.value = []
+}
+
+const removeAnswerAttachment = (index: number) => {
+  answerAttachments.value = answerAttachments.value.filter((_, itemIndex) => itemIndex !== index)
 }
 
 const submitAnswer = async () => {
@@ -329,6 +303,7 @@ const submitAnswer = async () => {
         avatarText: answererInitials.value,
         authorMeta: answererSkills.value,
         time: 'Just now',
+        content: mapAnswerContent(response.data) || value,
       })
       closeAnswerModal()
       toast.success('Answer posted')
@@ -366,6 +341,20 @@ watch(
   },
   { immediate: true },
 )
+
+watch(answerAttachments, (files) => {
+  answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
+  answerAttachmentPreviews.value = files.map((file) => ({
+    key: `${file.name}-${file.size}-${file.lastModified}`,
+    name: file.name,
+    url: URL.createObjectURL(file),
+    kind: file.type.startsWith('video/') ? 'video' : 'image',
+  }))
+})
+
+onBeforeUnmount(() => {
+  answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
+})
 </script>
 
 <template>
@@ -390,9 +379,15 @@ watch(
           <RouterLink
             v-if="questionAuthor"
             :to="questionAuthor.to"
-            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-sm font-bold text-white"
+            class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white"
           >
-            {{ questionAuthor.avatarText }}
+            <img
+              v-if="questionAuthor.avatarSrc"
+              :src="questionAuthor.avatarSrc"
+              :alt="questionAuthor.name"
+              class="h-full w-full object-cover"
+            />
+            <span v-else>{{ questionAuthor.avatarText }}</span>
           </RouterLink>
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--text-secondary)]">
@@ -622,14 +617,45 @@ watch(
             @change="handleAnswerAttachmentChange"
           />
         </label>
-        <div v-if="answerAttachments.length" class="flex flex-wrap gap-2">
-          <span
-            v-for="file in answerAttachments"
-            :key="`${file.name}-${file.size}`"
-            class="rounded-full bg-[var(--surface-muted)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]"
+        <div v-if="answerAttachmentPreviews.length" class="space-y-3">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div
+              v-for="(file, index) in answerAttachmentPreviews"
+              :key="file.key"
+              class="overflow-hidden rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
+            >
+              <img
+                v-if="file.kind === 'image'"
+                :src="file.url"
+                :alt="file.name"
+                class="aspect-[4/3] w-full object-cover"
+              />
+              <video
+                v-else
+                :src="file.url"
+                class="aspect-[4/3] w-full bg-black object-cover"
+                controls
+                playsinline
+              />
+              <div class="flex items-center justify-between gap-2 px-3 py-2">
+                <p class="truncate text-xs font-semibold text-[var(--text-primary)]">{{ file.name }}</p>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-lg border border-[color:var(--border-soft)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
+                  @click="removeAnswerAttachment(index)"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--border-soft)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
+            @click="clearAnswerAttachments"
           >
-            {{ file.name }}
-          </span>
+            Clear all
+          </button>
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ChevronRight, CircleUserRound, LogOut } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { ApiError } from '@/lib/api'
 import { authService } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
@@ -15,18 +16,11 @@ type MenuItem = {
 
 const router = useRouter()
 const authStore = useAuthStore()
-
-const profileName = computed(() => authStore.signUpDraft.name || 'Samuel Bada')
-const profileRole = computed(() => authStore.signUpDraft.headline || 'Community member')
-const profileImage = computed(() => authStore.signUpDraft.avatar || authStore.userProfile?.avatar || '')
-const profileInitials = computed(() =>
-  profileName.value
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase(),
-)
+const currentUser = useCurrentUserIdentity()
+const profileName = currentUser.displayName
+const profileRole = currentUser.role
+const profileInitials = currentUser.initials
+const profileImage = currentUser.avatarSrc
 
 const userMenu = computed<MenuItem[]>(() => [
   { label: 'Profile', to: '/profile' },

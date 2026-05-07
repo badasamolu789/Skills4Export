@@ -32,7 +32,7 @@ export function useErrorHandler() {
     const showErrorToast = (message: string, duration = 5000) => {
         toast.error(message, {
             duration,
-            position: 'top-right',
+            position: 'bottom-right',
         })
     }
 
@@ -42,7 +42,7 @@ export function useErrorHandler() {
     const showWarningToast = (message: string, duration = 5000) => {
         toast.warning(message, {
             duration,
-            position: 'top-right',
+            position: 'bottom-right',
         })
     }
 
@@ -52,7 +52,7 @@ export function useErrorHandler() {
     const showSuccessToast = (message: string, duration = 3000) => {
         toast.success(message, {
             duration,
-            position: 'top-right',
+            position: 'bottom-right',
         })
     }
 
@@ -62,7 +62,7 @@ export function useErrorHandler() {
     const showInfoToast = (message: string, duration = 3000) => {
         toast.info(message, {
             duration,
-            position: 'top-right',
+            position: 'bottom-right',
         })
     }
 

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { useCurrentUserIdentity, getInitials, getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import { getSeededPublicProfile } from '@/data/publicProfiles'
 import { ApiError } from '@/lib/api'
@@ -47,6 +48,7 @@ const props = defineProps<{
 }>()
 
 const authStore = useAuthStore()
+const currentUser = useCurrentUserIdentity()
 const isFollowing = ref(props.post.isFollowing ?? false)
 const isSaved = ref(false)
 const isScored = ref(false)
@@ -197,20 +199,6 @@ const formatCommentTime = (value: string) => {
   }).format(date)
 }
 
-const getInitials = (value: string) =>
-  value
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase() || 'CM'
-
-const getProfileName = (profile?: MyProfileData | null) =>
-  profile?.profile?.username?.trim() ||
-  profile?.user?.username?.trim() ||
-  profile?.user?.email?.split('@')[0]?.trim() ||
-  ''
-
 const getProfileSkills = (profile?: MyProfileData | null) =>
   profile?.skills
     ?.map((skill) => (skill.name || skill.skill || '').trim())
@@ -219,17 +207,11 @@ const getProfileSkills = (profile?: MyProfileData | null) =>
     .join(' | ') || ''
 
 const currentUserCommentProfile = () => {
-  const name =
-    authStore.userProfile?.username ||
-    authStore.signUpDraft.username ||
-    authStore.signUpDraft.name ||
-    'You'
-
   return {
-    name,
-    to: authStore.userId ? `/profile/view/${authStore.userId}` : '/profile',
-    avatarSrc: authStore.userProfile?.avatar || authStore.signUpDraft.avatar || null,
-    tag: authStore.signUpDraft.interests.slice(0, 3).join(' | '),
+    name: currentUser.displayName.value,
+    to: currentUser.profilePath.value,
+    avatarSrc: currentUser.avatarSrc.value || null,
+    tag: currentUser.skills.value.join(' | '),
   }
 }
 
@@ -242,7 +224,7 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
     ? await usersService.getUserProfile(comment.user_id, authStore.authToken).catch(() => null)
     : null
   const profile = response?.data ?? null
-  const name = getProfileName(profile) || 'Community member'
+  const name = getProfileDisplayName(profile) || 'Community member'
 
   return {
     name,
@@ -750,6 +732,18 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             {{ post.title }}
           </RouterLink>
           <div class="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] leading-5 text-[var(--text-secondary)]">
+            <RouterLink
+              :to="authorRoute"
+              class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.62rem] font-semibold text-[var(--text-tertiary)]"
+            >
+              <img
+                v-if="post.authorAvatarSrc"
+                :src="post.authorAvatarSrc"
+                :alt="authorName"
+                class="h-full w-full object-cover"
+              />
+              <span v-else>{{ getInitials(authorName) }}</span>
+            </RouterLink>
             <RouterLink :to="authorRoute" class="shrink-0 font-semibold text-[var(--accent-strong)]">
               {{ authorName }}
             </RouterLink>
@@ -1241,7 +1235,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
   <Teleport to="body">
     <div
       v-if="isShareModalOpen"
-      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/80 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
+      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/50 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
       @click.self="closeShareModal"
     >
       <div
@@ -1344,7 +1338,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
     <div
       v-if="isReportModalOpen"
-      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/80 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
+      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/50 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
       @click.self="closeReportModal"
     >
       <div

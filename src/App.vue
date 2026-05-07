@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { RefreshCw, WifiOff } from 'lucide-vue-next'
 import { Toaster } from 'vue-sonner'
 import { toast } from 'vue-sonner'
 import AppHeader from '@/components/AppHeader.vue'
+import NetworkStatusCard from '@/components/NetworkStatusCard.vue'
 import AppRightRail from '@/components/AppRightRail.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { ApiError } from '@/lib/api'
 import { authService } from '@/services/auth'
+import { usersService } from '@/services/users'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useTheme } from '@/composables/useTheme'
@@ -32,17 +36,12 @@ const showApiDebugModal =
     ? import.meta.env.DEV
     : import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
 
-const profileName = computed(() => authStore.signUpDraft.name || 'Samuel Bada')
-const profileRole = computed(() => authStore.signUpDraft.headline || 'Founder account')
-const profileImage = computed(() => authStore.signUpDraft.avatar || authStore.userProfile?.avatar || '')
-const profileInitials = computed(() =>
-  profileName.value
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase(),
-)
+const currentUser = useCurrentUserIdentity()
+const isLoadingCurrentUserProfile = ref(false)
+const profileName = currentUser.displayName
+const profileRole = currentUser.role
+const profileInitials = currentUser.initials
+const profileImage = currentUser.avatarSrc
 
 const userMenu = computed(() => [
   { label: 'Profile', to: '/profile' },
@@ -67,6 +66,9 @@ const toasterOptions = {
   actionButtonClass: 'skills-toast__action',
   cancelButtonClass: 'skills-toast__cancel',
 }
+const showNetworkOverlay = computed(
+  () => appStore.networkStatus.offline || appStore.networkStatus.backendUnreachable,
+)
 const currentLayout = computed(() => String(route.meta.layout ?? 'public'))
 const showHeader = computed(() => currentLayout.value === 'app')
 const hideSidebar = computed(() => Boolean(route.meta.hideSidebar))
@@ -114,6 +116,96 @@ watch(
   () => {
     isMobileSidebarOpen.value = false
   },
+)
+
+const syncBrowserNetworkState = () => {
+  if (typeof navigator === 'undefined') {
+    return
+  }
+
+  appStore.setOfflineStatus(!navigator.onLine)
+
+  if (navigator.onLine) {
+    appStore.networkStatus.backendUnreachable = false
+  }
+}
+
+const handleOffline = () => {
+  appStore.setOfflineStatus(true)
+  toast.warning('You are offline', {
+    description: 'We will reconnect automatically when your internet comes back on.',
+  })
+}
+
+const handleOnline = () => {
+  const hadNetworkIssue = showNetworkOverlay.value
+  appStore.clearNetworkIssue()
+
+  if (hadNetworkIssue) {
+    toast.success('Connection restored', {
+      description: 'You can continue using the app now.',
+    })
+  }
+}
+
+const reloadCurrentRoute = async () => {
+  await router.replace({
+    path: route.fullPath,
+    query: {
+      ...route.query,
+      _retry: Date.now().toString(),
+    },
+  })
+}
+
+onMounted(() => {
+  syncBrowserNetworkState()
+  window.addEventListener('offline', handleOffline)
+  window.addEventListener('online', handleOnline)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('offline', handleOffline)
+  window.removeEventListener('online', handleOnline)
+})
+
+const hydrateCurrentUserProfile = async () => {
+  if (!authStore.authToken || isLoadingCurrentUserProfile.value) {
+    return
+  }
+
+  isLoadingCurrentUserProfile.value = true
+
+  try {
+    const response = await usersService.getMyProfile(authStore.authToken)
+    const profileData = response.data ?? null
+
+    if (profileData?.profile) {
+      authStore.setUserProfile(profileData.profile)
+    }
+
+    if (profileData?.user?.name) {
+      authStore.signUpDraft.name = profileData.user.name
+    }
+
+    if (profileData?.user?.email) {
+      authStore.signUpDraft.email = profileData.user.email
+    }
+  } catch {
+    return
+  } finally {
+    isLoadingCurrentUserProfile.value = false
+  }
+}
+
+watch(
+  () => authStore.authToken,
+  () => {
+    if (authStore.isAuthenticated) {
+      void hydrateCurrentUserProfile()
+    }
+  },
+  { immediate: true },
 )
 
 const handleMenuAction = async (action: 'logout') => {
@@ -198,6 +290,14 @@ const handleMenuAction = async (action: 'logout') => {
           "
         >
           <div :class="showWorkspaceShell ? 'lg:pt-3' : ''">
+            <NetworkStatusCard
+              v-if="showNetworkOverlay"
+              class="mb-4"
+              :offline="appStore.networkStatus.offline"
+              :backend-unreachable="appStore.networkStatus.backendUnreachable"
+              :last-issue-at="appStore.networkStatus.lastIssueAt"
+              @retry="reloadCurrentRoute"
+            />
             <RouterView />
           </div>
         </div>
@@ -268,7 +368,7 @@ const handleMenuAction = async (action: 'logout') => {
   <Toaster
     rich-colors
     close-button
-    position="top-right"
+    position="bottom-right"
     :theme="toasterTheme"
     class="skills-toaster"
     :offset="20"

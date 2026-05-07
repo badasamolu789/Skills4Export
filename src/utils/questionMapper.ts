@@ -1,4 +1,5 @@
 import { slugify } from '@/utils/slugify'
+import { getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { QuestionPost } from '@/data/feedPosts'
 import type { QuestionRecord } from '@/services/questions'
 import type { MyProfileData } from '@/services/users'
@@ -38,18 +39,8 @@ const formatQuestionTime = (value?: string) => {
 }
 
 const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) => {
-  const profileName = getStringValue(
-    author?.profile?.username,
-    (author?.profile as { name?: string; displayName?: string } | undefined)?.name,
-    (author?.profile as { name?: string; displayName?: string } | undefined)?.displayName,
-  )
-  const userName = getStringValue(
-    author?.user?.username,
-    (author?.user as { name?: string; displayName?: string } | undefined)?.name,
-    (author?.user as { name?: string; displayName?: string } | undefined)?.displayName,
-    question.user?.username,
-    question.user?.name,
-  )
+  const profileName = getProfileDisplayName(author)
+  const userName = getStringValue(question.user?.name, question.user?.username)
   const emailName = author?.user?.email?.split('@')[0]?.trim()
   const embeddedEmailName = question.user?.email?.split('@')[0]?.trim()
   const userId = getQuestionUserId(question)
@@ -92,6 +83,7 @@ export const mapApiQuestionToFeedPost = (
     time: formatQuestionTime(createdAt),
     authorName,
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
+    authorAvatarSrc: author?.profile?.avatar ?? null,
     tag: getAuthorTag(author),
     answers: question.answers?.length ?? 0,
   }

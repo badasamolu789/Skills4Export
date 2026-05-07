@@ -9,6 +9,8 @@ export type ApiRequestOptions = {
   headers?: HeadersInit
   signal?: AbortSignal
   token?: string | null
+  suppressErrorModal?: boolean
+  retry?: boolean
 }
 
 export type ApiErrorPayload = {
@@ -72,6 +74,18 @@ const getApiBaseUrl = () => {
   if (!API_BASE_URL && !import.meta.env.DEV) {
     throw new ApiError(
       'Missing VITE_API_BASE_URL. Add it to your environment before making API calls.',
+      500,
+    )
+  }
+
+  if (
+    !import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    API_BASE_URL.startsWith('http://')
+  ) {
+    throw new ApiError(
+      'Invalid VITE_API_BASE_URL. Production HTTPS pages must use an HTTPS API URL.',
       500,
     )
   }
@@ -220,6 +234,21 @@ const reportApiError = ({
   }
 }
 
+const reportNetworkIssue = ({ offline }: { offline: boolean }) => {
+  try {
+    const appStore = useAppStore()
+
+    if (offline) {
+      appStore.setOfflineStatus(true)
+      return
+    }
+
+    appStore.reportBackendUnreachable()
+  } catch {
+    // Ignore store access failures outside an active Pinia context.
+  }
+}
+
 const logApiRequest = ({
   method,
   url,
@@ -278,6 +307,7 @@ const getCacheKey = (method: ApiMethod, path: string) => {
 
 const DYNAMIC_CACHE_BYPASS_PREFIXES = [
   '/posts',
+  '/questions',
   '/user/',
   '/users/',
   '/media/',
@@ -326,10 +356,12 @@ const invalidateRelatedCacheEntries = (path: string) => {
       cachedPath.startsWith('/users/') ||
       cachedPath.startsWith('/media/') ||
       cachedPath.startsWith('/posts') ||
+      cachedPath.startsWith('/questions') ||
       path.startsWith('/user/') ||
       path.startsWith('/users/') ||
       path.startsWith('/media/') ||
-      path.startsWith('/posts')
+      path.startsWith('/posts') ||
+      path.startsWith('/questions')
     ) {
       responseCache.delete(key)
     }
@@ -348,6 +380,10 @@ const getTimeoutForEndpoint = (path: string) => {
 
   if (path.startsWith('/posts')) {
     return 45000
+  }
+
+  if (path.includes('/avatar-file') || path.includes('/cover-file')) {
+    return 120000
   }
 
   // Longer timeout for data-heavy endpoints
@@ -413,7 +449,15 @@ const retryWithBackoff = async <T>(
 
 export const apiRequest = async <T>(
   path: string,
-  { method = 'GET', body, headers, signal, token }: ApiRequestOptions = {},
+  {
+    method = 'GET',
+    body,
+    headers,
+    signal,
+    token,
+    suppressErrorModal = false,
+    retry = true,
+  }: ApiRequestOptions = {},
 ): Promise<T> => {
   const requestKey = getRequestKey(method, path, body)
   const cacheKey = getCacheKey(method, path)
@@ -449,9 +493,6 @@ export const apiRequest = async <T>(
   if (!mergedHeaders.has('Accept')) {
     mergedHeaders.set('Accept', 'application/json')
   }
-
-  // Add performance headers
-  mergedHeaders.set('Accept-Encoding', 'gzip, deflate, br')
 
   if (token) {
     mergedHeaders.set('Authorization', `Bearer ${token}`)
@@ -489,13 +530,15 @@ export const apiRequest = async <T>(
       const payload = await parseResponse<T | ApiErrorPayload>(response)
 
       if (!response.ok) {
-        reportApiError({
-          method,
-          url: requestUrl,
-          status: response.status,
-          payload,
-          description: 'The backend returned an error response.',
-        })
+        if (!suppressErrorModal) {
+          reportApiError({
+            method,
+            url: requestUrl,
+            status: response.status,
+            payload,
+            description: 'The backend returned an error response.',
+          })
+        }
 
         throw new ApiError(
           getErrorMessage(payload as ApiErrorPayload | null, response.status, 'Something went wrong while contacting the server.'),
@@ -518,23 +561,30 @@ export const apiRequest = async <T>(
       }
 
       if (error instanceof DOMException && error.name === 'AbortError') {
-        reportApiError({
-          method,
-          url: requestUrl || path,
-          status: 408,
-          payload: { message: 'Request timeout' },
-          description: 'The request timed out before the server responded.',
-        })
+        if (!suppressErrorModal) {
+          reportApiError({
+            method,
+            url: requestUrl || path,
+            status: 408,
+            payload: { message: 'Request timeout' },
+            description: 'The request timed out before the server responded.',
+          })
+        }
         throw new ApiError('The request timed out. Please try again.', 408)
       }
 
-      reportApiError({
-        method,
-        url: requestUrl || path,
-        status: 0,
-        payload: { message: String(error) },
-        description: 'The request could not reach the backend service.',
-      })
+      if (!suppressErrorModal) {
+        reportApiError({
+          method,
+          url: requestUrl || path,
+          status: 0,
+          payload: { message: String(error) },
+          description: 'The request could not reach the backend service.',
+        })
+        reportNetworkIssue({
+          offline: typeof navigator !== 'undefined' ? navigator.onLine === false : false,
+        })
+      }
 
       throw new ApiError('Unable to reach the server. Check your network connection and try again.', 0)
     } finally {
@@ -543,7 +593,7 @@ export const apiRequest = async <T>(
   }
 
   // Store pending request for deduplication
-  const requestPromise = retryWithBackoff(() => makeRequest(), path)
+  const requestPromise = retry ? retryWithBackoff(() => makeRequest(), path) : makeRequest()
   pendingRequests.set(requestKey, requestPromise)
 
   try {

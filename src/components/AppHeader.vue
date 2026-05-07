@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Ckeditor } from '@ckeditor/ckeditor5-vue'
-import ClassicEditor from '@ckeditor/ckeditor5-build-classic'
 import {
   ArrowRight,
   Bell,
+  Bold,
   ChevronDown,
   CircleUserRound,
   CloudUpload,
+  Code2,
   House,
   Image as ImageIcon,
+  Italic,
   LayoutGrid,
+  List,
   Menu,
   MessageSquareMore,
   Search,
@@ -94,27 +96,8 @@ const postImageSizeReferences = [
   '1080 x 1080 (1:1)',
   '1200 x 627 (1.91:1)',
 ] as const
+const postContentInput = ref<HTMLTextAreaElement | null>(null)
 const unreadCount = computed(() => props.notifications.filter((item) => item.unread).length)
-const postEditor = ClassicEditor as any
-const postEditorConfig = {
-  toolbar: [
-    'heading',
-    '|',
-    'bold',
-    'italic',
-    'underline',
-    'bulletedList',
-    'numberedList',
-    '|',
-    'link',
-    'blockQuote',
-    'codeBlock',
-    '|',
-    'undo',
-    'redo',
-  ],
-  placeholder: 'Write the post content here...',
-}
 const postFileKind = computed(() => {
   if (!postFile.value) {
     return ''
@@ -228,6 +211,55 @@ const handleMenuItemClick = (item: MenuItem) => {
   if (item.action) {
     emit('menu-action', item.action)
   }
+}
+
+const insertAtSelection = async ({
+  before = '',
+  after = '',
+  placeholder = '',
+}: {
+  before?: string
+  after?: string
+  placeholder?: string
+}) => {
+  const textarea = postContentInput.value
+
+  if (!textarea) {
+    return
+  }
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selectedText = postContent.value.slice(start, end)
+  const replacement = `${before}${selectedText || placeholder}${after}`
+
+  postContent.value =
+    `${postContent.value.slice(0, start)}${replacement}${postContent.value.slice(end)}`
+
+  await nextTick()
+
+  const cursorStart = start + before.length
+  const cursorEnd = cursorStart + (selectedText || placeholder).length
+  textarea.focus()
+  textarea.setSelectionRange(cursorStart, cursorEnd)
+}
+
+const addEditorPrefixLine = async (prefix: string) => {
+  const textarea = postContentInput.value
+
+  if (!textarea) {
+    return
+  }
+
+  const start = textarea.selectionStart
+  const lineStart = postContent.value.lastIndexOf('\n', Math.max(0, start - 1)) + 1
+
+  postContent.value =
+    `${postContent.value.slice(0, lineStart)}${prefix}${postContent.value.slice(lineStart)}`
+
+  await nextTick()
+  textarea.focus()
+  textarea.setSelectionRange(start + prefix.length, start + prefix.length)
 }
 
 const submitQuestion = async () => {
@@ -858,10 +890,46 @@ onBeforeUnmount(() => {
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Content</span>
           <div class="post-content-editor mt-2">
-            <Ckeditor
+            <div class="flex flex-wrap gap-2 rounded-t-[0.75rem] border border-b-0 border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-2.5">
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-2 rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="insertAtSelection({ before: '**', after: '**', placeholder: 'Bold text' })"
+              >
+                <Bold class="h-4 w-4" />
+                Bold
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-2 rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="insertAtSelection({ before: '*', after: '*', placeholder: 'Italic text' })"
+              >
+                <Italic class="h-4 w-4" />
+                Italic
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-2 rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="addEditorPrefixLine('- ')"
+              >
+                <List class="h-4 w-4" />
+                List
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-9 items-center gap-2 rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="insertAtSelection({ before: '```\\n', after: '\\n```', placeholder: 'Code snippet' })"
+              >
+                <Code2 class="h-4 w-4" />
+                Code
+              </button>
+            </div>
+            <textarea
+              ref="postContentInput"
               v-model="postContent"
-              :editor="postEditor"
-              :config="postEditorConfig"
+              rows="12"
+              placeholder="Write the post content here..."
+              class="min-h-[18rem] w-full resize-y rounded-b-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
             />
           </div>
         </label>

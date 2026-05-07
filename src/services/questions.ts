@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import type { ApiRequestOptions } from '@/lib/api'
 import type { ApiSuccessResponse, PaginatorPayload } from '@/services/posts'
 
 export type QuestionAnswerRecord = {
@@ -9,7 +10,11 @@ export type QuestionAnswerRecord = {
   user_id?: string
   parentAnswerId: string | null
   parent_answer_id?: string | null
-  content: string
+  content?: string
+  body?: string
+  answer?: string
+  text?: string
+  message?: string
   createdAt: string
   created_at?: string
   updatedAt: string
@@ -54,6 +59,8 @@ export type CreateAnswerRequest = {
   parentAnswerId?: string | null
 }
 
+type QuestionRequestOptions = Pick<ApiRequestOptions, 'suppressErrorModal' | 'signal'>
+
 const QUESTION_ROUTES = {
   questions: '/questions',
   questionById: (id: string, includeAnswers = false) =>
@@ -66,8 +73,8 @@ export const questionsService = {
     return api.post<ApiSuccessResponse<QuestionRecord>>(QUESTION_ROUTES.questions, payload, { token })
   },
 
-  listQuestions(token?: string | null) {
-    return api.get<PaginatorPayload<QuestionRecord>>(QUESTION_ROUTES.questions, { token })
+  listQuestions(token?: string | null, options?: QuestionRequestOptions) {
+    return api.get<PaginatorPayload<QuestionRecord>>(QUESTION_ROUTES.questions, { token, ...options })
   },
 
   getQuestion(id: string, token?: string | null, includeAnswers = true) {

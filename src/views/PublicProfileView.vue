@@ -532,7 +532,7 @@ watch(
 
   <div
     v-if="profileModal"
-    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950 p-4 sm:items-center"
+    class="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-4 sm:items-center"
     @click.self="profileModal = null"
   >
     <div class="w-full max-w-2xl overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">

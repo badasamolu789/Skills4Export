@@ -50,6 +50,7 @@ export type QuestionPost = {
   time: string
   authorName: string
   authorTo: string
+  authorAvatarSrc?: string | null
   tag: string
   answers: number
   isFollowing?: boolean

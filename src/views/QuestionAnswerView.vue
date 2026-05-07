@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { questionPosts, type QuestionPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { questionsService, type QuestionRecord } from '@/services/questions'
@@ -9,25 +10,13 @@ import { useAuthStore } from '@/stores/auth'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const authStore = useAuthStore()
+const currentUser = useCurrentUserIdentity()
 const isLoadingQuestions = ref(false)
 const questionsError = ref('')
 const apiQuestions = ref<QuestionPost[]>([])
 const hasLoadedApiQuestions = ref(false)
 
 const questions = computed(() => (hasLoadedApiQuestions.value ? apiQuestions.value : questionPosts))
-
-const getCurrentUserProfileData = () => ({
-  user: {
-    id: authStore.userId,
-    username:
-      authStore.userProfile?.username ||
-      authStore.signUpDraft.username ||
-      authStore.signUpDraft.name ||
-      'You',
-    email: authStore.signUpDraft.email,
-  },
-  profile: authStore.userProfile,
-})
 
 const loadQuestion = async (question: QuestionRecord) => {
   const userId = getQuestionUserId(question)
@@ -36,7 +25,7 @@ const loadQuestion = async (question: QuestionRecord) => {
     : null
   const authorData =
     authorResponse?.data ??
-    (userId && userId === authStore.userId ? getCurrentUserProfileData() : null)
+    (userId && userId === authStore.userId ? currentUser.profileData.value : null)
 
   return mapApiQuestionToFeedPost(question, authorData)
 }

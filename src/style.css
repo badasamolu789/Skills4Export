@@ -171,40 +171,7 @@ textarea {
 }
 
 .post-content-editor {
-  --ck-color-base-background: var(--surface-primary);
-  --ck-color-base-foreground: var(--surface-secondary);
-  --ck-color-toolbar-background: var(--surface-secondary);
-  --ck-color-toolbar-border: var(--border-soft);
-  --ck-color-base-border: var(--border-soft);
-  --ck-color-focus-border: var(--accent-soft);
-  --ck-color-text: var(--text-primary);
-  --ck-color-button-default-hover-background: var(--surface-muted);
-  --ck-color-button-on-background: var(--accent-soft);
-  --ck-color-button-on-color: var(--accent-strong);
-  --ck-border-radius: 0.75rem;
-}
-
-.post-content-editor .ck.ck-editor {
   width: 100%;
-}
-
-.post-content-editor .ck.ck-toolbar {
-  border-top-left-radius: 0.75rem;
-  border-top-right-radius: 0.75rem;
-  padding: 0.45rem 0.6rem;
-}
-
-.post-content-editor .ck.ck-editor__main > .ck-editor__editable {
-  min-height: 18rem;
-  border-bottom-left-radius: 0.75rem;
-  border-bottom-right-radius: 0.75rem;
-  color: var(--text-primary);
-  font-size: 0.92rem;
-  line-height: 1.6;
-}
-
-.post-content-editor .ck.ck-editor__editable_inline {
-  padding: 1rem;
 }
 
 :where(button, input, select, textarea) {

@@ -1,4 +1,5 @@
 import { slugify } from '@/utils/slugify'
+import { getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
@@ -28,11 +29,7 @@ const getInitials = (value: string) => {
 }
 
 const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
-  const profileName = author?.profile?.username?.trim()
-  const userName = author?.user?.username?.trim()
-  const emailName = author?.user?.email?.split('@')[0]?.trim()
-
-  return profileName || userName || emailName || (post.user_id ? 'Community member' : 'Member')
+  return getProfileDisplayName(author) || (post.user_id ? 'Community member' : 'Member')
 }
 
 const getAuthorTag = (author?: MyProfileData | null) => {

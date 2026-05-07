@@ -161,24 +161,60 @@ const clearBannerSelection = () => {
   }
 }
 
-const waitForProfileImageRefresh = async (
-  kind: 'avatar' | 'banner',
-  previousUrl: string,
-) => {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 800))
-    await loadProfile()
+type ProfileImageUploadResult = {
+  jobId?: string
+  url?: string
+}
 
-    const nextUrl = kind === 'avatar'
-      ? authStore.userProfile?.avatar
-      : authStore.userProfile?.banner
+const queueProfileImageUpload = async (kind: 'avatar' | 'banner', file: File) => {
+  try {
+    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
+    const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
+    const publicId = uploadResponse.public_id
+    const uploadedUrl = uploadResponse.secure_url
 
-    if (nextUrl && nextUrl !== previousUrl) {
-      return nextUrl
+    if (!publicId && !uploadedUrl) {
+      throw new Error('Cloudinary did not return an uploaded image identifier.')
     }
-  }
 
-  return ''
+    const uploadPayload = publicId
+      ? { publicId, ...(uploadedUrl ? { imageUrl: uploadedUrl } : {}) }
+      : { imageUrl: uploadedUrl as string }
+
+    const response =
+      kind === 'avatar'
+        ? await usersService.uploadUserAvatar(
+            authStore.userId,
+            uploadPayload,
+            authStore.authToken,
+            { replace: true, suppressErrorModal: true },
+          )
+        : await usersService.uploadUserBanner(
+            authStore.userId,
+            uploadPayload,
+            authStore.authToken,
+            { replace: true, suppressErrorModal: true },
+          )
+
+    return {
+      jobId: response.data?.jobId,
+      url: uploadedUrl,
+    } satisfies ProfileImageUploadResult
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.info('[profile] direct image upload failed, falling back to multipart upload', error)
+    }
+
+    const response = await mediaService.uploadAvatarFile(authStore.userId, file, {
+      kind,
+      replace: true,
+      token: authStore.authToken,
+    })
+
+    return {
+      jobId: response.data?.jobId,
+    } satisfies ProfileImageUploadResult
+  }
 }
 
 const loadProfile = async () => {
@@ -192,6 +228,8 @@ const loadProfile = async () => {
     const response = await usersService.getMyProfile(authStore.authToken)
     const profile = response.data?.profile ?? null
     authStore.setUserProfile(profile)
+
+    const loadedUserId = response.data?.user?.id || authStore.userId
 
     if (response.data?.user?.id) {
       authStore.setUserId(response.data.user.id)
@@ -212,46 +250,6 @@ const loadProfile = async () => {
       form.value.avatar = profile.avatar || form.value.avatar
       form.value.banner = profile.banner || form.value.banner
 
-      skills.value = response.data?.skills?.map((skill: UserSkill) => ({
-        id: skill.id || '',
-        name: skill.skill || skill.name || 'Unnamed skill',
-        level: skill.level,
-      })) || skills.value
-
-      portfolios.value = response.data?.portfolios?.map((portfolio: UserPortfolio) => ({
-        id: portfolio.id || '',
-        title: portfolio.title || portfolio.link || 'Untitled project',
-        description: portfolio.description,
-        link: portfolio.link,
-      })) || portfolios.value
-
-      certifications.value = response.data?.certifications?.map((certification: UserCertification) => ({
-        id: certification.id || '',
-        name: certification.name || 'Unnamed certification',
-        issuer: certification.issuer,
-        issueDate: certification.issueDate,
-      })) || certifications.value
-
-      educations.value = response.data?.education?.map((education: UserEducation) => ({
-        id: education.id || '',
-        school: education.school || 'Unnamed school',
-        degree: education.degree,
-        field: education.field,
-        startDate: education.startDate,
-        endDate: education.endDate,
-      })) || educations.value
-
-      experiences.value = response.data?.experiences?.map((experience: UserExperience) => ({
-        id: experience.id || '',
-        company: experience.company || 'Unnamed company',
-        title: experience.title || 'Unnamed title',
-        employmentType: experience.employmentType,
-        startDate: experience.startDate || '',
-        endDate: experience.endDate,
-        isCurrent: experience.isCurrent === 1,
-        description: experience.description,
-      })) || experiences.value
-
       // Sync server data to store for persistence
       authStore.signUpDraft.username = profile.username || authStore.signUpDraft.username
       authStore.signUpDraft.location = profile.location || authStore.signUpDraft.location
@@ -261,6 +259,73 @@ const loadProfile = async () => {
       if (profile.banner) {
         authStore.signUpDraft.banner = profile.banner
       }
+    }
+
+    if (loadedUserId) {
+      const [skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
+        await Promise.allSettled([
+          usersService.listUserSkills(loadedUserId, authStore.authToken),
+          usersService.listUserPortfolios(loadedUserId, authStore.authToken),
+          usersService.listUserCertifications(loadedUserId, authStore.authToken),
+          usersService.listUserEducations(loadedUserId, authStore.authToken),
+          usersService.listUserExperiences(loadedUserId, authStore.authToken),
+        ])
+
+      const sourceSkills = skillsResult.status === 'fulfilled'
+        ? skillsResult.value.data
+        : response.data?.skills ?? []
+      const sourcePortfolios = portfoliosResult.status === 'fulfilled'
+        ? portfoliosResult.value.data
+        : response.data?.portfolios ?? []
+      const sourceCertifications = certificationsResult.status === 'fulfilled'
+        ? certificationsResult.value.data
+        : response.data?.certifications ?? []
+      const sourceEducations = educationsResult.status === 'fulfilled'
+        ? educationsResult.value.data
+        : response.data?.education ?? []
+      const sourceExperiences = experiencesResult.status === 'fulfilled'
+        ? experiencesResult.value.data
+        : response.data?.experiences ?? []
+
+      skills.value = sourceSkills.map((skill: UserSkill) => ({
+        id: skill.id || '',
+        name: skill.skill || skill.name || 'Unnamed skill',
+        level: skill.level,
+      }))
+
+      portfolios.value = sourcePortfolios.map((portfolio: UserPortfolio) => ({
+        id: portfolio.id || '',
+        title: portfolio.title || portfolio.link || 'Untitled project',
+        description: portfolio.description,
+        link: portfolio.link,
+      }))
+
+      certifications.value = sourceCertifications.map((certification: UserCertification) => ({
+        id: certification.id || '',
+        name: certification.name || 'Unnamed certification',
+        issuer: certification.issuer,
+        issueDate: certification.issueDate,
+      }))
+
+      educations.value = sourceEducations.map((education: UserEducation) => ({
+        id: education.id || '',
+        school: education.school || 'Unnamed school',
+        degree: education.degree,
+        field: education.field,
+        startDate: education.startDate,
+        endDate: education.endDate,
+      }))
+
+      experiences.value = sourceExperiences.map((experience: UserExperience) => ({
+        id: experience.id || '',
+        company: experience.company || 'Unnamed company',
+        title: experience.title || 'Unnamed title',
+        employmentType: experience.employmentType,
+        startDate: experience.startDate || '',
+        endDate: experience.endDate,
+        isCurrent: experience.isCurrent === 1 || experience.isCurrent === true,
+        description: experience.description,
+      }))
     }
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
@@ -282,29 +347,14 @@ const uploadAvatarFile = async () => {
   const loadingToastId = toast.loading('Uploading avatar...')
 
   try {
-    const previousAvatar = authStore.userProfile?.avatar || ''
-    const response = await mediaService.uploadAvatarFile(authStore.userId, avatarFile.value, {
-      kind: 'avatar',
-      replace: true,
-      token: authStore.authToken,
-    })
-    const jobId = response.data?.jobId
+    const uploadResult = await queueProfileImageUpload('avatar', avatarFile.value)
 
-    if (!jobId) {
+    if (!uploadResult.jobId) {
       throw new Error('The server did not return a media processing job ID.')
     }
 
-    toast.loading('Processing avatar...', { id: loadingToastId })
-    const processedMedia = await mediaService.waitForProcessedMediaResult(jobId, {
-      token: authStore.authToken,
-      attempts: 45,
-      intervalMs: 1000,
-    })
-
-    const refreshedAvatar = await waitForProfileImageRefresh('avatar', previousAvatar)
-
-    if (refreshedAvatar) {
-      syncProfileImage('avatar', refreshedAvatar)
+    if (uploadResult.url) {
+      syncProfileImage('avatar', uploadResult.url)
       clearAvatarSelection()
       toast.success('Avatar uploaded successfully!', {
         id: loadingToastId,
@@ -313,17 +363,10 @@ const uploadAvatarFile = async () => {
       return
     }
 
-    if (processedMedia.url) {
-      syncProfileImage('avatar', processedMedia.url)
-    }
-
-    if (import.meta.env.DEV) {
-      console.info('[profile] avatar job completed but profile.avatar was not updated', processedMedia.job)
-    }
-
-    toast.error('Avatar processed, but not attached', {
+    clearAvatarSelection()
+    toast.success('Avatar upload queued', {
       id: loadingToastId,
-      description: 'The backend accepted the image job, but /user/profile/me did not return the new avatar.',
+      description: 'The backend accepted the image and will attach it to your profile shortly.',
     })
   } catch (error) {
     const message = error instanceof ApiError || error instanceof Error ? error.message : 'Avatar upload failed.'
@@ -346,29 +389,14 @@ const uploadBannerFile = async () => {
   const loadingToastId = toast.loading('Uploading banner...')
 
   try {
-    const previousBanner = authStore.userProfile?.banner || ''
-    const response = await mediaService.uploadAvatarFile(authStore.userId, bannerFile.value, {
-      kind: 'banner',
-      replace: true,
-      token: authStore.authToken,
-    })
-    const jobId = response.data?.jobId
+    const uploadResult = await queueProfileImageUpload('banner', bannerFile.value)
 
-    if (!jobId) {
+    if (!uploadResult.jobId) {
       throw new Error('The server did not return a media processing job ID.')
     }
 
-    toast.loading('Processing banner...', { id: loadingToastId })
-    const processedMedia = await mediaService.waitForProcessedMediaResult(jobId, {
-      token: authStore.authToken,
-      attempts: 45,
-      intervalMs: 1000,
-    })
-
-    const refreshedBanner = await waitForProfileImageRefresh('banner', previousBanner)
-
-    if (refreshedBanner) {
-      syncProfileImage('banner', refreshedBanner)
+    if (uploadResult.url) {
+      syncProfileImage('banner', uploadResult.url)
       clearBannerSelection()
       toast.success('Banner uploaded successfully!', {
         id: loadingToastId,
@@ -377,17 +405,10 @@ const uploadBannerFile = async () => {
       return
     }
 
-    if (processedMedia.url) {
-      syncProfileImage('banner', processedMedia.url)
-    }
-
-    if (import.meta.env.DEV) {
-      console.info('[profile] banner job completed but profile.banner was not updated', processedMedia.job)
-    }
-
-    toast.error('Banner processed, but not attached', {
+    clearBannerSelection()
+    toast.success('Banner upload queued', {
       id: loadingToastId,
-      description: 'The backend accepted the image job, but /user/profile/me did not return the new banner.',
+      description: 'The backend accepted the image and will attach it to your profile shortly.',
     })
   } catch (error) {
     const message = error instanceof ApiError || error instanceof Error ? error.message : 'Banner upload failed.'
@@ -976,7 +997,7 @@ const upsertProfile = async (payload: {
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       throw new Error(
-        'The backend does not expose a profile update route for existing profiles. Please ask the backend team to enable profile updates for /api/users/:id/profile or make POST /api/users/:id/profile update existing profiles.',
+        'The backend does not expose the profile save route documented for /api/users/:id/profile.',
       )
     }
 
@@ -1198,7 +1219,7 @@ const addExperienceFromModal = async () => {
         </div>
       </div>
 
-      <div class="relative px-5 pb-5 pt-28 sm:px-7 sm:pb-7 sm:pl-52 sm:pt-6">
+      <div class="relative px-5 pb-5 pt-24 sm:px-7 sm:pb-7 sm:pt-24">
         <div class="absolute -top-16 left-5 sm:left-7">
           <div class="relative h-32 w-32 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
             <img
@@ -1224,8 +1245,8 @@ const addExperienceFromModal = async () => {
           </div>
         </div>
 
-        <div class="flex min-h-[9.5rem] flex-col justify-end gap-4 sm:min-h-32 sm:flex-row sm:items-end sm:justify-between">
-          <div class="min-w-0 pt-3 sm:pt-0">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div class="min-w-0">
             <h2 class="text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">{{ displayName }}</h2>
             <p class="mt-1 text-sm text-[var(--text-secondary)]">
               {{ currentJobTitle || 'Add your role' }} <span class="text-[var(--border-strong,var(--border-soft))]">-</span> {{ currentWorkplace || 'Add your workplace' }}
@@ -1277,7 +1298,7 @@ const addExperienceFromModal = async () => {
 
     <section class="space-y-6">
       <div class="border-b border-[color:var(--border-soft)] pb-2">
-        <h2 class="inline-flex border-b-2 border-[color:var(--accent)] pb-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-secondary)]">
+        <h2 class="inline-flex border-b-2 border-[color:var(--accent)] pb-2 text-xs font-semibold uppercase text-[var(--text-secondary)]">
           Public Information
         </h2>
       </div>
@@ -1308,15 +1329,6 @@ const addExperienceFromModal = async () => {
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">About me</span>
         <div class="mt-2 overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
-          <div class="flex flex-wrap gap-2 border-b border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 text-[0.78rem] font-semibold text-[var(--text-secondary)]">
-            <span>Paragraph</span>
-            <span>B</span>
-            <span>I</span>
-            <span>U</span>
-            <span>•</span>
-            <span>1.</span>
-            <span>Link</span>
-          </div>
           <textarea v-model="form.bio" rows="9" class="w-full resize-y bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] outline-none" />
         </div>
       </label>

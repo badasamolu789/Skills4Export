@@ -480,6 +480,7 @@ export const mediaService = {
             formData,
             {
                 token: options?.token,
+                retry: false,
             },
         )
     },
