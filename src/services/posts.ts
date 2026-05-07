@@ -33,6 +33,12 @@ export type PostCommentRecord = {
   parent_comment_id: string | null
   content: string
   created_at: string
+  reactions_count?: number | string
+  reaction_count?: number | string
+  reactionsCount?: number | string
+  likes_count?: number | string
+  likesCount?: number | string
+  score?: number | string
 }
 
 export type PaginatorPayload<T> = {

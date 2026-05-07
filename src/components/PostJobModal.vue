@@ -2,6 +2,9 @@
 import { computed, ref, watch } from 'vue'
 import { BriefcaseBusiness, Mail, MapPin, Wallet, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { ApiError } from '@/lib/api'
+import { jobsService, type JobRecord } from '@/services/jobs'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps<{
   open: boolean
@@ -9,10 +12,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'close'): void
+  (event: 'created', job: JobRecord): void
 }>()
 
+const authStore = useAuthStore()
 const skillInput = ref('')
 const skillTags = ref<string[]>([])
+const isSubmitting = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
 const form = ref({
@@ -103,14 +109,62 @@ const removeSkillTag = (skill: string) => {
   syncSkillsField()
 }
 
-const submitForm = () => {
-  toast.success('Job posted successfully', {
-    description: `${form.value.title || 'Your job'} is now ready for applicants.`,
-  })
+const submitForm = async () => {
+  finalizeSkillInput()
 
-  closeTimer = setTimeout(() => {
-    closeModal()
-  }, 1200)
+  if (form.value.senderEmail && form.value.confirmEmail && form.value.senderEmail !== form.value.confirmEmail) {
+    toast.error('Emails do not match.')
+    return
+  }
+
+  if (!authStore.authToken) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before posting a job.',
+    })
+    return
+  }
+
+  if (isSubmitting.value) {
+    return
+  }
+
+  isSubmitting.value = true
+
+  try {
+    const response = await jobsService.createJob(
+      {
+        title: form.value.title,
+        skills: skillTags.value,
+        location: form.value.location,
+        type: form.value.jobType,
+        workMode: form.value.jobType === 'remote' || form.value.jobType === 'hybrid' ? form.value.jobType : undefined,
+        senderEmail: form.value.senderEmail,
+        companyName: form.value.companyName,
+        description: form.value.jobDescription,
+        qualifications: form.value.qualifications,
+        tasks: form.value.qualifications,
+        workExperience: form.value.workExperience,
+        minSalary: form.value.minSalary ? Number(form.value.minSalary) : undefined,
+        salaryCurrency: 'NGN',
+        applicationEndDate: form.value.applicationEndDate,
+      },
+      authStore.authToken,
+    )
+
+    emit('created', response.data)
+    toast.success('Job posted successfully', {
+      description: `${response.data.title || form.value.title || 'Your job'} is now ready for applicants.`,
+    })
+
+    closeTimer = setTimeout(() => {
+      closeModal()
+    }, 1200)
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to post this job.'
+    toast.error('Job failed', { description: message })
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 watch(
@@ -334,10 +388,11 @@ watch(
 
               <button
               type="submit"
+              :disabled="isSubmitting"
               class="inline-flex items-center justify-center gap-2 rounded-[0.8rem] bg-[var(--accent)] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
               >
                 <BriefcaseBusiness class="h-4 w-4" />
-                <span>Post Job</span>
+                <span>{{ isSubmitting ? 'Posting...' : 'Post Job' }}</span>
               </button>
           </div>
           </div>

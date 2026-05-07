@@ -24,6 +24,7 @@ import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
 import { postsService, type PostCommentRecord } from '@/services/posts'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { getOptionalCount } from '@/utils/postMapper'
 type PostComment = {
   id: number | string
   parentId?: string | null
@@ -247,7 +248,14 @@ const mapComment = async (comment: PostCommentRecord): Promise<PostComment> => {
     time: formatCommentTime(comment.created_at),
     tag: author.tag,
     body: comment.content,
-    score: 0,
+    score: getOptionalCount(
+      comment.score,
+      comment.reactions_count,
+      comment.reaction_count,
+      comment.reactionsCount,
+      comment.likes_count,
+      comment.likesCount,
+    ),
     isScored: false,
     isFollowing: false,
     isReplying: false,
@@ -339,13 +347,20 @@ const toggleScore = async () => {
     return
   }
 
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before scoring posts.',
+    })
+    return
+  }
+
   isReactingToPost.value = true
 
   try {
     const response = await postsService.togglePostReaction(
       apiPostId.value,
       {
-        userId: authStore.userId || undefined,
+        userId: authStore.userId,
         type: 'like',
       },
       authStore.authToken,
@@ -609,11 +624,18 @@ const submitReport = async () => {
 
 const toggleCommentScore = async (comment: PostCommentThreadItem) => {
   if (typeof comment.id === 'string') {
+    if (!authStore.authToken || !authStore.userId) {
+      toast.error('Sign in required', {
+        description: 'Please sign in again before scoring comments.',
+      })
+      return
+    }
+
     try {
       const response = await postsService.toggleCommentReaction(
         comment.id,
         {
-          userId: authStore.userId || undefined,
+          userId: authStore.userId,
           type: 'like',
         },
         authStore.authToken,

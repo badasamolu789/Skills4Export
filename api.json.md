@@ -46,6 +46,6702 @@
                 }
             }
         },
+        "/api/jobs": {
+            "get": {
+                "operationId": "listJobs",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "List jobs feed with filters and pagination.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "location",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "type",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "skill",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "experience",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "workMode",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "companyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "companyId": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "location": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "workMode": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ],
+                                                        "enum": [
+                                                            "remote",
+                                                            "hybrid",
+                                                            "onsite",
+                                                            null
+                                                        ]
+                                                    },
+                                                    "type": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "full-time",
+                                                            "part-time",
+                                                            "contract",
+                                                            "hybrid",
+                                                            "remote"
+                                                        ]
+                                                    },
+                                                    "salaryMin": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "salaryMax": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "salaryCurrency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "salaryLabel": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "experience": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "skills": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "description": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "summary": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "responsibilities": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "requirements": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "perks": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "applicationEmail": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "applicationUrl": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "applicationEndDate": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "draft",
+                                                            "pending_review",
+                                                            "live",
+                                                            "closed",
+                                                            "archived"
+                                                        ]
+                                                    },
+                                                    "applicantCount": {
+                                                        "type": "number"
+                                                    },
+                                                    "hasApplied": {
+                                                        "type": [
+                                                            "null",
+                                                            "boolean"
+                                                        ]
+                                                    },
+                                                    "createdByUserId": {
+                                                        "type": "string"
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "job-uuid",
+                                                    "slug": "senior-software-engineer",
+                                                    "title": "Senior Software Engineer",
+                                                    "companyName": "Skills4Export",
+                                                    "companyId": null,
+                                                    "location": "Remote",
+                                                    "workMode": "remote",
+                                                    "type": "full-time",
+                                                    "salaryMin": 250000,
+                                                    "salaryMax": null,
+                                                    "salaryCurrency": "NGN",
+                                                    "salaryLabel": null,
+                                                    "experience": "2-3",
+                                                    "skills": [
+                                                        "JavaScript",
+                                                        "Vue"
+                                                    ],
+                                                    "description": "Describe the role...",
+                                                    "summary": null,
+                                                    "responsibilities": [],
+                                                    "requirements": [
+                                                        "Qualifications and tasks..."
+                                                    ],
+                                                    "perks": [],
+                                                    "applicationEmail": "owner@example.com",
+                                                    "applicationUrl": null,
+                                                    "applicationEndDate": "2026-06-30",
+                                                    "status": "live",
+                                                    "applicantCount": 0,
+                                                    "hasApplied": false,
+                                                    "createdByUserId": "user-uuid",
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "job-uuid",
+                                                "slug": "senior-software-engineer",
+                                                "title": "Senior Software Engineer",
+                                                "companyName": "Skills4Export",
+                                                "companyId": null,
+                                                "location": "Remote",
+                                                "workMode": "remote",
+                                                "type": "full-time",
+                                                "salaryMin": 250000,
+                                                "salaryMax": null,
+                                                "salaryCurrency": "NGN",
+                                                "salaryLabel": null,
+                                                "experience": "2-3",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "Vue"
+                                                ],
+                                                "description": "Describe the role...",
+                                                "summary": null,
+                                                "responsibilities": [],
+                                                "requirements": [
+                                                    "Qualifications and tasks..."
+                                                ],
+                                                "perks": [],
+                                                "applicationEmail": "owner@example.com",
+                                                "applicationUrl": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "hasApplied": false,
+                                                "createdByUserId": "user-uuid",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createJob",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Create a job posting.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "title",
+                                    "companyName",
+                                    "description"
+                                ],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "skills": {
+                                        "oneOf": [
+                                            {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            {
+                                                "type": "string"
+                                            }
+                                        ]
+                                    },
+                                    "location": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "full-time",
+                                            "part-time",
+                                            "contract",
+                                            "hybrid",
+                                            "remote"
+                                        ]
+                                    },
+                                    "workMode": {
+                                        "type": "string",
+                                        "enum": [
+                                            "remote",
+                                            "hybrid",
+                                            "onsite"
+                                        ]
+                                    },
+                                    "senderEmail": {
+                                        "type": "string"
+                                    },
+                                    "companyName": {
+                                        "type": "string"
+                                    },
+                                    "company": {
+                                        "type": "string",
+                                        "description": "Legacy alias for companyName"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "qualifications": {
+                                        "type": "string"
+                                    },
+                                    "tasks": {
+                                        "type": "string",
+                                        "description": "Legacy alias mapped to responsibilities"
+                                    },
+                                    "workExperience": {
+                                        "type": "string"
+                                    },
+                                    "minSalary": {
+                                        "type": "number"
+                                    },
+                                    "maxSalary": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "salaryCurrency": {
+                                        "type": "string"
+                                    },
+                                    "applicationEndDate": {
+                                        "type": "string"
+                                    }
+                                },
+                                "example": {
+                                    "title": "Senior Software Engineer",
+                                    "skills": [
+                                        "JavaScript",
+                                        "Vue"
+                                    ],
+                                    "location": "Remote",
+                                    "type": "full-time",
+                                    "senderEmail": "owner@example.com",
+                                    "companyName": "Skills4Export",
+                                    "description": "Describe the role...",
+                                    "qualifications": "Qualifications and tasks...",
+                                    "workExperience": "2-3",
+                                    "minSalary": 250000,
+                                    "maxSalary": null,
+                                    "salaryCurrency": "NGN",
+                                    "applicationEndDate": "2026-06-30"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "companyId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "workMode": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ],
+                                                    "enum": [
+                                                        "remote",
+                                                        "hybrid",
+                                                        "onsite",
+                                                        null
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "full-time",
+                                                        "part-time",
+                                                        "contract",
+                                                        "hybrid",
+                                                        "remote"
+                                                    ]
+                                                },
+                                                "salaryMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryCurrency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "salaryLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "experience": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "summary": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "responsibilities": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "requirements": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "perks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "applicationEmail": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationUrl": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "job-uuid",
+                                                "slug": "senior-software-engineer",
+                                                "title": "Senior Software Engineer",
+                                                "companyName": "Skills4Export",
+                                                "companyId": null,
+                                                "location": "Remote",
+                                                "workMode": "remote",
+                                                "type": "full-time",
+                                                "salaryMin": 250000,
+                                                "salaryMax": null,
+                                                "salaryCurrency": "NGN",
+                                                "salaryLabel": null,
+                                                "experience": "2-3",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "Vue"
+                                                ],
+                                                "description": "Describe the role...",
+                                                "summary": null,
+                                                "responsibilities": [],
+                                                "requirements": [
+                                                    "Qualifications and tasks..."
+                                                ],
+                                                "perks": [],
+                                                "applicationEmail": "owner@example.com",
+                                                "applicationUrl": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "hasApplied": false,
+                                                "createdByUserId": "user-uuid",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": false,
+                                        "error": {
+                                            "code": "profile_already_exists",
+                                            "message": "Profile already exists"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/jobs/{idOrSlug}": {
+            "get": {
+                "operationId": "getJob",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Get job detail by id or slug.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "idOrSlug",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "companyId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "workMode": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ],
+                                                    "enum": [
+                                                        "remote",
+                                                        "hybrid",
+                                                        "onsite",
+                                                        null
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "full-time",
+                                                        "part-time",
+                                                        "contract",
+                                                        "hybrid",
+                                                        "remote"
+                                                    ]
+                                                },
+                                                "salaryMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryCurrency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "salaryLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "experience": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "summary": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "responsibilities": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "requirements": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "perks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "applicationEmail": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationUrl": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "job-uuid",
+                                                "slug": "senior-software-engineer",
+                                                "title": "Senior Software Engineer",
+                                                "companyName": "Skills4Export",
+                                                "companyId": null,
+                                                "location": "Remote",
+                                                "workMode": "remote",
+                                                "type": "full-time",
+                                                "salaryMin": 250000,
+                                                "salaryMax": null,
+                                                "salaryCurrency": "NGN",
+                                                "salaryLabel": null,
+                                                "experience": "2-3",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "Vue"
+                                                ],
+                                                "description": "Describe the role...",
+                                                "summary": null,
+                                                "responsibilities": [],
+                                                "requirements": [
+                                                    "Qualifications and tasks..."
+                                                ],
+                                                "perks": [],
+                                                "applicationEmail": "owner@example.com",
+                                                "applicationUrl": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "hasApplied": false,
+                                                "createdByUserId": "user-uuid",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": false,
+                                        "error": {
+                                            "code": "profile_already_exists",
+                                            "message": "Profile already exists"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/jobs/{id}": {
+            "patch": {
+                "operationId": "updateJob",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Update a job posting. Creator/admin only.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "skills": {
+                                        "oneOf": [
+                                            {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            {
+                                                "type": "string"
+                                            }
+                                        ]
+                                    },
+                                    "location": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "full-time",
+                                            "part-time",
+                                            "contract",
+                                            "hybrid",
+                                            "remote"
+                                        ]
+                                    },
+                                    "workMode": {
+                                        "type": "string",
+                                        "enum": [
+                                            "remote",
+                                            "hybrid",
+                                            "onsite"
+                                        ]
+                                    },
+                                    "senderEmail": {
+                                        "type": "string"
+                                    },
+                                    "companyName": {
+                                        "type": "string"
+                                    },
+                                    "company": {
+                                        "type": "string",
+                                        "description": "Legacy alias for companyName"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "qualifications": {
+                                        "type": "string"
+                                    },
+                                    "tasks": {
+                                        "type": "string",
+                                        "description": "Legacy alias mapped to responsibilities"
+                                    },
+                                    "workExperience": {
+                                        "type": "string"
+                                    },
+                                    "minSalary": {
+                                        "type": "number"
+                                    },
+                                    "maxSalary": {
+                                        "type": [
+                                            "number",
+                                            "null"
+                                        ]
+                                    },
+                                    "salaryCurrency": {
+                                        "type": "string"
+                                    },
+                                    "applicationEndDate": {
+                                        "type": "string"
+                                    }
+                                },
+                                "example": {
+                                    "title": "Senior Software Engineer",
+                                    "skills": [
+                                        "JavaScript",
+                                        "Vue"
+                                    ],
+                                    "location": "Remote",
+                                    "type": "full-time",
+                                    "senderEmail": "owner@example.com",
+                                    "companyName": "Skills4Export",
+                                    "description": "Describe the role...",
+                                    "qualifications": "Qualifications and tasks...",
+                                    "workExperience": "2-3",
+                                    "minSalary": 250000,
+                                    "maxSalary": null,
+                                    "salaryCurrency": "NGN",
+                                    "applicationEndDate": "2026-06-30"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "companyId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "workMode": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ],
+                                                    "enum": [
+                                                        "remote",
+                                                        "hybrid",
+                                                        "onsite",
+                                                        null
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "full-time",
+                                                        "part-time",
+                                                        "contract",
+                                                        "hybrid",
+                                                        "remote"
+                                                    ]
+                                                },
+                                                "salaryMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryCurrency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "salaryLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "experience": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "summary": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "responsibilities": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "requirements": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "perks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "applicationEmail": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationUrl": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "job-uuid",
+                                                "slug": "senior-software-engineer",
+                                                "title": "Senior Software Engineer",
+                                                "companyName": "Skills4Export",
+                                                "companyId": null,
+                                                "location": "Remote",
+                                                "workMode": "remote",
+                                                "type": "full-time",
+                                                "salaryMin": 250000,
+                                                "salaryMax": null,
+                                                "salaryCurrency": "NGN",
+                                                "salaryLabel": null,
+                                                "experience": "2-3",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "Vue"
+                                                ],
+                                                "description": "Describe the role...",
+                                                "summary": null,
+                                                "responsibilities": [],
+                                                "requirements": [
+                                                    "Qualifications and tasks..."
+                                                ],
+                                                "perks": [],
+                                                "applicationEmail": "owner@example.com",
+                                                "applicationUrl": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "hasApplied": false,
+                                                "createdByUserId": "user-uuid",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deleteJob",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Delete a job posting. Creator/admin only.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": true,
+                                        "data": {
+                                            "id": "user-uuid"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/jobs/{id}/status": {
+            "patch": {
+                "operationId": "updateJobStatus",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Update a job status.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "example": {
+                                    "status": "closed"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "companyId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "workMode": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ],
+                                                    "enum": [
+                                                        "remote",
+                                                        "hybrid",
+                                                        "onsite",
+                                                        null
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "full-time",
+                                                        "part-time",
+                                                        "contract",
+                                                        "hybrid",
+                                                        "remote"
+                                                    ]
+                                                },
+                                                "salaryMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "salaryCurrency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "salaryLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "experience": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "summary": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "responsibilities": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "requirements": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "perks": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "applicationEmail": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationUrl": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "job-uuid",
+                                                "slug": "senior-software-engineer",
+                                                "title": "Senior Software Engineer",
+                                                "companyName": "Skills4Export",
+                                                "companyId": null,
+                                                "location": "Remote",
+                                                "workMode": "remote",
+                                                "type": "full-time",
+                                                "salaryMin": 250000,
+                                                "salaryMax": null,
+                                                "salaryCurrency": "NGN",
+                                                "salaryLabel": null,
+                                                "experience": "2-3",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "Vue"
+                                                ],
+                                                "description": "Describe the role...",
+                                                "summary": null,
+                                                "responsibilities": [],
+                                                "requirements": [
+                                                    "Qualifications and tasks..."
+                                                ],
+                                                "perks": [],
+                                                "applicationEmail": "owner@example.com",
+                                                "applicationUrl": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "hasApplied": false,
+                                                "createdByUserId": "user-uuid",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/jobs/posted": {
+            "get": {
+                "operationId": "listMyPostedJobs",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "List jobs posted by the authenticated user.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "location",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "type",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "skill",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "experience",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "workMode",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "companyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "companyId": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "location": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "workMode": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ],
+                                                        "enum": [
+                                                            "remote",
+                                                            "hybrid",
+                                                            "onsite",
+                                                            null
+                                                        ]
+                                                    },
+                                                    "type": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "full-time",
+                                                            "part-time",
+                                                            "contract",
+                                                            "hybrid",
+                                                            "remote"
+                                                        ]
+                                                    },
+                                                    "salaryMin": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "salaryMax": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "salaryCurrency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "salaryLabel": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "experience": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "skills": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "description": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "summary": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "responsibilities": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "requirements": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "perks": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "applicationEmail": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "applicationUrl": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "applicationEndDate": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "draft",
+                                                            "pending_review",
+                                                            "live",
+                                                            "closed",
+                                                            "archived"
+                                                        ]
+                                                    },
+                                                    "applicantCount": {
+                                                        "type": "number"
+                                                    },
+                                                    "hasApplied": {
+                                                        "type": [
+                                                            "null",
+                                                            "boolean"
+                                                        ]
+                                                    },
+                                                    "createdByUserId": {
+                                                        "type": "string"
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "job-uuid",
+                                                    "slug": "senior-software-engineer",
+                                                    "title": "Senior Software Engineer",
+                                                    "companyName": "Skills4Export",
+                                                    "companyId": null,
+                                                    "location": "Remote",
+                                                    "workMode": "remote",
+                                                    "type": "full-time",
+                                                    "salaryMin": 250000,
+                                                    "salaryMax": null,
+                                                    "salaryCurrency": "NGN",
+                                                    "salaryLabel": null,
+                                                    "experience": "2-3",
+                                                    "skills": [
+                                                        "JavaScript",
+                                                        "Vue"
+                                                    ],
+                                                    "description": "Describe the role...",
+                                                    "summary": null,
+                                                    "responsibilities": [],
+                                                    "requirements": [
+                                                        "Qualifications and tasks..."
+                                                    ],
+                                                    "perks": [],
+                                                    "applicationEmail": "owner@example.com",
+                                                    "applicationUrl": null,
+                                                    "applicationEndDate": "2026-06-30",
+                                                    "status": "live",
+                                                    "applicantCount": 0,
+                                                    "hasApplied": false,
+                                                    "createdByUserId": "user-uuid",
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "job-uuid",
+                                                "slug": "senior-software-engineer",
+                                                "title": "Senior Software Engineer",
+                                                "companyName": "Skills4Export",
+                                                "companyId": null,
+                                                "location": "Remote",
+                                                "workMode": "remote",
+                                                "type": "full-time",
+                                                "salaryMin": 250000,
+                                                "salaryMax": null,
+                                                "salaryCurrency": "NGN",
+                                                "salaryLabel": null,
+                                                "experience": "2-3",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "Vue"
+                                                ],
+                                                "description": "Describe the role...",
+                                                "summary": null,
+                                                "responsibilities": [],
+                                                "requirements": [
+                                                    "Qualifications and tasks..."
+                                                ],
+                                                "perks": [],
+                                                "applicationEmail": "owner@example.com",
+                                                "applicationUrl": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "hasApplied": false,
+                                                "createdByUserId": "user-uuid",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/jobs/{id}/applications": {
+            "post": {
+                "operationId": "applyToJob",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Apply to a job.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "coverLetter": {
+                                        "type": "string"
+                                    },
+                                    "resumeMediaId": {
+                                        "type": "string"
+                                    },
+                                    "answers": {
+                                        "type": "array",
+                                        "items": {}
+                                    }
+                                },
+                                "example": {
+                                    "coverLetter": "Optional text",
+                                    "resumeMediaId": "media-uuid",
+                                    "answers": []
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "jobId": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "job": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "additionalProperties": true
+                                                },
+                                                "coverLetter": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "resumeMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "answers": {
+                                                    "type": "array",
+                                                    "items": {}
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "submitted",
+                                                        "reviewing",
+                                                        "shortlisted",
+                                                        "interview",
+                                                        "rejected",
+                                                        "accepted",
+                                                        "withdrawn"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "appliedAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "application-uuid",
+                                                "jobId": "job-uuid",
+                                                "userId": "user-uuid",
+                                                "job": null,
+                                                "coverLetter": "Optional text",
+                                                "resumeMediaId": null,
+                                                "answers": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "409": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": false,
+                                        "error": {
+                                            "code": "profile_already_exists",
+                                            "message": "Profile already exists"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "operationId": "listJobApplications",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "List applications for a posted job. Creator/admin only.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "jobId": {
+                                                        "type": "string"
+                                                    },
+                                                    "userId": {
+                                                        "type": "string"
+                                                    },
+                                                    "job": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "additionalProperties": true
+                                                    },
+                                                    "coverLetter": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "resumeMediaId": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "answers": {
+                                                        "type": "array",
+                                                        "items": {}
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "submitted",
+                                                            "reviewing",
+                                                            "shortlisted",
+                                                            "interview",
+                                                            "rejected",
+                                                            "accepted",
+                                                            "withdrawn"
+                                                        ]
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "appliedAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "application-uuid",
+                                                    "jobId": "job-uuid",
+                                                    "userId": "user-uuid",
+                                                    "job": null,
+                                                    "coverLetter": "Optional text",
+                                                    "resumeMediaId": null,
+                                                    "answers": [],
+                                                    "status": "submitted",
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "appliedAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "application-uuid",
+                                                "jobId": "job-uuid",
+                                                "userId": "user-uuid",
+                                                "job": null,
+                                                "coverLetter": "Optional text",
+                                                "resumeMediaId": null,
+                                                "answers": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/jobs/applications": {
+            "get": {
+                "operationId": "listMyJobApplications",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "List jobs the authenticated user applied for.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "jobId": {
+                                                        "type": "string"
+                                                    },
+                                                    "userId": {
+                                                        "type": "string"
+                                                    },
+                                                    "job": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "additionalProperties": true
+                                                    },
+                                                    "coverLetter": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "resumeMediaId": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "answers": {
+                                                        "type": "array",
+                                                        "items": {}
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "submitted",
+                                                            "reviewing",
+                                                            "shortlisted",
+                                                            "interview",
+                                                            "rejected",
+                                                            "accepted",
+                                                            "withdrawn"
+                                                        ]
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "appliedAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "application-uuid",
+                                                    "jobId": "job-uuid",
+                                                    "userId": "user-uuid",
+                                                    "job": null,
+                                                    "coverLetter": "Optional text",
+                                                    "resumeMediaId": null,
+                                                    "answers": [],
+                                                    "status": "submitted",
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "appliedAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "application-uuid",
+                                                "jobId": "job-uuid",
+                                                "userId": "user-uuid",
+                                                "job": null,
+                                                "coverLetter": "Optional text",
+                                                "resumeMediaId": null,
+                                                "answers": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/jobs/{jobId}/applications/{applicationId}": {
+            "patch": {
+                "operationId": "updateJobApplication",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Update job application status. Creator/admin only.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "example": {
+                                    "status": "closed"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "jobId",
+                        "required": true
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "applicationId",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "jobId": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "job": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "additionalProperties": true
+                                                },
+                                                "coverLetter": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "resumeMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "answers": {
+                                                    "type": "array",
+                                                    "items": {}
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "submitted",
+                                                        "reviewing",
+                                                        "shortlisted",
+                                                        "interview",
+                                                        "rejected",
+                                                        "accepted",
+                                                        "withdrawn"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "appliedAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "application-uuid",
+                                                "jobId": "job-uuid",
+                                                "userId": "user-uuid",
+                                                "job": null,
+                                                "coverLetter": "Optional text",
+                                                "resumeMediaId": null,
+                                                "answers": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "withdrawJobApplication",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Withdraw a job application.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "jobId",
+                        "required": true
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "applicationId",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "jobId": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "job": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "additionalProperties": true
+                                                },
+                                                "coverLetter": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "resumeMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "answers": {
+                                                    "type": "array",
+                                                    "items": {}
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "submitted",
+                                                        "reviewing",
+                                                        "shortlisted",
+                                                        "interview",
+                                                        "rejected",
+                                                        "accepted",
+                                                        "withdrawn"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "appliedAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "application-uuid",
+                                                "jobId": "job-uuid",
+                                                "userId": "user-uuid",
+                                                "job": null,
+                                                "coverLetter": "Optional text",
+                                                "resumeMediaId": null,
+                                                "answers": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/alert-preferences": {
+            "get": {
+                "operationId": "getAlertPreferences",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Get my alert preferences.",
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "contestAlert": {
+                                                    "type": "boolean"
+                                                },
+                                                "sponsorshipAlert": {
+                                                    "type": "boolean"
+                                                },
+                                                "scholarshipType": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "jobAlert": {
+                                                    "type": "boolean"
+                                                },
+                                                "jobSearchTags": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "contestAlert": true,
+                                                "sponsorshipAlert": false,
+                                                "scholarshipType": null,
+                                                "jobAlert": true,
+                                                "jobSearchTags": [
+                                                    "Frontend developer"
+                                                ],
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "operationId": "updateAlertPreferences",
+                "tags": [
+                    "Jobs"
+                ],
+                "description": "Update my alert preferences.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "contestAlert": {
+                                        "type": "boolean"
+                                    },
+                                    "sponsorshipAlert": {
+                                        "type": "boolean"
+                                    },
+                                    "scholarshipType": {
+                                        "type": [
+                                            "string",
+                                            "null"
+                                        ]
+                                    },
+                                    "jobAlert": {
+                                        "type": "boolean"
+                                    },
+                                    "jobSearchTags": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "maxItems": 10
+                                    }
+                                },
+                                "example": {
+                                    "contestAlert": true,
+                                    "sponsorshipAlert": false,
+                                    "scholarshipType": null,
+                                    "jobAlert": true,
+                                    "jobSearchTags": [
+                                        "Product designer",
+                                        "Frontend developer"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "contestAlert": {
+                                                    "type": "boolean"
+                                                },
+                                                "sponsorshipAlert": {
+                                                    "type": "boolean"
+                                                },
+                                                "scholarshipType": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "jobAlert": {
+                                                    "type": "boolean"
+                                                },
+                                                "jobSearchTags": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "contestAlert": true,
+                                                "sponsorshipAlert": false,
+                                                "scholarshipType": null,
+                                                "jobAlert": true,
+                                                "jobSearchTags": [
+                                                    "Frontend developer"
+                                                ],
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelancers": {
+            "get": {
+                "operationId": "listFreelancers",
+                "tags": [
+                    "Freelancers"
+                ],
+                "description": "List freelancer profiles.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "skill",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "location",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "availability",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "in": "query",
+                        "name": "remoteOnly",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "userId": {
+                                                        "type": "string"
+                                                    },
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "skills": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "location": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "bio": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "avatar": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "passportMediaId": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "draft",
+                                                            "pending_review",
+                                                            "available",
+                                                            "certified",
+                                                            "suspended"
+                                                        ]
+                                                    },
+                                                    "availability": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "available_now",
+                                                            "open",
+                                                            "busy",
+                                                            "unavailable"
+                                                        ]
+                                                    },
+                                                    "remoteOnly": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "hourlyRateMin": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "hourlyRateMax": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "currency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "rating": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "completedJobsCount": {
+                                                        "type": "number"
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "freelancer-uuid",
+                                                    "userId": "user-uuid",
+                                                    "name": "Samuel Bada",
+                                                    "title": "Software Developer",
+                                                    "skills": [
+                                                        "Vue",
+                                                        "Node.js"
+                                                    ],
+                                                    "location": "Lagos",
+                                                    "bio": "Describe achievements, skills, and experience.",
+                                                    "avatar": null,
+                                                    "passportMediaId": null,
+                                                    "status": "available",
+                                                    "availability": "available_now",
+                                                    "remoteOnly": false,
+                                                    "hourlyRateMin": null,
+                                                    "hourlyRateMax": null,
+                                                    "currency": "NGN",
+                                                    "rating": null,
+                                                    "completedJobsCount": 0,
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "freelancer-uuid",
+                                                "userId": "user-uuid",
+                                                "name": "Samuel Bada",
+                                                "title": "Software Developer",
+                                                "skills": [
+                                                    "Vue",
+                                                    "Node.js"
+                                                ],
+                                                "location": "Lagos",
+                                                "bio": "Describe achievements, skills, and experience.",
+                                                "avatar": null,
+                                                "passportMediaId": null,
+                                                "status": "available",
+                                                "availability": "available_now",
+                                                "remoteOnly": false,
+                                                "hourlyRateMin": null,
+                                                "hourlyRateMax": null,
+                                                "currency": "NGN",
+                                                "rating": null,
+                                                "completedJobsCount": 0,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createFreelancer",
+                "tags": [
+                    "Freelancers"
+                ],
+                "description": "Register as a freelancer.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "name",
+                                    "title",
+                                    "skills",
+                                    "location",
+                                    "bio",
+                                    "availability",
+                                    "agreedToTerms"
+                                ],
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "skills": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "location": {
+                                        "type": "string"
+                                    },
+                                    "bio": {
+                                        "type": "string"
+                                    },
+                                    "passportMediaId": {
+                                        "type": "string"
+                                    },
+                                    "availability": {
+                                        "type": "string",
+                                        "enum": [
+                                            "available_now",
+                                            "open",
+                                            "busy",
+                                            "unavailable"
+                                        ]
+                                    },
+                                    "remoteOnly": {
+                                        "type": "boolean"
+                                    },
+                                    "agreedToTerms": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "example": {
+                                    "name": "Samuel Bada",
+                                    "title": "Software Developer",
+                                    "skills": [
+                                        "Vue",
+                                        "Node.js"
+                                    ],
+                                    "location": "Lagos",
+                                    "bio": "Describe achievements, skills, and experience.",
+                                    "passportMediaId": "media-uuid",
+                                    "availability": "available_now",
+                                    "remoteOnly": false,
+                                    "agreedToTerms": true
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "bio": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "avatar": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "passportMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "available",
+                                                        "certified",
+                                                        "suspended"
+                                                    ]
+                                                },
+                                                "availability": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "available_now",
+                                                        "open",
+                                                        "busy",
+                                                        "unavailable"
+                                                    ]
+                                                },
+                                                "remoteOnly": {
+                                                    "type": "boolean"
+                                                },
+                                                "hourlyRateMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "hourlyRateMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "rating": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "completedJobsCount": {
+                                                    "type": "number"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelancer-uuid",
+                                                "userId": "user-uuid",
+                                                "name": "Samuel Bada",
+                                                "title": "Software Developer",
+                                                "skills": [
+                                                    "Vue",
+                                                    "Node.js"
+                                                ],
+                                                "location": "Lagos",
+                                                "bio": "Describe achievements, skills, and experience.",
+                                                "avatar": null,
+                                                "passportMediaId": null,
+                                                "status": "available",
+                                                "availability": "available_now",
+                                                "remoteOnly": false,
+                                                "hourlyRateMin": null,
+                                                "hourlyRateMax": null,
+                                                "currency": "NGN",
+                                                "rating": null,
+                                                "completedJobsCount": 0,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelancers/{idOrUserId}": {
+            "get": {
+                "operationId": "getFreelancer",
+                "tags": [
+                    "Freelancers"
+                ],
+                "description": "Get freelancer profile by profile id or user id.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "idOrUserId",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "bio": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "avatar": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "passportMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "available",
+                                                        "certified",
+                                                        "suspended"
+                                                    ]
+                                                },
+                                                "availability": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "available_now",
+                                                        "open",
+                                                        "busy",
+                                                        "unavailable"
+                                                    ]
+                                                },
+                                                "remoteOnly": {
+                                                    "type": "boolean"
+                                                },
+                                                "hourlyRateMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "hourlyRateMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "rating": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "completedJobsCount": {
+                                                    "type": "number"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelancer-uuid",
+                                                "userId": "user-uuid",
+                                                "name": "Samuel Bada",
+                                                "title": "Software Developer",
+                                                "skills": [
+                                                    "Vue",
+                                                    "Node.js"
+                                                ],
+                                                "location": "Lagos",
+                                                "bio": "Describe achievements, skills, and experience.",
+                                                "avatar": null,
+                                                "passportMediaId": null,
+                                                "status": "available",
+                                                "availability": "available_now",
+                                                "remoteOnly": false,
+                                                "hourlyRateMin": null,
+                                                "hourlyRateMax": null,
+                                                "currency": "NGN",
+                                                "rating": null,
+                                                "completedJobsCount": 0,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": false,
+                                        "error": {
+                                            "code": "profile_already_exists",
+                                            "message": "Profile already exists"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/freelancer-profile": {
+            "get": {
+                "operationId": "getMyFreelancerProfile",
+                "tags": [
+                    "Freelancers"
+                ],
+                "description": "Get my freelancer profile.",
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "bio": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "avatar": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "passportMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "available",
+                                                        "certified",
+                                                        "suspended"
+                                                    ]
+                                                },
+                                                "availability": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "available_now",
+                                                        "open",
+                                                        "busy",
+                                                        "unavailable"
+                                                    ]
+                                                },
+                                                "remoteOnly": {
+                                                    "type": "boolean"
+                                                },
+                                                "hourlyRateMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "hourlyRateMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "rating": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "completedJobsCount": {
+                                                    "type": "number"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelancer-uuid",
+                                                "userId": "user-uuid",
+                                                "name": "Samuel Bada",
+                                                "title": "Software Developer",
+                                                "skills": [
+                                                    "Vue",
+                                                    "Node.js"
+                                                ],
+                                                "location": "Lagos",
+                                                "bio": "Describe achievements, skills, and experience.",
+                                                "avatar": null,
+                                                "passportMediaId": null,
+                                                "status": "available",
+                                                "availability": "available_now",
+                                                "remoteOnly": false,
+                                                "hourlyRateMin": null,
+                                                "hourlyRateMax": null,
+                                                "currency": "NGN",
+                                                "rating": null,
+                                                "completedJobsCount": 0,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "operationId": "updateMyFreelancerProfile",
+                "tags": [
+                    "Freelancers"
+                ],
+                "description": "Update my freelancer profile.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [],
+                                "properties": {
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "skills": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "location": {
+                                        "type": "string"
+                                    },
+                                    "bio": {
+                                        "type": "string"
+                                    },
+                                    "passportMediaId": {
+                                        "type": "string"
+                                    },
+                                    "availability": {
+                                        "type": "string",
+                                        "enum": [
+                                            "available_now",
+                                            "open",
+                                            "busy",
+                                            "unavailable"
+                                        ]
+                                    },
+                                    "remoteOnly": {
+                                        "type": "boolean"
+                                    },
+                                    "agreedToTerms": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "example": {
+                                    "name": "Samuel Bada",
+                                    "title": "Software Developer",
+                                    "skills": [
+                                        "Vue",
+                                        "Node.js"
+                                    ],
+                                    "location": "Lagos",
+                                    "bio": "Describe achievements, skills, and experience.",
+                                    "passportMediaId": "media-uuid",
+                                    "availability": "available_now",
+                                    "remoteOnly": false,
+                                    "agreedToTerms": true
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "name": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "bio": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "avatar": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "passportMediaId": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "draft",
+                                                        "pending_review",
+                                                        "available",
+                                                        "certified",
+                                                        "suspended"
+                                                    ]
+                                                },
+                                                "availability": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "available_now",
+                                                        "open",
+                                                        "busy",
+                                                        "unavailable"
+                                                    ]
+                                                },
+                                                "remoteOnly": {
+                                                    "type": "boolean"
+                                                },
+                                                "hourlyRateMin": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "hourlyRateMax": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "rating": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "completedJobsCount": {
+                                                    "type": "number"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelancer-uuid",
+                                                "userId": "user-uuid",
+                                                "name": "Samuel Bada",
+                                                "title": "Software Developer",
+                                                "skills": [
+                                                    "Vue",
+                                                    "Node.js"
+                                                ],
+                                                "location": "Lagos",
+                                                "bio": "Describe achievements, skills, and experience.",
+                                                "avatar": null,
+                                                "passportMediaId": null,
+                                                "status": "available",
+                                                "availability": "available_now",
+                                                "remoteOnly": false,
+                                                "hourlyRateMin": null,
+                                                "hourlyRateMax": null,
+                                                "currency": "NGN",
+                                                "rating": null,
+                                                "completedJobsCount": 0,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelance-jobs": {
+            "get": {
+                "operationId": "listFreelanceJobs",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "List freelance jobs.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "skill",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "location",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "type",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "companyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "postedByUserId": {
+                                                        "type": "string"
+                                                    },
+                                                    "location": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "type": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "contract",
+                                                            "part-time",
+                                                            "project-based",
+                                                            "remote",
+                                                            "hybrid"
+                                                        ]
+                                                    },
+                                                    "skills": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "description": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "qualifications": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "minFee": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "maxFee": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "currency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "feeLabel": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "applicationEndDate": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "pending_review",
+                                                            "live",
+                                                            "closed",
+                                                            "archived"
+                                                        ]
+                                                    },
+                                                    "applicantCount": {
+                                                        "type": "number"
+                                                    },
+                                                    "verified": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "hasApplied": {
+                                                        "type": [
+                                                            "null",
+                                                            "boolean"
+                                                        ]
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "freelance-job-uuid",
+                                                    "slug": "web-app-development",
+                                                    "title": "Web App Development",
+                                                    "companyName": "TradeBridge Labs",
+                                                    "postedByUserId": "user-uuid",
+                                                    "location": "Remote",
+                                                    "type": "project-based",
+                                                    "skills": [
+                                                        "JavaScript",
+                                                        "React"
+                                                    ],
+                                                    "description": "I need a full-featured e-commerce web application.",
+                                                    "qualifications": "Frontend and backend experience required.",
+                                                    "minFee": 300000,
+                                                    "maxFee": 320000,
+                                                    "currency": "NGN",
+                                                    "feeLabel": null,
+                                                    "applicationEndDate": "2026-06-30",
+                                                    "status": "live",
+                                                    "applicantCount": 0,
+                                                    "verified": false,
+                                                    "hasApplied": false,
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "freelance-job-uuid",
+                                                "slug": "web-app-development",
+                                                "title": "Web App Development",
+                                                "companyName": "TradeBridge Labs",
+                                                "postedByUserId": "user-uuid",
+                                                "location": "Remote",
+                                                "type": "project-based",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "React"
+                                                ],
+                                                "description": "I need a full-featured e-commerce web application.",
+                                                "qualifications": "Frontend and backend experience required.",
+                                                "minFee": 300000,
+                                                "maxFee": 320000,
+                                                "currency": "NGN",
+                                                "feeLabel": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "verified": false,
+                                                "hasApplied": false,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "operationId": "createFreelanceJob",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Create freelance job.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "title",
+                                    "skills",
+                                    "location",
+                                    "type",
+                                    "description",
+                                    "qualifications",
+                                    "companyName",
+                                    "applicationEndDate",
+                                    "agreedToTerms"
+                                ],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "skills": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "location": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "contract",
+                                            "part-time",
+                                            "project-based",
+                                            "remote",
+                                            "hybrid"
+                                        ]
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "qualifications": {
+                                        "type": "string"
+                                    },
+                                    "minFee": {
+                                        "type": "number"
+                                    },
+                                    "maxFee": {
+                                        "type": "number"
+                                    },
+                                    "currency": {
+                                        "type": "string"
+                                    },
+                                    "companyName": {
+                                        "type": "string"
+                                    },
+                                    "applicationEndDate": {
+                                        "type": "string"
+                                    },
+                                    "agreedToTerms": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "example": {
+                                    "title": "Web App Development",
+                                    "skills": [
+                                        "JavaScript",
+                                        "React"
+                                    ],
+                                    "location": "Remote",
+                                    "type": "project-based",
+                                    "description": "I need a full-featured e-commerce web application.",
+                                    "qualifications": "Frontend and backend experience required.",
+                                    "minFee": 300000,
+                                    "maxFee": 320000,
+                                    "currency": "NGN",
+                                    "companyName": "TradeBridge Labs",
+                                    "applicationEndDate": "2026-06-30",
+                                    "agreedToTerms": true
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "postedByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "contract",
+                                                        "part-time",
+                                                        "project-based",
+                                                        "remote",
+                                                        "hybrid"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "qualifications": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "minFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "maxFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "feeLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "verified": {
+                                                    "type": "boolean"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelance-job-uuid",
+                                                "slug": "web-app-development",
+                                                "title": "Web App Development",
+                                                "companyName": "TradeBridge Labs",
+                                                "postedByUserId": "user-uuid",
+                                                "location": "Remote",
+                                                "type": "project-based",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "React"
+                                                ],
+                                                "description": "I need a full-featured e-commerce web application.",
+                                                "qualifications": "Frontend and backend experience required.",
+                                                "minFee": 300000,
+                                                "maxFee": 320000,
+                                                "currency": "NGN",
+                                                "feeLabel": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "verified": false,
+                                                "hasApplied": false,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelance-jobs/{idOrSlug}": {
+            "get": {
+                "operationId": "getFreelanceJob",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Get freelance job detail.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "idOrSlug",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "postedByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "contract",
+                                                        "part-time",
+                                                        "project-based",
+                                                        "remote",
+                                                        "hybrid"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "qualifications": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "minFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "maxFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "feeLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "verified": {
+                                                    "type": "boolean"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelance-job-uuid",
+                                                "slug": "web-app-development",
+                                                "title": "Web App Development",
+                                                "companyName": "TradeBridge Labs",
+                                                "postedByUserId": "user-uuid",
+                                                "location": "Remote",
+                                                "type": "project-based",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "React"
+                                                ],
+                                                "description": "I need a full-featured e-commerce web application.",
+                                                "qualifications": "Frontend and backend experience required.",
+                                                "minFee": 300000,
+                                                "maxFee": 320000,
+                                                "currency": "NGN",
+                                                "feeLabel": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "verified": false,
+                                                "hasApplied": false,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "error": {
+                                            "type": "object",
+                                            "properties": {
+                                                "code": {
+                                                    "type": "string"
+                                                },
+                                                "message": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": false,
+                                        "error": {
+                                            "code": "profile_already_exists",
+                                            "message": "Profile already exists"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelance-jobs/{id}": {
+            "patch": {
+                "operationId": "updateFreelanceJob",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Update freelance job.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [],
+                                "properties": {
+                                    "title": {
+                                        "type": "string"
+                                    },
+                                    "skills": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "location": {
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "contract",
+                                            "part-time",
+                                            "project-based",
+                                            "remote",
+                                            "hybrid"
+                                        ]
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "qualifications": {
+                                        "type": "string"
+                                    },
+                                    "minFee": {
+                                        "type": "number"
+                                    },
+                                    "maxFee": {
+                                        "type": "number"
+                                    },
+                                    "currency": {
+                                        "type": "string"
+                                    },
+                                    "companyName": {
+                                        "type": "string"
+                                    },
+                                    "applicationEndDate": {
+                                        "type": "string"
+                                    },
+                                    "agreedToTerms": {
+                                        "type": "boolean"
+                                    }
+                                },
+                                "example": {
+                                    "title": "Web App Development",
+                                    "skills": [
+                                        "JavaScript",
+                                        "React"
+                                    ],
+                                    "location": "Remote",
+                                    "type": "project-based",
+                                    "description": "I need a full-featured e-commerce web application.",
+                                    "qualifications": "Frontend and backend experience required.",
+                                    "minFee": 300000,
+                                    "maxFee": 320000,
+                                    "currency": "NGN",
+                                    "companyName": "TradeBridge Labs",
+                                    "applicationEndDate": "2026-06-30",
+                                    "agreedToTerms": true
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "postedByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "contract",
+                                                        "part-time",
+                                                        "project-based",
+                                                        "remote",
+                                                        "hybrid"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "qualifications": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "minFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "maxFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "feeLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "verified": {
+                                                    "type": "boolean"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelance-job-uuid",
+                                                "slug": "web-app-development",
+                                                "title": "Web App Development",
+                                                "companyName": "TradeBridge Labs",
+                                                "postedByUserId": "user-uuid",
+                                                "location": "Remote",
+                                                "type": "project-based",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "React"
+                                                ],
+                                                "description": "I need a full-featured e-commerce web application.",
+                                                "qualifications": "Frontend and backend experience required.",
+                                                "minFee": 300000,
+                                                "maxFee": 320000,
+                                                "currency": "NGN",
+                                                "feeLabel": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "verified": false,
+                                                "hasApplied": false,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "deleteFreelanceJob",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Delete freelance job.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "example": {
+                                        "success": true,
+                                        "data": {
+                                            "id": "user-uuid"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelance-jobs/{id}/status": {
+            "patch": {
+                "operationId": "updateFreelanceJobStatus",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Update freelance job status.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "example": {
+                                    "status": "closed"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "slug": {
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "type": "string"
+                                                },
+                                                "companyName": {
+                                                    "type": "string"
+                                                },
+                                                "postedByUserId": {
+                                                    "type": "string"
+                                                },
+                                                "location": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "type": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "contract",
+                                                        "part-time",
+                                                        "project-based",
+                                                        "remote",
+                                                        "hybrid"
+                                                    ]
+                                                },
+                                                "skills": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "qualifications": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "minFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "maxFee": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "feeLabel": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "applicationEndDate": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "enum": [
+                                                        "pending_review",
+                                                        "live",
+                                                        "closed",
+                                                        "archived"
+                                                    ]
+                                                },
+                                                "applicantCount": {
+                                                    "type": "number"
+                                                },
+                                                "verified": {
+                                                    "type": "boolean"
+                                                },
+                                                "hasApplied": {
+                                                    "type": [
+                                                        "null",
+                                                        "boolean"
+                                                    ]
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "freelance-job-uuid",
+                                                "slug": "web-app-development",
+                                                "title": "Web App Development",
+                                                "companyName": "TradeBridge Labs",
+                                                "postedByUserId": "user-uuid",
+                                                "location": "Remote",
+                                                "type": "project-based",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "React"
+                                                ],
+                                                "description": "I need a full-featured e-commerce web application.",
+                                                "qualifications": "Frontend and backend experience required.",
+                                                "minFee": 300000,
+                                                "maxFee": 320000,
+                                                "currency": "NGN",
+                                                "feeLabel": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "verified": false,
+                                                "hasApplied": false,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelance-jobs/{id}/applications": {
+            "post": {
+                "operationId": "applyToFreelanceJob",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Apply to freelance job.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "proposal": {
+                                        "type": "string"
+                                    },
+                                    "bidAmount": {
+                                        "type": "number"
+                                    },
+                                    "currency": {
+                                        "type": "string"
+                                    },
+                                    "attachmentMediaIds": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                },
+                                "example": {
+                                    "proposal": "I can deliver this in 3 weeks.",
+                                    "bidAmount": 300000,
+                                    "currency": "NGN",
+                                    "attachmentMediaIds": []
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "freelanceJobId": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "freelanceJob": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "additionalProperties": true
+                                                },
+                                                "proposal": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "bidAmount": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "attachmentMediaIds": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "appliedAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "application-uuid",
+                                                "freelanceJobId": "freelance-job-uuid",
+                                                "userId": "user-uuid",
+                                                "freelanceJob": null,
+                                                "proposal": "I can deliver this in 3 weeks.",
+                                                "bidAmount": 300000,
+                                                "currency": "NGN",
+                                                "attachmentMediaIds": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "get": {
+                "operationId": "listFreelanceJobApplications",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "List applications for freelance job.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "id",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "freelanceJobId": {
+                                                        "type": "string"
+                                                    },
+                                                    "userId": {
+                                                        "type": "string"
+                                                    },
+                                                    "freelanceJob": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "additionalProperties": true
+                                                    },
+                                                    "proposal": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "bidAmount": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "currency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "attachmentMediaIds": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "appliedAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "application-uuid",
+                                                    "freelanceJobId": "freelance-job-uuid",
+                                                    "userId": "user-uuid",
+                                                    "freelanceJob": null,
+                                                    "proposal": "I can deliver this in 3 weeks.",
+                                                    "bidAmount": 300000,
+                                                    "currency": "NGN",
+                                                    "attachmentMediaIds": [],
+                                                    "status": "submitted",
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "appliedAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "application-uuid",
+                                                "freelanceJobId": "freelance-job-uuid",
+                                                "userId": "user-uuid",
+                                                "freelanceJob": null,
+                                                "proposal": "I can deliver this in 3 weeks.",
+                                                "bidAmount": 300000,
+                                                "currency": "NGN",
+                                                "attachmentMediaIds": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/freelance-jobs/posted": {
+            "get": {
+                "operationId": "listMyFreelanceJobs",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "List my posted freelance jobs.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "skill",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "location",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "type",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "slug": {
+                                                        "type": "string"
+                                                    },
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "companyName": {
+                                                        "type": "string"
+                                                    },
+                                                    "postedByUserId": {
+                                                        "type": "string"
+                                                    },
+                                                    "location": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "type": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "contract",
+                                                            "part-time",
+                                                            "project-based",
+                                                            "remote",
+                                                            "hybrid"
+                                                        ]
+                                                    },
+                                                    "skills": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "description": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "qualifications": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "minFee": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "maxFee": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "currency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "feeLabel": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "applicationEndDate": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "status": {
+                                                        "type": "string",
+                                                        "enum": [
+                                                            "pending_review",
+                                                            "live",
+                                                            "closed",
+                                                            "archived"
+                                                        ]
+                                                    },
+                                                    "applicantCount": {
+                                                        "type": "number"
+                                                    },
+                                                    "verified": {
+                                                        "type": "boolean"
+                                                    },
+                                                    "hasApplied": {
+                                                        "type": [
+                                                            "null",
+                                                            "boolean"
+                                                        ]
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "freelance-job-uuid",
+                                                    "slug": "web-app-development",
+                                                    "title": "Web App Development",
+                                                    "companyName": "TradeBridge Labs",
+                                                    "postedByUserId": "user-uuid",
+                                                    "location": "Remote",
+                                                    "type": "project-based",
+                                                    "skills": [
+                                                        "JavaScript",
+                                                        "React"
+                                                    ],
+                                                    "description": "I need a full-featured e-commerce web application.",
+                                                    "qualifications": "Frontend and backend experience required.",
+                                                    "minFee": 300000,
+                                                    "maxFee": 320000,
+                                                    "currency": "NGN",
+                                                    "feeLabel": null,
+                                                    "applicationEndDate": "2026-06-30",
+                                                    "status": "live",
+                                                    "applicantCount": 0,
+                                                    "verified": false,
+                                                    "hasApplied": false,
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "freelance-job-uuid",
+                                                "slug": "web-app-development",
+                                                "title": "Web App Development",
+                                                "companyName": "TradeBridge Labs",
+                                                "postedByUserId": "user-uuid",
+                                                "location": "Remote",
+                                                "type": "project-based",
+                                                "skills": [
+                                                    "JavaScript",
+                                                    "React"
+                                                ],
+                                                "description": "I need a full-featured e-commerce web application.",
+                                                "qualifications": "Frontend and backend experience required.",
+                                                "minFee": 300000,
+                                                "maxFee": 320000,
+                                                "currency": "NGN",
+                                                "feeLabel": null,
+                                                "applicationEndDate": "2026-06-30",
+                                                "status": "live",
+                                                "applicantCount": 0,
+                                                "verified": false,
+                                                "hasApplied": false,
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/me/freelance-jobs/applications": {
+            "get": {
+                "operationId": "listMyFreelanceApplications",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "List my freelance job applications.",
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "in": "query",
+                        "name": "page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 100
+                        },
+                        "in": "query",
+                        "name": "per_page",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "q",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "status",
+                        "required": false
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "query",
+                        "name": "sort",
+                        "required": false
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "current_page": {
+                                            "type": "number"
+                                        },
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "string"
+                                                    },
+                                                    "freelanceJobId": {
+                                                        "type": "string"
+                                                    },
+                                                    "userId": {
+                                                        "type": "string"
+                                                    },
+                                                    "freelanceJob": {
+                                                        "type": [
+                                                            "null",
+                                                            "object"
+                                                        ],
+                                                        "additionalProperties": true
+                                                    },
+                                                    "proposal": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "bidAmount": {
+                                                        "type": [
+                                                            "null",
+                                                            "number"
+                                                        ]
+                                                    },
+                                                    "currency": {
+                                                        "type": [
+                                                            "null",
+                                                            "string"
+                                                        ]
+                                                    },
+                                                    "attachmentMediaIds": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "status": {
+                                                        "type": "string"
+                                                    },
+                                                    "createdAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "appliedAt": {
+                                                        "type": "string"
+                                                    },
+                                                    "updatedAt": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "example": {
+                                                    "id": "application-uuid",
+                                                    "freelanceJobId": "freelance-job-uuid",
+                                                    "userId": "user-uuid",
+                                                    "freelanceJob": null,
+                                                    "proposal": "I can deliver this in 3 weeks.",
+                                                    "bidAmount": 300000,
+                                                    "currency": "NGN",
+                                                    "attachmentMediaIds": [],
+                                                    "status": "submitted",
+                                                    "createdAt": "2026-05-07T10:00:00Z",
+                                                    "appliedAt": "2026-05-07T10:00:00Z",
+                                                    "updatedAt": "2026-05-07T10:00:00Z"
+                                                }
+                                            }
+                                        },
+                                        "first_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "from": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "last_page": {
+                                            "type": "number"
+                                        },
+                                        "last_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "links": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "next_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "path": {
+                                            "type": "string"
+                                        },
+                                        "per_page": {
+                                            "type": "number"
+                                        },
+                                        "prev_page_url": {
+                                            "type": [
+                                                "null",
+                                                "string"
+                                            ]
+                                        },
+                                        "to": {
+                                            "type": [
+                                                "null",
+                                                "number"
+                                            ]
+                                        },
+                                        "total": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "example": {
+                                        "current_page": 1,
+                                        "data": [
+                                            {
+                                                "id": "application-uuid",
+                                                "freelanceJobId": "freelance-job-uuid",
+                                                "userId": "user-uuid",
+                                                "freelanceJob": null,
+                                                "proposal": "I can deliver this in 3 weeks.",
+                                                "bidAmount": 300000,
+                                                "currency": "NGN",
+                                                "attachmentMediaIds": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        ],
+                                        "first_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "from": 1,
+                                        "last_page": 1,
+                                        "last_page_url": "http://localhost:3000/resource?page=1&per_page=20",
+                                        "links": [],
+                                        "next_page_url": null,
+                                        "path": "http://localhost:3000/resource",
+                                        "per_page": 20,
+                                        "prev_page_url": null,
+                                        "to": 1,
+                                        "total": 1
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/freelance-jobs/{jobId}/applications/{applicationId}": {
+            "patch": {
+                "operationId": "updateFreelanceApplication",
+                "tags": [
+                    "Freelance Jobs"
+                ],
+                "description": "Update freelance application status.",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "required": [
+                                    "status"
+                                ],
+                                "properties": {
+                                    "status": {
+                                        "type": "string"
+                                    }
+                                },
+                                "example": {
+                                    "status": "closed"
+                                }
+                            }
+                        }
+                    }
+                },
+                "parameters": [
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "jobId",
+                        "required": true
+                    },
+                    {
+                        "schema": {
+                            "type": "string"
+                        },
+                        "in": "path",
+                        "name": "applicationId",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "type": "object",
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string"
+                                                },
+                                                "freelanceJobId": {
+                                                    "type": "string"
+                                                },
+                                                "userId": {
+                                                    "type": "string"
+                                                },
+                                                "freelanceJob": {
+                                                    "type": [
+                                                        "null",
+                                                        "object"
+                                                    ],
+                                                    "additionalProperties": true
+                                                },
+                                                "proposal": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "bidAmount": {
+                                                    "type": [
+                                                        "null",
+                                                        "number"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "null",
+                                                        "string"
+                                                    ]
+                                                },
+                                                "attachmentMediaIds": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "status": {
+                                                    "type": "string"
+                                                },
+                                                "createdAt": {
+                                                    "type": "string"
+                                                },
+                                                "appliedAt": {
+                                                    "type": "string"
+                                                },
+                                                "updatedAt": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "example": {
+                                                "id": "application-uuid",
+                                                "freelanceJobId": "freelance-job-uuid",
+                                                "userId": "user-uuid",
+                                                "freelanceJob": null,
+                                                "proposal": "I can deliver this in 3 weeks.",
+                                                "bidAmount": 300000,
+                                                "currency": "NGN",
+                                                "attachmentMediaIds": [],
+                                                "status": "submitted",
+                                                "createdAt": "2026-05-07T10:00:00Z",
+                                                "appliedAt": "2026-05-07T10:00:00Z",
+                                                "updatedAt": "2026-05-07T10:00:00Z"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/auth/google": {
             "get": {
                 "operationId": "googleRedirect",

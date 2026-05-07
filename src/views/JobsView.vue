@@ -1,58 +1,46 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { BriefcaseBusiness, Clock3, Search, Send, UserCheck } from 'lucide-vue-next'
+import { ApiError } from '@/lib/api'
+import { jobsService, type JobApplicationRecord, type JobRecord } from '@/services/jobs'
+import { useAuthStore } from '@/stores/auth'
 
-const postedJobs = [
-  {
-    title: 'Frontend Developer',
-    company: 'Skills4Export',
-    status: 'Live',
-    applicants: 24,
-    postedOn: 'Posted 3 days ago',
-    description:
-      'Hiring a frontend developer to refine product workflows, improve dashboard performance, and ship polished UI updates.',
-  },
-  {
-    title: 'Community Manager',
-    company: 'Telefun',
-    status: 'Reviewing',
-    applicants: 11,
-    postedOn: 'Posted 1 week ago',
-    description:
-      'Looking for a community lead to coordinate creator communication, moderation standards, and campaign rollouts.',
-  },
-]
-
-const appliedJobs = [
-  {
-    title: 'Product Designer',
-    company: 'EL Academy',
-    status: 'Interview stage',
-    appliedOn: 'Applied 2 days ago',
-    location: 'Remote',
-  },
-  {
-    title: 'Growth Marketer',
-    company: 'Nova Labs',
-    status: 'Application sent',
-    appliedOn: 'Applied 5 days ago',
-    location: 'Lagos, Nigeria',
-  },
-]
-
+const authStore = useAuthStore()
 const searchQuery = ref('')
 const activeTab = ref<'posted' | 'applied'>('posted')
+const postedJobs = ref<JobRecord[]>([])
+const appliedJobs = ref<JobApplicationRecord[]>([])
+const isLoadingJobs = ref(false)
+const jobsError = ref('')
+
+const formatDate = (value?: string) => {
+  if (!value) {
+    return 'Date not available'
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
 
 const filteredPostedJobs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
   if (!query) {
-    return postedJobs
+    return postedJobs.value
   }
 
-  return postedJobs.filter((job) =>
-    [job.title, job.company, job.status, job.description].some((value) =>
-      value.toLowerCase().includes(query),
+  return postedJobs.value.filter((job) =>
+    [job.title, job.companyName, job.status, job.description].some((value) =>
+      String(value || '').toLowerCase().includes(query),
     ),
   )
 })
@@ -61,14 +49,45 @@ const filteredAppliedJobs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
   if (!query) {
-    return appliedJobs
+    return appliedJobs.value
   }
 
-  return appliedJobs.filter((job) =>
-    [job.title, job.company, job.status, job.appliedOn, job.location].some((value) =>
-      value.toLowerCase().includes(query),
+  return appliedJobs.value.filter((application) =>
+    [
+      application.job?.title,
+      application.job?.companyName,
+      application.status,
+      application.appliedAt,
+      application.job?.location,
+    ].some((value) =>
+      String(value || '').toLowerCase().includes(query),
     ),
   )
+})
+
+const loadManageJobs = async () => {
+  isLoadingJobs.value = true
+  jobsError.value = ''
+
+  try {
+    const [postedResponse, appliedResponse] = await Promise.all([
+      jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken),
+      jobsService.listMyJobApplications({ per_page: 100 }, authStore.authToken),
+    ])
+
+    postedJobs.value = postedResponse.data
+    appliedJobs.value = appliedResponse.data
+  } catch (error) {
+    jobsError.value = error instanceof ApiError ? error.message : 'Unable to load your jobs.'
+    postedJobs.value = []
+    appliedJobs.value = []
+  } finally {
+    isLoadingJobs.value = false
+  }
+}
+
+onMounted(() => {
+  void loadManageJobs()
 })
 </script>
 
@@ -154,14 +173,30 @@ const filteredAppliedJobs = computed(() => {
         <span
           class="inline-flex items-center rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-sm font-medium text-[var(--text-secondary)]"
         >
-          {{ activeTab === 'posted' ? filteredPostedJobs.length : filteredAppliedJobs.length }}
+          {{ isLoadingJobs ? '...' : activeTab === 'posted' ? filteredPostedJobs.length : filteredAppliedJobs.length }}
         </span>
       </div>
 
       <div v-if="activeTab === 'posted'" class="mt-5 space-y-4">
         <article
+          v-if="isLoadingJobs"
+          v-for="item in 2"
+          :key="`posted-job-skeleton-${item}`"
+          class="animate-pulse rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+        >
+          <div class="flex gap-2">
+            <span class="h-7 w-32 rounded-full bg-[var(--surface-primary)]" />
+            <span class="h-7 w-24 rounded-full bg-[var(--surface-primary)]" />
+          </div>
+          <div class="mt-3 h-5 w-1/3 rounded-full bg-[var(--surface-primary)]" />
+          <div class="mt-3 h-3 w-full rounded-full bg-[var(--surface-primary)]" />
+          <div class="mt-2 h-3 w-2/3 rounded-full bg-[var(--surface-primary)]" />
+        </article>
+
+        <article
+          v-if="!isLoadingJobs"
           v-for="job in filteredPostedJobs"
-          :key="`${job.company}-${job.title}`"
+          :key="job.id"
           class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
         >
           <div class="flex flex-wrap items-center gap-2">
@@ -169,12 +204,12 @@ const filteredAppliedJobs = computed(() => {
               class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]"
             >
               <BriefcaseBusiness class="h-3.5 w-3.5" />
-              {{ job.company }}
+              {{ job.companyName }}
             </span>
             <span
               class="inline-flex items-center rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]"
             >
-              {{ job.status }}
+              {{ job.status || 'draft' }}
             </span>
           </div>
           <h3 class="mt-3 text-lg font-semibold text-[var(--text-primary)]">{{ job.title }}</h3>
@@ -182,27 +217,47 @@ const filteredAppliedJobs = computed(() => {
           <div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
             <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
               <UserCheck class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ job.applicants }} applicants
+              {{ job.applicantCount || 0 }} applicants
             </span>
             <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
               <Clock3 class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ job.postedOn }}
+              Posted {{ formatDate(job.createdAt || job.updatedAt) }}
             </span>
           </div>
         </article>
 
         <article
-          v-if="filteredPostedJobs.length === 0"
+          v-if="!isLoadingJobs && filteredPostedJobs.length === 0"
           class="rounded-[1.1rem] border border-dashed border-[color:var(--border-soft)] p-6 text-center"
         >
-          <p class="text-sm text-[var(--text-secondary)]">No posted jobs match your search.</p>
+          <p class="text-sm text-[var(--text-secondary)]">
+            {{ jobsError || (searchQuery ? 'No posted jobs match your search.' : 'You have not posted any jobs yet.') }}
+          </p>
         </article>
       </div>
 
       <div v-else class="mt-5 space-y-4">
         <article
-          v-for="job in filteredAppliedJobs"
-          :key="`${job.company}-${job.title}`"
+          v-if="isLoadingJobs"
+          v-for="item in 2"
+          :key="`applied-job-skeleton-${item}`"
+          class="animate-pulse rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+        >
+          <div class="flex gap-2">
+            <span class="h-7 w-32 rounded-full bg-[var(--surface-primary)]" />
+            <span class="h-7 w-28 rounded-full bg-[var(--surface-primary)]" />
+          </div>
+          <div class="mt-3 h-5 w-2/5 rounded-full bg-[var(--surface-primary)]" />
+          <div class="mt-4 flex gap-2">
+            <span class="h-8 w-36 rounded-full bg-[var(--surface-primary)]" />
+            <span class="h-8 w-32 rounded-full bg-[var(--surface-primary)]" />
+          </div>
+        </article>
+
+        <article
+          v-if="!isLoadingJobs"
+          v-for="application in filteredAppliedJobs"
+          :key="application.id"
           class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
         >
           <div class="flex flex-wrap items-center gap-2">
@@ -210,32 +265,34 @@ const filteredAppliedJobs = computed(() => {
               class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]"
             >
               <Send class="h-3.5 w-3.5" />
-              {{ job.company }}
+              {{ application.job?.companyName || 'Company not listed' }}
             </span>
             <span
               class="inline-flex items-center rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]"
             >
-              {{ job.status }}
+              {{ application.status || 'submitted' }}
             </span>
           </div>
-          <h3 class="mt-3 text-lg font-semibold text-[var(--text-primary)]">{{ job.title }}</h3>
+          <h3 class="mt-3 text-lg font-semibold text-[var(--text-primary)]">{{ application.job?.title || 'Job application' }}</h3>
           <div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
             <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
               <Clock3 class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ job.appliedOn }}
+              Applied {{ formatDate(application.appliedAt || application.createdAt) }}
             </span>
             <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
               <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ job.location }}
+              {{ application.job?.location || 'Location not listed' }}
             </span>
           </div>
         </article>
 
         <article
-          v-if="filteredAppliedJobs.length === 0"
+          v-if="!isLoadingJobs && filteredAppliedJobs.length === 0"
           class="rounded-[1.1rem] border border-dashed border-[color:var(--border-soft)] p-6 text-center"
         >
-          <p class="text-sm text-[var(--text-secondary)]">No applications match your search.</p>
+          <p class="text-sm text-[var(--text-secondary)]">
+            {{ jobsError || (searchQuery ? 'No applications match your search.' : 'You have not applied for any jobs yet.') }}
+          </p>
         </article>
       </div>
     </section>

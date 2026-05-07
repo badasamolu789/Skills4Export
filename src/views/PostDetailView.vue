@@ -27,7 +27,7 @@ import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/se
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const route = useRoute()
@@ -94,6 +94,7 @@ type QuestionAnswerItem = {
   time: string
   content: string
   score: number
+  isScored: boolean
 }
 
 const answerItems = ref<QuestionAnswerItem[]>([
@@ -106,6 +107,7 @@ const answerItems = ref<QuestionAnswerItem[]>([
     content:
       'Beryllium is the fourth element of the periodic table. It has the atomic number 4 and the chemical symbol Be.',
     score: 0,
+    isScored: false,
   },
   {
     id: 'seed-answer-2',
@@ -116,6 +118,7 @@ const answerItems = ref<QuestionAnswerItem[]>([
     content:
       'The answer is beryllium. The first four elements are hydrogen, helium, lithium, and beryllium.',
     score: 0,
+    isScored: false,
   },
 ])
 
@@ -135,7 +138,15 @@ const mapAnswerItem = (answer: QuestionAnswerRecord): QuestionAnswerItem => {
     authorMeta: ['Skills4Export member'],
     time: formatCommentTime(answer.createdAt || answer.created_at || ''),
     content: mapAnswerBody(answer),
-    score: 0,
+    score: getOptionalCount(
+      answer.score,
+      answer.reactions_count,
+      answer.reaction_count,
+      answer.reactionsCount,
+      answer.likes_count,
+      answer.likesCount,
+    ),
+    isScored: false,
   }
 }
 
@@ -197,7 +208,14 @@ const mapDetailComment = async (comment: PostCommentRecord): Promise<DetailComme
     tag: authorProfile.tag,
     time: formatCommentTime(comment.created_at),
     body: comment.content,
-    score: 0,
+    score: getOptionalCount(
+      comment.score,
+      comment.reactions_count,
+      comment.reaction_count,
+      comment.reactionsCount,
+      comment.likes_count,
+      comment.likesCount,
+    ),
     isScored: false,
     isFollowing: false,
     isReplying: false,
@@ -570,13 +588,20 @@ const toggleScore = async () => {
     return
   }
 
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before scoring posts.',
+    })
+    return
+  }
+
   isReactingToPost.value = true
 
   try {
     const response = await postsService.togglePostReaction(
       apiPostId.value,
       {
-        userId: authStore.userId || undefined,
+        userId: authStore.userId,
         type: 'like',
       },
       authStore.authToken,
@@ -715,11 +740,18 @@ const createCurrentUserDetailComment = (
 
 const toggleCommentScore = async (comment: DetailComment | PostCommentThreadItem) => {
   if (apiPostId.value && comment.id) {
+    if (!authStore.authToken || !authStore.userId) {
+      toast.error('Sign in required', {
+        description: 'Please sign in again before scoring comments.',
+      })
+      return
+    }
+
     try {
       const response = await postsService.toggleCommentReaction(
         String(comment.id),
         {
-          userId: authStore.userId || undefined,
+          userId: authStore.userId,
           type: 'like',
         },
         authStore.authToken,
@@ -736,6 +768,11 @@ const toggleCommentScore = async (comment: DetailComment | PostCommentThreadItem
 
   comment.isScored = !comment.isScored
   comment.score = (comment.score ?? 0) + (comment.isScored ? 1 : -1)
+}
+
+const toggleAnswerScore = (answer: QuestionAnswerItem) => {
+  answer.isScored = !answer.isScored
+  answer.score += answer.isScored ? 1 : -1
 }
 
 const toggleCommentFollow = (comment: DetailComment | PostCommentThreadItem) => {
@@ -885,6 +922,7 @@ const submitAnswer = async () => {
         authorMeta: skillPills.value.length ? skillPills.value.slice(0, 3) : ['Skills4Export member'],
         time: 'Just now',
         content: mapAnswerBody(response.data) || value,
+        isScored: false,
       })
       closeAnswerModal()
 
@@ -915,6 +953,7 @@ const submitAnswer = async () => {
     time: 'Just now',
     content: value,
     score: 0,
+    isScored: false,
   })
   closeAnswerModal()
   toast.success('Answer posted')
@@ -1197,7 +1236,13 @@ const submitAnswer = async () => {
               <div class="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                  class="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition"
+                  :class="
+                    answer.isScored
+                      ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+                      : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                  "
+                  @click="toggleAnswerScore(answer)"
                 >
                   <ArrowUp class="h-3.5 w-3.5" />
                   {{ answer.score }} score

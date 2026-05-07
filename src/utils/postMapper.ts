@@ -43,8 +43,22 @@ const getAuthorTag = (author?: MyProfileData | null) => {
   return parts.length ? parts.join(' | ') : 'Skills4Export member'
 }
 
-const getOptionalCount = (...values: Array<number | undefined>) => {
-  return values.find((value) => typeof value === 'number' && Number.isFinite(value)) ?? 0
+export const getOptionalCount = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      const numberValue = Number(value)
+
+      if (Number.isFinite(numberValue)) {
+        return numberValue
+      }
+    }
+  }
+
+  return 0
 }
 
 export const mapApiPostToFeedPost = (

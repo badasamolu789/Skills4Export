@@ -64,11 +64,15 @@ export default defineConfig(({ mode }) => {
               target: proxyTarget,
               changeOrigin: true,
               secure: isHttpsProxyTarget,
+              timeout: 60000,
+              proxyTimeout: 60000,
             },
             '/health': {
               target: proxyTarget,
               changeOrigin: true,
               secure: isHttpsProxyTarget,
+              timeout: 60000,
+              proxyTimeout: 60000,
             },
           },
         }

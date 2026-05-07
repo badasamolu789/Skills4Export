@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { getOptionalCount } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const route = useRoute()
@@ -26,6 +27,7 @@ type AnswerItem = {
   time: string
   content: string
   score: number
+  isScored: boolean
 }
 
 const apiQuestion = ref<QuestionPost | null>(null)
@@ -195,7 +197,15 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
     authorMeta: author.skills,
     time: formatTime(answer.createdAt || answer.created_at),
     content: mapAnswerContent(answer),
-    score: 0,
+    score: getOptionalCount(
+      answer.score,
+      answer.reactions_count,
+      answer.reaction_count,
+      answer.reactionsCount,
+      answer.likes_count,
+      answer.likesCount,
+    ),
+    isScored: false,
   }
 }
 
@@ -327,9 +337,15 @@ const submitAnswer = async () => {
     time: 'Just now',
     content: value,
     score: 0,
+    isScored: false,
   })
   closeAnswerModal()
   toast.success('Answer posted')
+}
+
+const toggleAnswerScore = (answer: AnswerItem) => {
+  answer.isScored = !answer.isScored
+  answer.score += answer.isScored ? 1 : -1
 }
 
 watch(
@@ -521,7 +537,16 @@ onBeforeUnmount(() => {
             </p>
 
             <div class="mt-4 flex flex-wrap gap-2">
-              <button type="button" class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)]">
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition"
+                :class="
+                  answer.isScored
+                    ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+                    : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                "
+                @click="toggleAnswerScore(answer)"
+              >
                 <ArrowUp class="h-3.5 w-3.5" />
                 {{ answer.score }} score
               </button>

@@ -11,9 +11,16 @@ import {
   Upload,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
-import { publicProfileRoute, seededPublicProfiles } from '@/data/publicProfiles'
+import {
+  freelancersService,
+  type FreelanceJobRecord,
+  type FreelancerRecord,
+} from '@/services/freelancers'
+import { useAuthStore } from '@/stores/auth'
 
+const authStore = useAuthStore()
 const activeTab = ref<'freelancers' | 'jobs'>('freelancers')
 const skillQuery = ref('')
 const locationQuery = ref('')
@@ -28,50 +35,93 @@ const passportPreviewUrl = ref('')
 const visibleFreelancerCount = ref(2)
 const visibleJobCount = ref(1)
 const revealSentinel = ref<HTMLElement | null>(null)
+const freelancers = ref<FreelancerRecord[]>([])
+const freelanceJobs = ref<FreelanceJobRecord[]>([])
+const isLoadingFreelancers = ref(false)
+const isLoadingFreelanceJobs = ref(false)
+const freelancersError = ref('')
+const freelanceJobsError = ref('')
+const freelancerForm = ref({
+  name: '',
+  title: '',
+  skills: '',
+  location: '',
+  bio: '',
+  availability: 'available_now',
+  remoteOnly: false,
+})
+const freelanceJobForm = ref({
+  title: '',
+  skills: '',
+  location: '',
+  type: 'project-based',
+  description: '',
+  qualifications: '',
+  minFee: '',
+  maxFee: '',
+  currency: 'NGN',
+  companyName: '',
+  applicationEndDate: '',
+})
 let revealObserver: IntersectionObserver | null = null
 
-const freelancers = seededPublicProfiles.map((profile, index) => ({
-  id: profile.id,
-  name: String(profile.user.name || 'Freelancer'),
-  initials: String(profile.user.name || 'Freelancer')
-    .split(' ')
+const splitList = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const getInitials = (value: string) =>
+  value
+    .split(/\s+/)
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase(),
-  title: profile.experiences[0]?.title || 'Freelancer',
-  location: profile.profile.location || 'Remote',
-  bio: profile.profile.bio || 'Available for freelance opportunities.',
-  skills: profile.skills
-    .map((skill) => skill.name || skill.skill)
-    .filter((skill): skill is string => Boolean(skill)),
-  status: index % 2 === 0 ? 'Certified' : 'Available',
-  to: publicProfileRoute(profile.id),
-}))
+    .toUpperCase() || 'FR'
 
-const freelanceJobs = [
-  {
-    id: 'job-web-app-development',
-    title: 'Web App Development',
-    company: 'TradeBridge Labs',
-    location: 'Remote',
-    fee: 'N300k - N320k',
-    deadline: '12 days left',
-    skills: ['javascript', 'bootstrap-4', 'jquery', 'select', 'bootstrap-4', 'jquery', 'select'],
-    description:
-      'I need a full-featured e-commerce web application. I need a developer who can build it from architecture to deployment. I have preference on the tech-stack React, or another modern front...',
-  },
-  {
-    id: 'job-content-strategy',
-    title: 'Export content strategist',
-    company: 'Market Access Studio',
-    location: 'Lagos, Nigeria',
-    fee: 'N250k - N400k',
-    deadline: '18 days left',
-    skills: ['Writing', 'SEO', 'Research'],
-    description: 'Create practical articles and guides for businesses preparing to sell into new markets.',
-  },
-]
+const getFreelancerPath = (freelancer: FreelancerRecord) => `/profile/view/${freelancer.userId}`
+
+const formatFee = (job: FreelanceJobRecord) => {
+  if (job.feeLabel) {
+    return job.feeLabel
+  }
+
+  const currency = job.currency || 'NGN'
+  const format = (value?: number | null) =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? new Intl.NumberFormat(undefined, {
+          style: 'currency',
+          currency,
+          maximumFractionDigits: 0,
+        }).format(value)
+      : ''
+  const min = format(job.minFee)
+  const max = format(job.maxFee)
+
+  if (min && max) {
+    return `${min} - ${max}`
+  }
+
+  return min || max || 'Fee not listed'
+}
+
+const formatDeadline = (value?: string | null) => {
+  if (!value) {
+    return 'Deadline not listed'
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
 
 const trendingQuestions = [
   {
@@ -95,14 +145,19 @@ const filteredFreelancers = computed(() => {
   const skill = skillQuery.value.trim().toLowerCase()
   const location = locationQuery.value.trim().toLowerCase()
 
-  return freelancers.filter((freelancer) => {
+  return freelancers.value.filter((freelancer) => {
     const skillMatch =
       !skill ||
       freelancer.skills.some((item) => item.toLowerCase().includes(skill)) ||
       freelancer.title.toLowerCase().includes(skill)
-    const locationMatch = !location || freelancer.location.toLowerCase().includes(location)
+    const locationMatch = !location || String(freelancer.location || '').toLowerCase().includes(location)
+    const availabilityMatch =
+      availabilityFilter.value === 'Any of the options' ||
+      (availabilityFilter.value === 'Remote only' && freelancer.remoteOnly) ||
+      freelancer.status.toLowerCase() === availabilityFilter.value.toLowerCase() ||
+      freelancer.availability.toLowerCase() === availabilityFilter.value.toLowerCase().replace(/\s+/g, '_')
 
-    return skillMatch && locationMatch
+    return skillMatch && locationMatch && availabilityMatch
   })
 })
 
@@ -110,12 +165,12 @@ const filteredJobs = computed(() => {
   const skill = skillQuery.value.trim().toLowerCase()
   const location = locationQuery.value.trim().toLowerCase()
 
-  return freelanceJobs.filter((job) => {
+  return freelanceJobs.value.filter((job) => {
     const skillMatch =
       !skill ||
       job.skills.some((item) => item.toLowerCase().includes(skill)) ||
       job.title.toLowerCase().includes(skill)
-    const locationMatch = !location || job.location.toLowerCase().includes(location)
+    const locationMatch = !location || String(job.location || '').toLowerCase().includes(location)
 
     return skillMatch && locationMatch
   })
@@ -179,6 +234,8 @@ watch(hasMoreActiveItems, () => {
 })
 
 onMounted(() => {
+  void loadFreelancers()
+  void loadFreelanceJobs()
   nextTick(setupRevealObserver)
 })
 
@@ -190,28 +247,100 @@ onBeforeUnmount(() => {
   }
 })
 
-const submitFreelancerRegistration = () => {
+const loadFreelancers = async () => {
+  isLoadingFreelancers.value = true
+  freelancersError.value = ''
+
+  try {
+    const response = await freelancersService.listFreelancers({ per_page: 100 }, authStore.authToken)
+    freelancers.value = response.data
+  } catch (error) {
+    freelancersError.value = error instanceof ApiError ? error.message : 'Unable to load freelancers.'
+    freelancers.value = []
+  } finally {
+    isLoadingFreelancers.value = false
+  }
+}
+
+const loadFreelanceJobs = async () => {
+  isLoadingFreelanceJobs.value = true
+  freelanceJobsError.value = ''
+
+  try {
+    const response = await freelancersService.listFreelanceJobs({ per_page: 100, status: 'live' }, authStore.authToken)
+    freelanceJobs.value = response.data
+  } catch (error) {
+    freelanceJobsError.value = error instanceof ApiError ? error.message : 'Unable to load freelance jobs.'
+    freelanceJobs.value = []
+  } finally {
+    isLoadingFreelanceJobs.value = false
+  }
+}
+
+const submitFreelancerRegistration = async () => {
   if (!freelancerTermsAgreed.value) {
     toast.error('Accept the terms before submitting.')
     return
   }
 
-  toast.success('Freelancer profile submitted', {
-    description: 'Your freelancer profile is ready for review.',
-  })
-  isRegisterModalOpen.value = false
+  try {
+    const response = await freelancersService.createFreelancer(
+      {
+        name: freelancerForm.value.name,
+        title: freelancerForm.value.title,
+        skills: splitList(freelancerForm.value.skills),
+        location: freelancerForm.value.location,
+        bio: freelancerForm.value.bio,
+        availability: freelancerForm.value.availability,
+        remoteOnly: freelancerForm.value.remoteOnly,
+        agreedToTerms: freelancerTermsAgreed.value,
+      },
+      authStore.authToken,
+    )
+    freelancers.value = [response.data, ...freelancers.value]
+    toast.success('Freelancer profile submitted', {
+      description: 'Your freelancer profile is ready for review.',
+    })
+    isRegisterModalOpen.value = false
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to submit freelancer profile.'
+    toast.error('Freelancer failed', { description: message })
+  }
 }
 
-const submitFreelanceJob = () => {
+const submitFreelanceJob = async () => {
   if (!agreedToTerms.value) {
     toast.error('Accept the terms before posting.')
     return
   }
 
-  toast.success('Freelance job posted', {
-    description: 'Your freelance job is now ready for applicants.',
-  })
-  isPostJobModalOpen.value = false
+  try {
+    const response = await freelancersService.createFreelanceJob(
+      {
+        title: freelanceJobForm.value.title,
+        skills: splitList(freelanceJobForm.value.skills),
+        location: freelanceJobForm.value.location,
+        type: freelanceJobForm.value.type,
+        description: freelanceJobForm.value.description,
+        qualifications: freelanceJobForm.value.qualifications,
+        minFee: freelanceJobForm.value.minFee ? Number(freelanceJobForm.value.minFee) : undefined,
+        maxFee: freelanceJobForm.value.maxFee ? Number(freelanceJobForm.value.maxFee) : undefined,
+        currency: freelanceJobForm.value.currency,
+        companyName: freelanceJobForm.value.companyName,
+        applicationEndDate: freelanceJobForm.value.applicationEndDate,
+        agreedToTerms: agreedToTerms.value,
+      },
+      authStore.authToken,
+    )
+    freelanceJobs.value = [response.data, ...freelanceJobs.value]
+    toast.success('Freelance job posted', {
+      description: 'Your freelance job is now ready for applicants.',
+    })
+    isPostJobModalOpen.value = false
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to post freelance job.'
+    toast.error('Freelance job failed', { description: message })
+  }
 }
 
 const handlePassportUpload = (event: Event) => {
@@ -355,17 +484,47 @@ const clearPassportUpload = () => {
     <div class="space-y-4">
       <div class="space-y-3">
         <template v-if="activeTab === 'freelancers'">
+          <article
+            v-if="isLoadingFreelancers"
+            v-for="item in 3"
+            :key="`freelancer-skeleton-${item}`"
+            class="animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-soft)]"
+          >
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+              <span class="h-14 w-14 shrink-0 rounded-[0.9rem] bg-[var(--surface-secondary)]" />
+              <div class="min-w-0 flex-1 space-y-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div class="space-y-2">
+                    <div class="h-5 w-40 rounded-full bg-[var(--surface-secondary)]" />
+                    <div class="h-4 w-56 rounded-full bg-[var(--surface-secondary)]" />
+                  </div>
+                  <span class="h-9 w-28 rounded-[0.75rem] bg-[var(--surface-secondary)]" />
+                </div>
+                <div class="h-4 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
+                <div class="h-3 w-1/2 rounded-full bg-[var(--surface-secondary)]" />
+                <div class="h-3 w-full rounded-full bg-[var(--surface-secondary)]" />
+              </div>
+            </div>
+          </article>
+
           <RouterLink
+            v-if="!isLoadingFreelancers"
             v-for="freelancer in visibleFreelancers"
             :key="freelancer.id"
-            :to="freelancer.to"
+            :to="getFreelancerPath(freelancer)"
             class="block rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-soft)] transition hover:border-[color:var(--accent-soft)]"
           >
             <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
               <span
                 class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[0.9rem] bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)]"
               >
-                {{ freelancer.initials }}
+                <img
+                  v-if="freelancer.avatar"
+                  :src="freelancer.avatar"
+                  :alt="freelancer.name"
+                  class="h-full w-full object-cover"
+                />
+                <span v-else>{{ getInitials(freelancer.name) }}</span>
               </span>
 
               <div class="min-w-0 flex-1">
@@ -390,8 +549,8 @@ const clearPassportUpload = () => {
                   <span>|</span>
                   <span class="inline-flex items-center gap-1">
                     Status -
-                    <span class="font-semibold text-[var(--danger)]">{{ freelancer.status }}</span>
-                    <BadgeCheck v-if="freelancer.status === 'Certified'" class="h-3.5 w-3.5 text-[var(--accent-strong)]" />
+                  <span class="font-semibold text-[var(--danger)]">{{ freelancer.status }}</span>
+                    <BadgeCheck v-if="freelancer.status === 'certified'" class="h-3.5 w-3.5 text-[var(--accent-strong)]" />
                   </span>
                 </p>
                 <p class="mt-3 line-clamp-3 text-[0.86rem] leading-7 text-[var(--text-secondary)]">
@@ -410,10 +569,52 @@ const clearPassportUpload = () => {
           >
             Scroll to reveal more freelancers
           </button>
+
+          <article
+            v-if="!isLoadingFreelancers && visibleFreelancers.length === 0"
+            class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center shadow-[var(--shadow-soft)]"
+          >
+            <h2 class="text-base font-semibold text-[var(--text-primary)]">No freelancers found.</h2>
+            <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+              {{ freelancersError || 'Freelancers will appear here once profiles are available for this filter.' }}
+            </p>
+          </article>
         </template>
 
         <template v-else>
-          <div class="divide-y divide-[color:var(--border-soft)] rounded-[1rem] bg-[var(--surface-primary)] px-4 py-2 shadow-[var(--shadow-soft)]">
+          <div
+            v-if="isLoadingFreelanceJobs"
+            class="divide-y divide-[color:var(--border-soft)] rounded-[1rem] bg-[var(--surface-primary)] px-4 py-2 shadow-[var(--shadow-soft)]"
+          >
+            <article
+              v-for="item in 3"
+              :key="`freelance-job-skeleton-${item}`"
+              class="animate-pulse py-5"
+            >
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0 flex-1 space-y-3">
+                  <div class="h-5 w-2/5 rounded-full bg-[var(--surface-secondary)]" />
+                  <div class="h-3 w-full rounded-full bg-[var(--surface-secondary)]" />
+                  <div class="h-3 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
+                </div>
+                <span class="h-7 w-32 rounded-full bg-[var(--surface-secondary)]" />
+              </div>
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                <span class="h-6 w-16 rounded-[0.45rem] bg-[var(--surface-secondary)]" />
+                <span class="h-6 w-20 rounded-[0.45rem] bg-[var(--surface-secondary)]" />
+                <span class="h-6 w-14 rounded-[0.45rem] bg-[var(--surface-secondary)]" />
+              </div>
+              <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <span class="h-4 w-48 rounded-full bg-[var(--surface-secondary)]" />
+                <span class="h-4 w-28 rounded-full bg-[var(--surface-secondary)]" />
+              </div>
+            </article>
+          </div>
+
+          <div
+            v-else
+            class="divide-y divide-[color:var(--border-soft)] rounded-[1rem] bg-[var(--surface-primary)] px-4 py-2 shadow-[var(--shadow-soft)]"
+          >
             <article
               v-for="job in visibleJobs"
               :key="job.id"
@@ -426,7 +627,7 @@ const clearPassportUpload = () => {
                 </div>
                 <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-[0.78rem] font-semibold text-[var(--accent-strong)]">
                   <BriefcaseBusiness class="h-3.5 w-3.5" />
-                  {{ job.company }}
+                  {{ job.companyName }}
                 </span>
               </div>
 
@@ -442,11 +643,11 @@ const clearPassportUpload = () => {
 
               <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-[0.84rem]">
                 <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span class="font-semibold text-emerald-600">Offer | {{ job.fee }}</span>
+                  <span class="font-semibold text-emerald-600">Offer | {{ formatFee(job) }}</span>
                   <span class="text-[var(--text-tertiary)]">|</span>
-                  <span class="font-semibold text-[var(--danger)]">Verified</span>
+                  <span class="font-semibold text-[var(--danger)]">{{ job.verified ? 'Verified' : job.status }}</span>
                 </p>
-                <p class="font-medium text-[var(--text-primary)]">{{ job.deadline }}</p>
+                <p class="font-medium text-[var(--text-primary)]">{{ formatDeadline(job.applicationEndDate) }}</p>
               </div>
             </article>
           </div>
@@ -460,6 +661,16 @@ const clearPassportUpload = () => {
           >
             Scroll to reveal more jobs
           </button>
+
+          <article
+            v-if="!isLoadingFreelanceJobs && visibleJobs.length === 0"
+            class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center shadow-[var(--shadow-soft)]"
+          >
+            <h2 class="text-base font-semibold text-[var(--text-primary)]">No freelance jobs found.</h2>
+            <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+              {{ freelanceJobsError || 'Freelance jobs will appear here once clients publish matching work.' }}
+            </p>
+          </article>
         </template>
       </div>
 
@@ -491,49 +702,50 @@ const clearPassportUpload = () => {
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Title / Designation:<span class="text-[var(--danger)]">*</span></span>
-          <input class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" value="Senior Software Engineer, Business Development Mgr" />
+          <input v-model="freelanceJobForm.title" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Senior Software Engineer, Business Development Mgr" />
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Required skills:<span class="text-[var(--danger)]">*</span></span>
-          <input class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" value="Java, Project Mgt, Event management, Drumer, ..." />
+          <input v-model="freelanceJobForm.skills" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Java, Project Mgt, Event management" />
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location:<span class="text-[var(--danger)]">*</span></span>
-          <input class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" value="Abuja" />
+          <input v-model="freelanceJobForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Abuja" />
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Type:<span class="text-[var(--danger)]">*</span></span>
-          <select class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
-            <option>select</option>
-            <option>Contract</option>
-            <option>Part time</option>
-            <option>Project based</option>
+          <select v-model="freelanceJobForm.type" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+            <option value="contract">Contract</option>
+            <option value="part-time">Part time</option>
+            <option value="project-based">Project based</option>
+            <option value="remote">Remote</option>
+            <option value="hybrid">Hybrid</option>
           </select>
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Description:<span class="text-[var(--danger)]">*</span></span>
-          <textarea rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <textarea v-model="freelanceJobForm.description" rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Qualifications and Skills:<span class="text-[var(--danger)]">*</span></span>
-          <textarea rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <textarea v-model="freelanceJobForm.qualifications" rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Min fee:N</span>
-          <input class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <input v-model="freelanceJobForm.minFee" type="number" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Max fee:N</span>
-          <input class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <input v-model="freelanceJobForm.maxFee" type="number" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Company Name :<span class="text-[var(--danger)]">*</span></span>
-          <input class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <input v-model="freelanceJobForm.companyName" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Application end date:<span class="text-[var(--danger)]">*</span></span>
           <div class="mt-1 flex h-11 items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3">
-            <input type="date" class="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+            <input v-model="freelanceJobForm.applicationEndDate" type="date" class="min-w-0 flex-1 bg-transparent text-sm outline-none" />
             <Calendar class="h-4 w-4 text-[var(--text-tertiary)]" />
           </div>
         </label>
@@ -567,19 +779,20 @@ const clearPassportUpload = () => {
         <div class="space-y-4">
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Your Name</span>
-            <input placeholder="Take from user profile" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
+            <input v-model="freelancerForm.name" placeholder="Take from user profile" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
           </label>
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Title</span>
-            <input placeholder="Take from user profile" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
+            <input v-model="freelancerForm.title" placeholder="Take from user profile" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
           </label>
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Skills</span>
-            <input placeholder="Take from user profile, else, Java, Project Mgt.." class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
+            <input v-model="freelancerForm.skills" placeholder="Take from user profile, else, Java, Project Mgt.." class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
           </label>
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location</span>
-            <select class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+            <select v-model="freelancerForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+              <option value="">Select location</option>
               <option>Abuja</option>
               <option>Lagos</option>
               <option>Remote</option>
@@ -626,7 +839,7 @@ const clearPassportUpload = () => {
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">
             About - Describe your academic achievements, skills, experiences
           </span>
-          <textarea rows="3" class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <textarea v-model="freelancerForm.bio" rows="3" class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
 
         <label class="mt-4 flex items-start gap-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]">

@@ -19,6 +19,12 @@ export type QuestionAnswerRecord = {
   created_at?: string
   updatedAt: string
   updated_at?: string
+  reactions_count?: number | string
+  reaction_count?: number | string
+  reactionsCount?: number | string
+  likes_count?: number | string
+  likesCount?: number | string
+  score?: number | string
 }
 
 export type QuestionRecord = {

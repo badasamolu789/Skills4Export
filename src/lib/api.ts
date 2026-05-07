@@ -308,6 +308,10 @@ const getCacheKey = (method: ApiMethod, path: string) => {
 const DYNAMIC_CACHE_BYPASS_PREFIXES = [
   '/posts',
   '/questions',
+  '/jobs',
+  '/freelancers',
+  '/freelance-jobs',
+  '/communities',
   '/user/',
   '/users/',
   '/media/',
