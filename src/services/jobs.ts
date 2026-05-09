@@ -58,6 +58,10 @@ export type JobListParams = {
   workMode?: string
 }
 
+export type JobRequestOptions = {
+  suppressErrorModal?: boolean
+}
+
 export type CreateJobRequest = {
   title: string
   skills?: string[] | string
@@ -120,8 +124,11 @@ const JOB_ROUTES = {
 } as const
 
 export const jobsService = {
-  listJobs(params: JobListParams = {}, token?: string | null) {
-    return api.get<PaginatorPayload<JobRecord>>(withQuery(JOB_ROUTES.jobs, params), { token })
+  listJobs(params: JobListParams = {}, token?: string | null, options: JobRequestOptions = {}) {
+    return api.get<PaginatorPayload<JobRecord>>(withQuery(JOB_ROUTES.jobs, params), {
+      token,
+      ...options,
+    })
   },
 
   createJob(payload: CreateJobRequest, token?: string | null) {

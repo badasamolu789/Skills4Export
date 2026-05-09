@@ -68,12 +68,12 @@ const loadProfile = async () => {
   const results = await Promise.allSettled([
     usersService.getUser(userId.value, authStore.authToken),
     usersService.getUserProfile(userId.value, authStore.authToken),
-    usersService.listUserSkills(userId.value, authStore.authToken),
-    usersService.listUserPortfolios(userId.value, authStore.authToken),
-    usersService.listUserCertifications(userId.value, authStore.authToken),
-    usersService.listUserEducations(userId.value, authStore.authToken),
-    usersService.listUserExperiences(userId.value, authStore.authToken),
-    usersService.listFollowers(userId.value, authStore.authToken),
+    usersService.listUserSkills(userId.value, authStore.authToken, { suppressErrorModal: true }),
+    usersService.listUserPortfolios(userId.value, authStore.authToken, { suppressErrorModal: true }),
+    usersService.listUserCertifications(userId.value, authStore.authToken, { suppressErrorModal: true }),
+    usersService.listUserEducations(userId.value, authStore.authToken, { suppressErrorModal: true }),
+    usersService.listUserExperiences(userId.value, authStore.authToken, { suppressErrorModal: true }),
+    usersService.listFollowers(userId.value, authStore.authToken, { suppressErrorModal: true }),
   ])
 
   const [userResult, profileResult, skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult, followersResult] =

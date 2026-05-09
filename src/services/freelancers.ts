@@ -85,6 +85,10 @@ export type FreelanceJobListParams = {
   type?: string
 }
 
+export type FreelancerRequestOptions = {
+  suppressErrorModal?: boolean
+}
+
 export type CreateFreelancerRequest = {
   name: string
   title: string
@@ -149,10 +153,10 @@ const FREELANCER_ROUTES = {
 } as const
 
 export const freelancersService = {
-  listFreelancers(params: FreelancerListParams = {}, token?: string | null) {
+  listFreelancers(params: FreelancerListParams = {}, token?: string | null, options: FreelancerRequestOptions = {}) {
     return api.get<PaginatorPayload<FreelancerRecord>>(
       withQuery(FREELANCER_ROUTES.freelancers, params),
-      { token },
+      { token, ...options },
     )
   },
 
@@ -179,10 +183,10 @@ export const freelancersService = {
     )
   },
 
-  listFreelanceJobs(params: FreelanceJobListParams = {}, token?: string | null) {
+  listFreelanceJobs(params: FreelanceJobListParams = {}, token?: string | null, options: FreelancerRequestOptions = {}) {
     return api.get<PaginatorPayload<FreelanceJobRecord>>(
       withQuery(FREELANCER_ROUTES.freelanceJobs, params),
-      { token },
+      { token, ...options },
     )
   },
 

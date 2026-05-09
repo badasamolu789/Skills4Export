@@ -90,8 +90,23 @@ const loadJobs = async () => {
   jobsError.value = ''
 
   try {
-    const response = await jobsService.listJobs({ per_page: 100, status: 'live' }, authStore.authToken)
-    jobs.value = response.data
+    const response = await jobsService
+      .listJobs({ per_page: 100, status: 'live' }, authStore.authToken, { suppressErrorModal: true })
+      .catch(async (error) => {
+        if (error instanceof ApiError && error.status >= 500) {
+          return jobsService.listJobs({ per_page: 100 }, authStore.authToken, { suppressErrorModal: true })
+            .catch(async (fallbackError) => {
+              if (fallbackError instanceof ApiError && fallbackError.status >= 500) {
+                return jobsService.listJobs({}, authStore.authToken, { suppressErrorModal: true })
+              }
+
+              throw fallbackError
+            })
+        }
+
+        throw error
+      })
+    jobs.value = response.data.filter((job) => !job.status || job.status === 'live')
   } catch (error) {
     jobsError.value = error instanceof ApiError ? error.message : 'Unable to load jobs.'
     jobs.value = []

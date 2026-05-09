@@ -267,8 +267,24 @@ const loadFreelanceJobs = async () => {
   freelanceJobsError.value = ''
 
   try {
-    const response = await freelancersService.listFreelanceJobs({ per_page: 100, status: 'live' }, authStore.authToken)
-    freelanceJobs.value = response.data
+    const response = await freelancersService
+      .listFreelanceJobs({ per_page: 100, status: 'live' }, authStore.authToken, { suppressErrorModal: true })
+      .catch(async (error) => {
+        if (error instanceof ApiError && error.status >= 500) {
+          return freelancersService
+            .listFreelanceJobs({ per_page: 100 }, authStore.authToken, { suppressErrorModal: true })
+            .catch(async (fallbackError) => {
+              if (fallbackError instanceof ApiError && fallbackError.status >= 500) {
+                return freelancersService.listFreelanceJobs({}, authStore.authToken, { suppressErrorModal: true })
+              }
+
+              throw fallbackError
+            })
+        }
+
+        throw error
+      })
+    freelanceJobs.value = response.data.filter((job) => !job.status || job.status === 'live')
   } catch (error) {
     freelanceJobsError.value = error instanceof ApiError ? error.message : 'Unable to load freelance jobs.'
     freelanceJobs.value = []

@@ -196,9 +196,9 @@ const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileRespo
   ...response,
   data: response.data
     ? {
-        ...response.data,
-        profile: normalizeUserProfile(response.data.profile),
-      }
+      ...response.data,
+      profile: normalizeUserProfile(response.data.profile),
+    }
     : response.data,
 })
 
@@ -509,9 +509,10 @@ export const usersService = {
    * List all skills for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
+   * @param options - Optional API request options
    */
-  listUserSkills(userId: string, token?: string | null) {
-    return api.get<UserSkillsListResponse>(USER_ROUTES.userSkills(userId), { token })
+  listUserSkills(userId: string, token?: string | null, options?: ApiRequestOptions) {
+    return api.get<UserSkillsListResponse>(USER_ROUTES.userSkills(userId), { token, ...options })
   },
 
   /**
@@ -542,9 +543,10 @@ export const usersService = {
    * List all portfolios for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
+   * @param options - Optional API request options
    */
-  listUserPortfolios(userId: string, token?: string | null) {
-    return api.get<UserPortfoliosListResponse>(USER_ROUTES.userPortfolios(userId), { token })
+  listUserPortfolios(userId: string, token?: string | null, options?: ApiRequestOptions) {
+    return api.get<UserPortfoliosListResponse>(USER_ROUTES.userPortfolios(userId), { token, ...options })
   },
 
   /**
@@ -578,9 +580,10 @@ export const usersService = {
    * List all certifications for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
+   * @param options - Optional API request options
    */
-  listUserCertifications(userId: string, token?: string | null) {
-    return api.get<UserCertificationsListResponse>(USER_ROUTES.userCertifications(userId), { token })
+  listUserCertifications(userId: string, token?: string | null, options?: ApiRequestOptions) {
+    return api.get<UserCertificationsListResponse>(USER_ROUTES.userCertifications(userId), { token, ...options })
   },
 
   /**
@@ -611,9 +614,10 @@ export const usersService = {
    * List all education records for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
+   * @param options - Optional API request options
    */
-  listUserEducations(userId: string, token?: string | null) {
-    return api.get<UserEducationsListResponse>(USER_ROUTES.userEducations(userId), { token })
+  listUserEducations(userId: string, token?: string | null, options?: ApiRequestOptions) {
+    return api.get<UserEducationsListResponse>(USER_ROUTES.userEducations(userId), { token, ...options })
   },
 
   /**
@@ -644,9 +648,10 @@ export const usersService = {
    * List all experience records for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
+   * @param options - Optional API request options
    */
-  listUserExperiences(userId: string, token?: string | null) {
-    return api.get<UserExperiencesListResponse>(USER_ROUTES.userExperiences(userId), { token })
+  listUserExperiences(userId: string, token?: string | null, options?: ApiRequestOptions) {
+    return api.get<UserExperiencesListResponse>(USER_ROUTES.userExperiences(userId), { token, ...options })
   },
 
   /**
@@ -700,9 +705,10 @@ export const usersService = {
    * Get list of followers for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
+   * @param options - Optional API request options
    */
-  listFollowers(userId: string, token?: string | null) {
-    return api.get<FollowersListResponse>(USER_ROUTES.userFollowers(userId), { token })
+  listFollowers(userId: string, token?: string | null, options?: ApiRequestOptions) {
+    return api.get<FollowersListResponse>(USER_ROUTES.userFollowers(userId), { token, ...options })
   },
 
   // ========================================================================
