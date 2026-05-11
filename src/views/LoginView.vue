@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
+import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -70,15 +71,61 @@ const submitLogin = async () => {
   }
 }
 
-const continueWithGoogle = () => {
+const continueWithGoogle = async () => {
   if (isRedirectingToGoogle.value) {
     return
   }
 
   isRedirectingToGoogle.value = true
-  toast.loading('Redirecting to Google...', {
-    description: 'You are being redirected to continue authentication.',
+  const loadingToastId = toast.loading('Connecting to Google...', {
+    description: 'Please wait while we finish your Google authentication.',
   })
+
+  if (isGoogleClientConfigured()) {
+    try {
+      const idToken = await requestGoogleIdToken()
+      const response = await authService.googleTokenSignIn({ id_token: idToken })
+      const session = extractAuthSession(response)
+      if (!session) {
+        throw new Error('Google sign-in completed but no auth token was returned.')
+      }
+
+      authStore.setAuthenticatedSession(session.token, session.userId)
+      toast.success('Signed in with Google', {
+        id: loadingToastId,
+        description: 'Your account session is ready. Redirecting now.',
+      })
+      router.push('/feed')
+      return
+    } catch (error) {
+      const message =
+        error instanceof ApiError || error instanceof Error
+          ? error.message
+          : 'Google sign-in could not be completed.'
+
+      const shouldRedirectToBackend =
+        message.includes('Missing Google client ID') ||
+        message.includes('invalid_id_token') ||
+        message.includes('no auth token')
+
+      if (shouldRedirectToBackend) {
+        toast.error('Google sign-in failed', {
+          id: loadingToastId,
+          description: `${message} Redirecting you to the backend Google flow.`,
+        })
+        window.location.href = authService.getGoogleRedirectUrl()
+        return
+      }
+
+      toast.error('Google sign-in failed', {
+        id: loadingToastId,
+        description: message,
+      })
+      isRedirectingToGoogle.value = false
+      return
+    }
+  }
+
   window.location.href = authService.getGoogleRedirectUrl()
 }
 </script>
