@@ -34,7 +34,7 @@ const panelClasses = computed(() =>
       ].join(' ')
     : [
         'w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]',
-        'rounded-[1rem] px-4 pb-4 pt-3 sm:px-5 sm:pb-5 sm:pt-4',
+        'rounded-t-[1.15rem] px-4 pb-4 pt-3 sm:rounded-[1rem] sm:px-5 sm:pb-5 sm:pt-4',
         props.maxWidthClass,
       ].join(' '),
 )
@@ -42,7 +42,7 @@ const panelClasses = computed(() =>
 const containerClasses = computed(() =>
   props.mobileAside
     ? 'fixed inset-0 z-50 flex items-start justify-start overflow-hidden bg-[#0c121e]/50'
-    : 'fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-(--overlay-bg) px-3 py-3 sm:items-center sm:px-6 sm:py-6',
+    : 'fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-(--overlay-bg) px-0 pt-3 sm:items-center sm:px-6 sm:py-6',
 )
 
 const panelTransitionClasses = computed(() =>

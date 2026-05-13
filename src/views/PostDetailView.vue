@@ -40,6 +40,19 @@ const postError = ref('')
 const seedPost = computed(() => getFeedPostBySlug(String(route.params.slug)))
 const post = computed(() => apiPost.value || seedPost.value)
 const apiPostId = computed(() => post.value?.apiId)
+const getPublicProfileIdFromRoute = (routeTarget: string) => {
+  const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
+  return match?.[1] ?? ''
+}
+const postAuthorRoute = computed(() => {
+  if (!post.value) {
+    return ''
+  }
+
+  return post.value.type === 'question' ? post.value.authorTo : post.value.author.to
+})
+const postAuthorUserId = computed(() => post.value?.userId || getPublicProfileIdFromRoute(postAuthorRoute.value))
+const isOwnPost = computed(() => Boolean(authStore.userId && postAuthorUserId.value === authStore.userId))
 const isQuestionRoute = computed(() => route.path.startsWith('/questions/'))
 const isFollowing = ref(false)
 const isSaved = ref(false)
@@ -574,10 +587,24 @@ onBeforeUnmount(() => {
 })
 
 const toggleFollow = () => {
+  if (isOwnPost.value) {
+    toast.info('This is your post', {
+      description: 'You cannot follow your own account.',
+    })
+    return
+  }
+
   isFollowing.value = !isFollowing.value
 }
 
 const toggleScore = async () => {
+  if (isOwnPost.value) {
+    toast.info('This is your post', {
+      description: 'You cannot score your own post.',
+    })
+    return
+  }
+
   if (!apiPostId.value) {
     isScored.value = !isScored.value
     currentScore.value += isScored.value ? 1 : -1

@@ -1,5 +1,8 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
+import { ApiError } from '@/lib/api'
+import { pagesService, type CreatePageRequest, type PageRecord } from '@/services/pages'
+import { useAuthStore } from '@/stores/auth'
 import { slugify } from '@/utils/slugify'
 
 export type PageCategory = 'student' | 'business'
@@ -19,80 +22,65 @@ export type ManagedPage = {
   updatedAt: string
 }
 
-const PAGE_STORAGE_KEY = 'skills4export-pages'
+export const mapPageRecordToManagedPage = (page: PageRecord): ManagedPage => {
+  const metadata = page.metadata || {}
+  const category = metadata.theme === 'student' || metadata.pageType === 'student' ? 'student' : 'business'
 
-const seededPages: ManagedPage[] = [
-  {
-    id: 'page-el-academy',
-    slug: 'el-academy',
-    name: 'EL Academy',
-    category: 'student',
-    description:
-      'A student-focused page for sharing academic opportunities, export readiness programs, and peer learning resources.',
-    status: 'active',
-    followers: 0,
-    posts: 0,
-    leads: 0,
-    completion: 0,
-    createdAt: '2026-03-01T09:00:00.000Z',
-    updatedAt: '2026-04-12T13:30:00.000Z',
-  },
-  {
-    id: 'page-telefun',
-    slug: 'telefun',
-    name: 'Telefun',
-    category: 'business',
-    description:
-      'A business page built to showcase services, build trust, and convert profile visitors into real conversations.',
-    status: 'active',
-    followers: 0,
-    posts: 0,
-    leads: 0,
-    completion: 0,
-    createdAt: '2026-02-14T10:45:00.000Z',
-    updatedAt: '2026-04-14T08:10:00.000Z',
-  },
-]
-
-const getStoredPages = () => {
-  if (typeof window === 'undefined') {
-    return seededPages
-  }
-
-  const storedValue = window.localStorage.getItem(PAGE_STORAGE_KEY)
-
-  if (!storedValue) {
-    window.localStorage.setItem(PAGE_STORAGE_KEY, JSON.stringify(seededPages))
-    return seededPages
-  }
-
-  try {
-    const parsed = JSON.parse(storedValue) as ManagedPage[]
-
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return seededPages
-    }
-
-    return parsed
-  } catch {
-    return seededPages
+  return {
+    id: page.id,
+    slug: page.slug,
+    name: page.name,
+    category,
+    description: page.description,
+    status: page.isActive ? 'active' : 'active',
+    followers: page.followers_count ?? 0,
+    posts: page.posts_count ?? 0,
+    leads: page.category_pages_count ?? 0,
+    completion: page.avatar && page.coverImage ? 100 : 60,
+    createdAt: page.createdAt,
+    updatedAt: page.updatedAt,
   }
 }
 
 export const usePagesStore = defineStore('pages', () => {
-  const pages = ref<ManagedPage[]>(getStoredPages())
-
-  const persistPages = () => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    window.localStorage.setItem(PAGE_STORAGE_KEY, JSON.stringify(pages.value))
-  }
+  const authStore = useAuthStore()
+  const pages = ref<ManagedPage[]>([])
+  const isLoadingPages = ref(false)
+  const pagesError = ref('')
 
   const pageCount = computed(() => pages.value.length)
 
   const getPageBySlug = (slug: string) => pages.value.find((page) => page.slug === slug) ?? null
+
+  const setPagesFromApi = (records: PageRecord[]) => {
+    pages.value = records.map(mapPageRecordToManagedPage)
+  }
+
+  const addPageFromApi = (record: PageRecord) => {
+    const page = mapPageRecordToManagedPage(record)
+    pages.value = [page, ...pages.value.filter((item) => item.id !== page.id)]
+    return page
+  }
+
+  const loadPages = async () => {
+    isLoadingPages.value = true
+    pagesError.value = ''
+
+    try {
+      const response = await pagesService.listPages({ per_page: 100 }, authStore.authToken)
+      setPagesFromApi(response.data)
+    } catch (error) {
+      pagesError.value = error instanceof ApiError ? error.message : 'Unable to load pages.'
+      pages.value = []
+    } finally {
+      isLoadingPages.value = false
+    }
+  }
+
+  const createPageFromApi = async (payload: CreatePageRequest) => {
+    const response = await pagesService.createPage(payload, authStore.authToken)
+    return addPageFromApi(response.data)
+  }
 
   const createPage = (payload: {
     name: string
@@ -122,15 +110,20 @@ export const usePagesStore = defineStore('pages', () => {
     }
 
     pages.value = [page, ...pages.value]
-    persistPages()
 
     return page
   }
 
   return {
     pages,
+    isLoadingPages,
+    pagesError,
     pageCount,
     getPageBySlug,
+    setPagesFromApi,
+    addPageFromApi,
+    loadPages,
+    createPageFromApi,
     createPage,
   }
 })

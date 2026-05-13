@@ -145,6 +145,14 @@ const authorRoute = computed(() =>
 const authorName = computed(() =>
   props.post.type === 'question' ? props.post.authorName : props.post.author.name,
 )
+const authorUserId = computed(() => {
+  if (props.post.userId) {
+    return props.post.userId
+  }
+
+  return getPublicProfileIdFromRoute(authorRoute.value)
+})
+const isOwnPost = computed(() => Boolean(authStore.userId && authorUserId.value === authStore.userId))
 
 const authorProfileDetails = computed(() => {
   const publicProfileId = getPublicProfileIdFromRoute(authorRoute.value)
@@ -333,10 +341,24 @@ watch(
 )
 
 const toggleFollow = () => {
+  if (isOwnPost.value) {
+    toast.info('This is your post', {
+      description: 'You cannot follow your own account.',
+    })
+    return
+  }
+
   isFollowing.value = !isFollowing.value
 }
 
 const toggleScore = async () => {
+  if (isOwnPost.value) {
+    toast.info('This is your post', {
+      description: 'You cannot score your own post.',
+    })
+    return
+  }
+
   if (!apiPostId.value) {
     isScored.value = !isScored.value
     currentScore.value += isScored.value ? 1 : -1

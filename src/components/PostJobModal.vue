@@ -3,8 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { BriefcaseBusiness, Mail, MapPin, Wallet, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
-import { jobsService, type JobRecord } from '@/services/jobs'
+import type { JobRecord } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
+import { useJobsStore } from '@/stores/jobs'
 
 const props = defineProps<{
   open: boolean
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
+const jobsStore = useJobsStore()
 const skillInput = ref('')
 const skillTags = ref<string[]>([])
 const isSubmitting = ref(false)
@@ -24,7 +26,7 @@ let closeTimer: ReturnType<typeof setTimeout> | null = null
 const form = ref({
   title: '',
   skills: '',
-  location: 'Remote',
+  location: '',
   jobType: '',
   senderEmail: '',
   confirmEmail: '',
@@ -32,6 +34,7 @@ const form = ref({
   qualifications: '',
   workExperience: '',
   minSalary: '',
+  maxSalary: '',
   companyName: '',
   applicationEndDate: '',
 })
@@ -109,10 +112,57 @@ const removeSkillTag = (skill: string) => {
   syncSkillsField()
 }
 
+const getTrimmedValue = (value: string) => value.trim()
+
+const getApiErrorDescription = (error: unknown, fallback: string) => {
+  if (!(error instanceof ApiError)) {
+    return fallback
+  }
+
+  const payload = error.payload
+
+  if (payload?.errors) {
+    const messages = Object.values(payload.errors)
+      .flatMap((value) => (Array.isArray(value) ? value : [value]))
+      .filter(Boolean)
+
+    if (messages.length) {
+      return messages.join(' ')
+    }
+  }
+
+  if (payload?.message) {
+    return payload.message
+  }
+
+  if (typeof payload?.error === 'string') {
+    return payload.error
+  }
+
+  if (payload?.error?.message) {
+    return payload.error.message
+  }
+
+  return error.message || fallback
+}
+
 const submitForm = async () => {
   finalizeSkillInput()
 
-  if (form.value.senderEmail && form.value.confirmEmail && form.value.senderEmail !== form.value.confirmEmail) {
+  const title = getTrimmedValue(form.value.title)
+  const companyName = getTrimmedValue(form.value.companyName)
+  const description = getTrimmedValue(form.value.jobDescription)
+  const senderEmail = getTrimmedValue(form.value.senderEmail)
+  const confirmEmail = getTrimmedValue(form.value.confirmEmail)
+
+  if (!title || !companyName || !description) {
+    toast.error('Fill the required fields first.', {
+      description: 'Job title, company name, and job description are required.',
+    })
+    return
+  }
+
+  if (senderEmail && confirmEmail && senderEmail !== confirmEmail) {
     toast.error('Emails do not match.')
     return
   }
@@ -131,36 +181,34 @@ const submitForm = async () => {
   isSubmitting.value = true
 
   try {
-    const response = await jobsService.createJob(
-      {
-        title: form.value.title,
-        skills: skillTags.value,
-        location: form.value.location,
-        type: form.value.jobType,
-        workMode: form.value.jobType === 'remote' || form.value.jobType === 'hybrid' ? form.value.jobType : undefined,
-        senderEmail: form.value.senderEmail,
-        companyName: form.value.companyName,
-        description: form.value.jobDescription,
-        qualifications: form.value.qualifications,
-        tasks: form.value.qualifications,
-        workExperience: form.value.workExperience,
-        minSalary: form.value.minSalary ? Number(form.value.minSalary) : undefined,
-        salaryCurrency: 'NGN',
-        applicationEndDate: form.value.applicationEndDate,
-      },
-      authStore.authToken,
-    )
+    const job = await jobsStore.createJob({
+      title,
+      skills: form.value.skills || undefined,
+      location: getTrimmedValue(form.value.location) || undefined,
+      type: form.value.jobType || undefined,
+      workMode: form.value.jobType === 'remote' || form.value.jobType === 'hybrid' ? form.value.jobType : undefined,
+      senderEmail: senderEmail || undefined,
+      companyName,
+      description,
+      qualifications: getTrimmedValue(form.value.qualifications) || undefined,
+      tasks: getTrimmedValue(form.value.qualifications) || undefined,
+      workExperience: form.value.workExperience || undefined,
+      minSalary: form.value.minSalary ? Number(form.value.minSalary) : undefined,
+      maxSalary: form.value.maxSalary ? Number(form.value.maxSalary) : null,
+      salaryCurrency: 'NGN',
+      applicationEndDate: form.value.applicationEndDate || undefined,
+    })
 
-    emit('created', response.data)
+    emit('created', job)
     toast.success('Job posted successfully', {
-      description: `${response.data.title || form.value.title || 'Your job'} is now ready for applicants.`,
+      description: `${job.title || form.value.title || 'Your job'} is now ready for applicants.`,
     })
 
     closeTimer = setTimeout(() => {
       closeModal()
     }, 1200)
   } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to post this job.'
+    const message = getApiErrorDescription(error, 'Unable to post this job.')
     toast.error('Job failed', { description: message })
   } finally {
     isSubmitting.value = false
@@ -187,10 +235,10 @@ watch(
   <Teleport to="body">
     <div
       v-if="open"
-      class="fixed inset-0 z-[120] flex items-center justify-center bg-[#0c0c1b]/50 px-4 py-5"
+      class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/50 px-0 pt-5 sm:items-center sm:px-4 sm:py-5"
     >
       <div
-        class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
+        class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-t-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)] sm:rounded-[1rem]"
       >
         <form class="flex min-h-0 flex-1 flex-col" @submit.prevent="submitForm">
           <div class="flex items-center justify-between gap-3 border-b border-[color:var(--border-soft)] px-4 py-3 sm:px-5">
@@ -258,7 +306,7 @@ watch(
               <input
                 v-model="form.location"
                 type="text"
-                placeholder="Remote"
+                placeholder="Lagos, Nigeria"
                 :class="inputClass"
               />
             </label>
@@ -358,10 +406,15 @@ watch(
             </label>
 
             <label class="space-y-2">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Application end date:*</span>
+              <span class="inline-flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
+                <Wallet class="h-4 w-4 text-[var(--accent-strong)]" />
+                <span>Max Salary: ₦</span>
+              </span>
               <input
-                v-model="form.applicationEndDate"
-                type="date"
+                v-model="form.maxSalary"
+                type="number"
+                min="0"
+                placeholder="500000"
                 :class="inputClass"
               />
             </label>

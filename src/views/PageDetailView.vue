@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BadgeCheck,
@@ -20,6 +20,14 @@ const route = useRoute()
 const pagesStore = usePagesStore()
 
 const page = computed(() => pagesStore.getPageBySlug(String(route.params.slug)))
+
+const loadPagesForSlug = async () => {
+  if (page.value) {
+    return
+  }
+
+  await pagesStore.loadPages()
+}
 
 const categoryCopy: Record<ManagedPage['category'], { label: string; icon: unknown; summary: string }> = {
   student: {
@@ -74,6 +82,17 @@ const managementActions = computed(() => {
     },
   ]
 })
+
+onMounted(() => {
+  void loadPagesForSlug()
+})
+
+watch(
+  () => route.params.slug,
+  () => {
+    void loadPagesForSlug()
+  },
+)
 </script>
 
 <template>
@@ -229,9 +248,9 @@ const managementActions = computed(() => {
   </section>
 
   <section v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
-    <h1 class="text-xl font-semibold text-[var(--text-primary)]">Page not found</h1>
+    <h1 class="text-xl font-semibold text-[var(--text-primary)]">{{ pagesStore.isLoadingPages ? 'Loading page...' : 'Page not found' }}</h1>
     <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-      The page you opened is not available right now. You can create a fresh one instead.
+      {{ pagesStore.isLoadingPages ? 'Checking the Pages API for this page.' : pagesStore.pagesError || 'The page you opened is not available right now. You can create a fresh one instead.' }}
     </p>
     <RouterLink
       to="/pages/create"

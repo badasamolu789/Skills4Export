@@ -2,17 +2,22 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { BriefcaseBusiness, CheckCircle2, MapPin, Wallet } from 'lucide-vue-next'
+import { BriefcaseBusiness, CheckCircle2, MapPin, Send, Wallet } from 'lucide-vue-next'
+import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
-import { jobsService, type JobRecord } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
+import { useJobsStore } from '@/stores/jobs'
 
 const route = useRoute()
 const authStore = useAuthStore()
-const job = ref<JobRecord | null>(null)
-const isLoadingJob = ref(false)
-const jobError = ref('')
+const jobsStore = useJobsStore()
+const job = computed(() => jobsStore.currentJob)
 const isApplying = ref(false)
+const isApplyModalOpen = ref(false)
+const applicationForm = ref({
+  coverLetter: '',
+  resumeMediaId: '',
+})
 
 const formatMoney = (value?: number | null, currency = 'NGN') => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -58,19 +63,19 @@ const responsibilities = computed(() => {
 const requirements = computed(() => job.value?.requirements || [])
 const perks = computed(() => job.value?.perks || [])
 
-const loadJob = async (idOrSlug: string) => {
-  isLoadingJob.value = true
-  jobError.value = ''
-  job.value = null
-
-  try {
-    const response = await jobsService.getJob(idOrSlug, authStore.authToken)
-    job.value = response.data
-  } catch (error) {
-    jobError.value = error instanceof ApiError ? error.message : 'Unable to load this job.'
-  } finally {
-    isLoadingJob.value = false
+const openApplyModal = () => {
+  if (!job.value || isApplying.value) {
+    return
   }
+
+  if (!authStore.authToken) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before applying.',
+    })
+    return
+  }
+
+  isApplyModalOpen.value = true
 }
 
 const applyToJob = async () => {
@@ -88,13 +93,17 @@ const applyToJob = async () => {
   isApplying.value = true
 
   try {
-    await jobsService.applyToJob(job.value.id, { answers: [] }, authStore.authToken)
-    job.value = {
-      ...job.value,
-      hasApplied: true,
-      applicantCount: (job.value.applicantCount || 0) + 1,
-    }
+    await jobsStore.applyToCurrentJob({
+      coverLetter: applicationForm.value.coverLetter.trim() || undefined,
+      resumeMediaId: applicationForm.value.resumeMediaId.trim() || undefined,
+      answers: [],
+    })
     toast.success('Application submitted')
+    isApplyModalOpen.value = false
+    applicationForm.value = {
+      coverLetter: '',
+      resumeMediaId: '',
+    }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to submit this application.'
     toast.error('Application failed', { description: message })
@@ -106,14 +115,14 @@ const applyToJob = async () => {
 watch(
   () => route.params.slug,
   (slug) => {
-    void loadJob(String(slug))
+    void jobsStore.loadJob(String(slug))
   },
   { immediate: true },
 )
 </script>
 
 <template>
-  <section v-if="isLoadingJob" class="space-y-6">
+  <section v-if="jobsStore.isLoadingJob" class="space-y-6">
     <div class="animate-pulse space-y-3 px-1">
       <div class="h-4 w-56 rounded-full bg-[var(--surface-secondary)]" />
       <div class="h-3 w-32 rounded-full bg-[var(--surface-secondary)]" />
@@ -228,19 +237,70 @@ watch(
             type="button"
             :disabled="isApplying || job.hasApplied === true"
             class="inline-flex w-full items-center justify-center rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
-            @click="applyToJob"
+            @click="openApplyModal"
           >
             {{ job.hasApplied ? 'Applied' : isApplying ? 'Applying...' : 'Apply now' }}
           </button>
         </aside>
       </div>
     </article>
+
+    <ResponsiveOverlay
+      v-model="isApplyModalOpen"
+      label="Job application"
+      title="Apply for this job"
+      max-width-class="sm:max-w-2xl"
+    >
+      <form class="space-y-4" @submit.prevent="applyToJob">
+        <div class="rounded-[1rem] bg-[var(--surface-secondary)] p-4">
+          <p class="text-sm font-semibold text-[var(--text-primary)]">{{ job.title }}</p>
+          <p class="mt-1 text-xs text-[var(--text-secondary)]">{{ job.companyName }}</p>
+        </div>
+
+        <label class="block">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Cover letter</span>
+          <textarea
+            v-model="applicationForm.coverLetter"
+            rows="6"
+            class="mt-2 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
+            placeholder="Optional text"
+          />
+        </label>
+
+        <label class="block">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Resume media ID</span>
+          <input
+            v-model="applicationForm.resumeMediaId"
+            class="mt-2 h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
+            placeholder="media-uuid"
+          />
+        </label>
+
+        <div class="flex justify-end gap-2 border-t border-[color:var(--border-soft)] pt-4">
+          <button
+            type="button"
+            class="inline-flex h-10 items-center rounded-[0.8rem] border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            @click="isApplyModalOpen = false"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            :disabled="isApplying"
+            class="inline-flex h-10 items-center gap-2 rounded-[0.8rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+          >
+            <Send class="h-4 w-4" />
+            {{ isApplying ? 'Submitting...' : 'Submit application' }}
+          </button>
+        </div>
+      </form>
+    </ResponsiveOverlay>
   </section>
 
   <section v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
     <h1 class="text-xl font-semibold text-[var(--text-primary)]">Job not found</h1>
     <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-      {{ jobError || 'The role you opened is not available.' }}
+      {{ jobsStore.jobError || 'The role you opened is not available.' }}
     </p>
   </section>
 </template>

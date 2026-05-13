@@ -2,18 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { BriefcaseBusiness, MapPin, Search, Wallet } from 'lucide-vue-next'
 import PostJobModal from '@/components/PostJobModal.vue'
-import { ApiError } from '@/lib/api'
-import { jobsService, type JobRecord } from '@/services/jobs'
-import { useAuthStore } from '@/stores/auth'
+import type { JobRecord } from '@/services/jobs'
+import { useJobsStore } from '@/stores/jobs'
 
-const authStore = useAuthStore()
+const jobsStore = useJobsStore()
 const searchQuery = ref('')
 const isPostJobModalOpen = ref(false)
 const visibleJobCount = ref(6)
 const loadMoreTarget = ref<HTMLElement | null>(null)
-const jobs = ref<JobRecord[]>([])
-const isLoadingJobs = ref(false)
-const jobsError = ref('')
 let loadMoreObserver: IntersectionObserver | null = null
 
 const formatMoney = (value?: number | null, currency = 'NGN') => {
@@ -51,10 +47,10 @@ const filteredJobs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
   if (!query) {
-    return jobs.value
+    return jobsStore.jobs
   }
 
-  return jobs.value.filter((job) =>
+  return jobsStore.jobs.filter((job) =>
     [
       job.title,
       job.companyName,
@@ -85,42 +81,14 @@ watch(searchQuery, () => {
   visibleJobCount.value = 6
 })
 
-const loadJobs = async () => {
-  isLoadingJobs.value = true
-  jobsError.value = ''
-
-  try {
-    const response = await jobsService
-      .listJobs({ per_page: 100, status: 'live' }, authStore.authToken, { suppressErrorModal: true })
-      .catch(async (error) => {
-        if (error instanceof ApiError && error.status >= 500) {
-          return jobsService.listJobs({ per_page: 100 }, authStore.authToken, { suppressErrorModal: true })
-            .catch(async (fallbackError) => {
-              if (fallbackError instanceof ApiError && fallbackError.status >= 500) {
-                return jobsService.listJobs({}, authStore.authToken, { suppressErrorModal: true })
-              }
-
-              throw fallbackError
-            })
-        }
-
-        throw error
-      })
-    jobs.value = response.data.filter((job) => !job.status || job.status === 'live')
-  } catch (error) {
-    jobsError.value = error instanceof ApiError ? error.message : 'Unable to load jobs.'
-    jobs.value = []
-  } finally {
-    isLoadingJobs.value = false
+const addCreatedJob = (job: JobRecord) => {
+  if (!jobsStore.jobs.some((item) => item.id === job.id)) {
+    jobsStore.jobs = [job, ...jobsStore.jobs]
   }
 }
 
-const addCreatedJob = (job: JobRecord) => {
-  jobs.value = [job, ...jobs.value]
-}
-
 onMounted(() => {
-  void loadJobs()
+  void jobsStore.loadJobs()
 
   loadMoreObserver = new IntersectionObserver((entries) => {
     if (entries.some((entry) => entry.isIntersecting)) {
@@ -174,13 +142,13 @@ onBeforeUnmount(() => {
     <div class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3 px-1">
         <p class="text-sm font-medium text-[var(--text-secondary)]">
-          {{ isLoadingJobs ? 'Loading jobs...' : `${filteredJobs.length} job${filteredJobs.length === 1 ? '' : 's'} found` }}
+          {{ jobsStore.isLoadingJobs ? 'Loading jobs...' : `${filteredJobs.length} job${filteredJobs.length === 1 ? '' : 's'} found` }}
         </p>
         <p class="text-sm text-[var(--text-secondary)]">Live opportunities across your network</p>
       </div>
 
       <article
-        v-if="isLoadingJobs"
+        v-if="jobsStore.isLoadingJobs"
         v-for="item in 4"
         :key="`job-skeleton-${item}`"
         class="animate-pulse rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
@@ -199,7 +167,7 @@ onBeforeUnmount(() => {
       </article>
 
       <article
-        v-if="!isLoadingJobs"
+        v-if="!jobsStore.isLoadingJobs"
         v-for="job in visibleJobs"
         :key="job.id"
         class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
@@ -255,15 +223,24 @@ onBeforeUnmount(() => {
       </article>
 
       <article
-        v-if="!isLoadingJobs && filteredJobs.length === 0"
+        v-if="!jobsStore.isLoadingJobs && filteredJobs.length === 0"
         class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]"
       >
         <h2 class="text-xl font-semibold text-[var(--text-primary)]">
-          {{ jobsError ? 'Jobs could not be loaded.' : searchQuery ? 'No job posts match your search.' : 'No jobs posted yet.' }}
+          {{ jobsStore.jobsError ? 'Jobs could not be loaded.' : searchQuery ? 'No job posts match your search.' : 'No jobs posted yet.' }}
         </h2>
         <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
-          {{ jobsError || (searchQuery ? 'Try another keyword for role, company, location, or job type.' : 'Live opportunities will show here as soon as they are published.') }}
+          {{ jobsStore.jobsError || (searchQuery ? 'Try another keyword for role, company, location, or job type.' : 'Live opportunities will show here as soon as they are published.') }}
         </p>
+        <button
+          v-if="!jobsStore.jobsError && !searchQuery"
+          type="button"
+          class="mt-5 inline-flex items-center justify-center gap-2 rounded-[0.9rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+          @click="isPostJobModalOpen = true"
+        >
+          <BriefcaseBusiness class="h-4 w-4" />
+          Post the first job
+        </button>
       </article>
 
       <div

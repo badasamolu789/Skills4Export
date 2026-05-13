@@ -89,54 +89,36 @@ onBeforeUnmount(() => {
 const continueWithGoogle = () => {
   window.location.href = authService.getGoogleRedirectUrl()
 }
-
-const openDashboardPreview = () => {
-  authStore.setAuthenticatedSession('dev-dashboard-preview-token')
-
-  const redirect =
-    typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
-      ? route.query.redirect
-      : '/feed'
-
-  router.push(redirect)
-}
 </script>
 
 <template>
   <section
     class="min-h-screen bg-[var(--landing-bg)] text-[var(--landing-text)]"
   >
-    <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+    <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
       <main class="flex-1">
-        <div>
-          <div class="grid min-h-[calc(100vh-11rem)] gap-10 py-8 lg:grid-cols-[minmax(20rem,0.9fr)_minmax(24rem,1.1fr)] lg:gap-14 lg:py-10">
-            <div class="flex flex-col justify-center">
-              <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[38rem]">
-                <div class="flex justify-center lg:justify-start">
-                  <img src="/logo_1.svg" alt="Skills4Export logo" class="h-16 w-auto sm:h-20" />
-                </div>
+        <div class="pt-5 sm:pt-7 lg:pt-8">
+          <div class="flex justify-center">
+            <img src="/logo_1.svg" alt="Skills4Export logo" class="h-14 w-auto sm:h-16 lg:h-[4.4rem]" />
+          </div>
 
-                <div class="mt-10 flex min-h-[11rem] items-center text-center lg:mt-14 lg:min-h-[12.5rem] lg:text-left">
+          <div class="grid gap-8 py-8 sm:py-10 lg:grid-cols-[minmax(20rem,0.92fr)_minmax(24rem,1.08fr)] lg:gap-12 lg:py-12">
+            <div class="flex flex-col justify-start lg:pt-8">
+              <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[38rem]">
+                <div class="text-center">
                   <h1
-                    class="font-sans text-[2.05rem] font-normal tracking-tight text-[var(--landing-heading)] sm:text-[2.55rem] lg:text-[3.2rem] lg:leading-[1.08]"
+                    class="mx-auto max-w-232 font-sans text-[4.65rem] font[200] leading-[1.06] tracking-[0] text-[#5a5a5a] sm:text-[6.35rem] lg:text-[7.6rem] lg:leading-[1.05] xl:text-[8rem] dark:text-(--landing-heading)"
                   >
-                    Join Skills4Export Community
+                    <span class="block">Join Skills4Export</span>
+                    <span class="block">Community</span>
                   </h1>
                 </div>
 
-                <p class="mx-auto mt-6 max-w-2xl text-base leading-8 text-[var(--landing-muted)] lg:mx-0 lg:max-w-[32rem] lg:text-lg">
+                <!-- <p class="mx-auto mt-8 max-w-2xl text-base leading-8 text-[var(--landing-muted)] lg:mx-0 lg:max-w-[32rem] lg:text-lg">
                   A career and business-focused community where people showcase skills, share experience, discover communities, ask questions, and find real opportunities.
-                </p>
+                </p> -->
 
-                <div class="mt-12 max-w-[38rem] space-y-4">
-                  <button
-                    type="button"
-                    class="inline-flex h-14 w-full items-center justify-center rounded-full bg-[var(--landing-heading)] px-6 text-base font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)]"
-                    @click="openDashboardPreview"
-                  >
-                    Open Dashboard Preview
-                  </button>
-
+                <div class="mt-9 max-w-[38rem] space-y-3.5">
                   <RouterLink
                     :to="{ path: '/auth/login', query: redirectQuery }"
                     class="inline-flex h-14 w-full items-center justify-center rounded-full bg-[var(--accent)] px-6 text-base font-semibold text-white shadow-[var(--shadow-accent)] transition hover:bg-[var(--accent-strong)]"
@@ -152,7 +134,7 @@ const openDashboardPreview = () => {
                   </RouterLink>
                 </div>
 
-                <p class="mt-4 max-w-[38rem] text-center text-sm leading-7 text-[var(--landing-muted)] lg:text-left">
+                <p class="mt-3 max-w-[38rem] text-center text-sm leading-7 text-[var(--landing-muted)]">
                   By signing up, you agree to the
                   <a href="#" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Terms of Service</a>
                   and
@@ -160,7 +142,7 @@ const openDashboardPreview = () => {
                   including Cookie Use.
                 </p>
 
-                <div class="mt-10 max-w-[38rem] flex items-center gap-4">
+                <div class="mt-8 max-w-[38rem] flex items-center gap-4">
                   <span class="h-px flex-1 bg-[var(--landing-rule)]" />
                   <span class="text-sm font-medium uppercase tracking-[0.24em] text-[var(--landing-muted)]">Or</span>
                   <span class="h-px flex-1 bg-[var(--landing-rule)]" />
@@ -168,7 +150,7 @@ const openDashboardPreview = () => {
 
                 <button
                   type="button"
-                  class="mt-8 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent)] transition hover:bg-[var(--surface-muted)]"
+                  class="mt-6 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent)] transition hover:bg-[var(--surface-muted)]"
                   @click="continueWithGoogle"
                 >
                   <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -182,29 +164,29 @@ const openDashboardPreview = () => {
               </div>
             </div>
 
-            <div class="flex flex-col justify-center lg:pl-4">
-              <div class="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-[44rem]">
-                <p class="max-w-[40rem] text-sm leading-7 text-[var(--landing-text)] sm:text-base">
-                  Skills4Export is a career and business focused community where users can showcase skills, share experiences, exchange ideas, ask and answer career-related questions, score and comment on others, join contests, subscribe to services, and apply for jobs, internships, and freelance roles.
+            <div class="flex flex-col justify-start lg:pl-4 lg:pt-7">
+              <div class="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-152">
+                <p class="max-w-[40rem] text-base leading-8 text-[var(--landing-text)] sm:text-[1.05rem]">
+                  A career and business focused Community. where users: showcase skills, share experiences, share ideas, ask and answer career related questions, score & comment others, partake in contests, subscribe to services. Apply for jobs, internships, Freelance jobs.
                 </p>
 
-                <div class="mt-8">
-                  <div class="space-y-6">
+                <div class="mt-7">
+                  <div class="space-y-5">
                     <article
                       v-for="feature in featureGroups"
                       :key="feature.title"
-                      class="grid gap-4 sm:grid-cols-[3rem_minmax(0,1fr)] sm:items-start"
+                      class="grid gap-4 sm:grid-cols-[3.25rem_minmax(0,1fr)] sm:items-start"
                     >
                       <div class="flex items-start justify-start pt-1">
-                        <div class="flex h-10 w-10 items-center justify-center rounded-lg border border-[color:color-mix(in_srgb,var(--accent)_24%,var(--surface-primary))] bg-[color:color-mix(in_srgb,var(--accent)_12%,var(--surface-primary))] text-[var(--accent-strong)]">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-lg border border-[color:color-mix(in_srgb,var(--accent)_24%,var(--surface-primary))] bg-[color:color-mix(in_srgb,var(--accent)_12%,var(--surface-primary))] text-[var(--accent-strong)]">
                           <component :is="feature.icon" class="h-4.5 w-4.5" />
                         </div>
                       </div>
                       <div class="max-w-[32rem]">
-                        <h2 class="text-lg font-medium tracking-tight text-[var(--landing-heading)] sm:text-[1.45rem]">
+                        <h2 class="text-lg font-light text-[var(--landing-heading)] sm:text-[1.7rem]">
                           {{ feature.title }}
                         </h2>
-                        <p class="mt-2 text-sm leading-6 text-[var(--landing-text)] sm:text-[0.95rem]">
+                        <p class="mt-2 text-sm leading-7 text-[var(--landing-text)] sm:text-base">
                           {{ feature.description }}
                         </p>
                       </div>
@@ -212,40 +194,15 @@ const openDashboardPreview = () => {
                   </div>
                 </div>
 
-                <div class="mt-10 w-full">
-                  <div class="min-h-[10.5rem]">
-                    <div class="relative overflow-hidden">
-                      <Quote class="absolute left-0 top-0 h-5 w-5 text-[var(--accent-soft)]" />
-                      <p class="max-w-[38rem] pl-8 pr-1 text-sm leading-7 text-[var(--landing-muted)] sm:text-[0.95rem] sm:leading-8">
+                <div class="mt-8 w-full">
+                  <div class="relative max-w-[38rem] rounded-md bg-white px-7 py-7 text-[#5a5a5a] dark:bg-[var(--surface-primary)] dark:text-[var(--landing-muted)] sm:px-9 sm:py-8">
+                    <div class="absolute -bottom-8 left-20 h-0 w-0 border-l-[1.8rem] border-r-[0.35rem] border-t-[2rem] border-l-transparent border-r-transparent border-t-white dark:border-t-[var(--surface-primary)]" />
+                    <div class="relative grid grid-cols-[3.25rem_minmax(0,1fr)] gap-3">
+                      <Quote class="mt-1 h-9 w-9 fill-[var(--accent)] text-[var(--accent)]" />
+                      <p class="text-[1.55rem] font-light leading-[1.62] tracking-[0] sm:text-[1.9rem]">
                         {{ currentQuote }}
                       </p>
                     </div>
-                  </div>
-
-                  <div class="mt-5 flex items-center justify-between gap-4">
-                    <div class="flex gap-2">
-                      <button
-                        v-for="(_, index) in quotes"
-                        :key="index"
-                        type="button"
-                        :class="[
-                          'h-2 rounded-full transition-all duration-300',
-                          index === currentQuoteIndex
-                            ? 'w-7 bg-[var(--accent)]'
-                            : 'w-2 bg-[color:var(--landing-rule)] hover:bg-[var(--accent-soft)]',
-                        ]"
-                        :aria-label="`Go to quote ${index + 1}`"
-                        @click="currentQuoteIndex = index; stopAutoScroll(); startAutoScroll()"
-                      />
-                    </div>
-
-                    <button
-                      type="button"
-                      class="inline-flex items-center rounded-full border border-[color:color-mix(in_srgb,var(--accent)_20%,var(--surface-primary))] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--accent-strong)] transition hover:bg-[var(--surface-primary)]"
-                      @click="nextQuote(); stopAutoScroll(); startAutoScroll()"
-                    >
-                      Next
-                    </button>
                   </div>
                 </div>
               </div>

@@ -106,7 +106,7 @@ const submitDetails = async () => {
       description: 'Your profile details have been saved successfully.',
     })
 
-    router.push('/auth/signup/success')
+    router.replace('/feed')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

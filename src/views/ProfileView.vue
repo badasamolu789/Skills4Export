@@ -1831,8 +1831,8 @@ const editModalTitle = computed(() => {
   </div>
 
   <!-- Delete Confirmation Modal -->
-  <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-    <div class="w-full max-w-sm overflow-hidden rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
+  <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+    <div class="w-full max-w-sm overflow-hidden rounded-t-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)] sm:rounded-[1.5rem]">
       <div class="p-6">
         <h3 class="text-lg font-semibold text-[var(--text-primary)]">Delete {{ deleteModal.label }}?</h3>
         <p class="mt-3 text-sm text-[var(--text-secondary)]">

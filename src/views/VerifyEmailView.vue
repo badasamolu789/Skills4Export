@@ -86,7 +86,7 @@ const verifyOtp = async () => {
       description: 'Your account has been verified successfully and your registration is complete.',
     })
 
-    router.push('/auth/signup/success')
+    router.replace('/feed')
   } catch (error) {
     const message =
       error instanceof ApiError ? error.message : 'We could not verify that code. Please try again.'

@@ -1,17 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { BriefcaseBusiness, Clock3, Search, Send, UserCheck } from 'lucide-vue-next'
-import { ApiError } from '@/lib/api'
-import { jobsService, type JobApplicationRecord, type JobRecord } from '@/services/jobs'
-import { useAuthStore } from '@/stores/auth'
+import { useJobsStore } from '@/stores/jobs'
 
-const authStore = useAuthStore()
+const jobsStore = useJobsStore()
 const searchQuery = ref('')
 const activeTab = ref<'posted' | 'applied'>('posted')
-const postedJobs = ref<JobRecord[]>([])
-const appliedJobs = ref<JobApplicationRecord[]>([])
-const isLoadingJobs = ref(false)
-const jobsError = ref('')
 
 const formatDate = (value?: string) => {
   if (!value) {
@@ -35,10 +29,10 @@ const filteredPostedJobs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
   if (!query) {
-    return postedJobs.value
+    return jobsStore.postedJobs
   }
 
-  return postedJobs.value.filter((job) =>
+  return jobsStore.postedJobs.filter((job) =>
     [job.title, job.companyName, job.status, job.description].some((value) =>
       String(value || '').toLowerCase().includes(query),
     ),
@@ -49,10 +43,10 @@ const filteredAppliedJobs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
 
   if (!query) {
-    return appliedJobs.value
+    return jobsStore.appliedJobs
   }
 
-  return appliedJobs.value.filter((application) =>
+  return jobsStore.appliedJobs.filter((application) =>
     [
       application.job?.title,
       application.job?.companyName,
@@ -65,29 +59,8 @@ const filteredAppliedJobs = computed(() => {
   )
 })
 
-const loadManageJobs = async () => {
-  isLoadingJobs.value = true
-  jobsError.value = ''
-
-  try {
-    const [postedResponse, appliedResponse] = await Promise.all([
-      jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken),
-      jobsService.listMyJobApplications({ per_page: 100 }, authStore.authToken),
-    ])
-
-    postedJobs.value = postedResponse.data
-    appliedJobs.value = appliedResponse.data
-  } catch (error) {
-    jobsError.value = error instanceof ApiError ? error.message : 'Unable to load your jobs.'
-    postedJobs.value = []
-    appliedJobs.value = []
-  } finally {
-    isLoadingJobs.value = false
-  }
-}
-
 onMounted(() => {
-  void loadManageJobs()
+  void jobsStore.loadManageJobs()
 })
 </script>
 
@@ -173,13 +146,13 @@ onMounted(() => {
         <span
           class="inline-flex items-center rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-sm font-medium text-[var(--text-secondary)]"
         >
-          {{ isLoadingJobs ? '...' : activeTab === 'posted' ? filteredPostedJobs.length : filteredAppliedJobs.length }}
+          {{ jobsStore.isLoadingManageJobs ? '...' : activeTab === 'posted' ? filteredPostedJobs.length : filteredAppliedJobs.length }}
         </span>
       </div>
 
       <div v-if="activeTab === 'posted'" class="mt-5 space-y-4">
         <article
-          v-if="isLoadingJobs"
+          v-if="jobsStore.isLoadingManageJobs"
           v-for="item in 2"
           :key="`posted-job-skeleton-${item}`"
           class="animate-pulse rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
@@ -194,7 +167,7 @@ onMounted(() => {
         </article>
 
         <article
-          v-if="!isLoadingJobs"
+          v-if="!jobsStore.isLoadingManageJobs"
           v-for="job in filteredPostedJobs"
           :key="job.id"
           class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
@@ -227,18 +200,18 @@ onMounted(() => {
         </article>
 
         <article
-          v-if="!isLoadingJobs && filteredPostedJobs.length === 0"
+          v-if="!jobsStore.isLoadingManageJobs && filteredPostedJobs.length === 0"
           class="rounded-[1.1rem] border border-dashed border-[color:var(--border-soft)] p-6 text-center"
         >
           <p class="text-sm text-[var(--text-secondary)]">
-            {{ jobsError || (searchQuery ? 'No posted jobs match your search.' : 'You have not posted any jobs yet.') }}
+            {{ jobsStore.manageJobsError || (searchQuery ? 'No posted jobs match your search.' : 'You have not posted any jobs yet.') }}
           </p>
         </article>
       </div>
 
       <div v-else class="mt-5 space-y-4">
         <article
-          v-if="isLoadingJobs"
+          v-if="jobsStore.isLoadingManageJobs"
           v-for="item in 2"
           :key="`applied-job-skeleton-${item}`"
           class="animate-pulse rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
@@ -255,7 +228,7 @@ onMounted(() => {
         </article>
 
         <article
-          v-if="!isLoadingJobs"
+          v-if="!jobsStore.isLoadingManageJobs"
           v-for="application in filteredAppliedJobs"
           :key="application.id"
           class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
@@ -287,11 +260,11 @@ onMounted(() => {
         </article>
 
         <article
-          v-if="!isLoadingJobs && filteredAppliedJobs.length === 0"
+          v-if="!jobsStore.isLoadingManageJobs && filteredAppliedJobs.length === 0"
           class="rounded-[1.1rem] border border-dashed border-[color:var(--border-soft)] p-6 text-center"
         >
           <p class="text-sm text-[var(--text-secondary)]">
-            {{ jobsError || (searchQuery ? 'No applications match your search.' : 'You have not applied for any jobs yet.') }}
+            {{ jobsStore.manageJobsError || (searchQuery ? 'No applications match your search.' : 'You have not applied for any jobs yet.') }}
           </p>
         </article>
       </div>

@@ -199,9 +199,17 @@ const totalTScore = computed(() =>
 const isFollowingProfile = computed(() =>
   followers.value.some((entry) => entry.followerId === authStore.userId),
 )
+const isOwnProfile = computed(() => Boolean(authStore.userId && authStore.userId === userId.value))
 
 const handleFollowToggle = async () => {
-  if (!userId.value || isTogglingFollow.value || authStore.userId === userId.value) {
+  if (!userId.value || isTogglingFollow.value) {
+    return
+  }
+
+  if (isOwnProfile.value) {
+    toast.info('This is your profile', {
+      description: 'You cannot follow your own account.',
+    })
     return
   }
 
@@ -342,7 +350,7 @@ watch(
             </div>
 
             <button
-              v-if="authStore.userId !== userId"
+              v-if="!isOwnProfile"
               type="button"
               :disabled="isTogglingFollow"
               class="inline-flex items-center justify-center gap-3 self-center rounded-[1rem] px-5 py-3 text-sm font-semibold shadow-[var(--shadow-soft)] transition sm:self-start"

@@ -14,13 +14,14 @@ import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import {
-  freelancersService,
   type FreelanceJobRecord,
   type FreelancerRecord,
 } from '@/services/freelancers'
 import { useAuthStore } from '@/stores/auth'
+import { useFreelancersStore } from '@/stores/freelancers'
 
 const authStore = useAuthStore()
+const freelancersStore = useFreelancersStore()
 const activeTab = ref<'freelancers' | 'jobs'>('freelancers')
 const skillQuery = ref('')
 const locationQuery = ref('')
@@ -35,12 +36,8 @@ const passportPreviewUrl = ref('')
 const visibleFreelancerCount = ref(2)
 const visibleJobCount = ref(1)
 const revealSentinel = ref<HTMLElement | null>(null)
-const freelancers = ref<FreelancerRecord[]>([])
-const freelanceJobs = ref<FreelanceJobRecord[]>([])
-const isLoadingFreelancers = ref(false)
-const isLoadingFreelanceJobs = ref(false)
-const freelancersError = ref('')
-const freelanceJobsError = ref('')
+const isApplyingToFreelanceJob = ref(false)
+const isFreelanceJobDetailOpen = ref(false)
 const freelancerForm = ref({
   name: '',
   title: '',
@@ -62,6 +59,12 @@ const freelanceJobForm = ref({
   currency: 'NGN',
   companyName: '',
   applicationEndDate: '',
+})
+const freelanceApplicationForm = ref({
+  proposal: '',
+  bidAmount: '',
+  currency: 'NGN',
+  attachmentMediaIds: '',
 })
 let revealObserver: IntersectionObserver | null = null
 
@@ -123,29 +126,19 @@ const formatDeadline = (value?: string | null) => {
   }).format(date)
 }
 
-const trendingQuestions = [
-  {
-    title: 'Using web3 to call precompile contract',
-    time: '2 mins ago',
-    author: 'Sudhir Kumbhare',
-  },
-  {
-    title: 'Is it true while finding Time Complexity of the algorithm [closed]',
-    time: '48 mins ago',
-    author: 'wimax',
-  },
-  {
-    title: 'image picker and store them into firebase with flutter',
-    time: '1 hour ago',
-    author: 'Antonin gavrel',
-  },
-]
+const parseAttachmentIds = (value: string) =>
+  value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const selectedFreelanceJob = computed(() => freelancersStore.currentFreelanceJob)
 
 const filteredFreelancers = computed(() => {
   const skill = skillQuery.value.trim().toLowerCase()
   const location = locationQuery.value.trim().toLowerCase()
 
-  return freelancers.value.filter((freelancer) => {
+  return freelancersStore.freelancers.filter((freelancer) => {
     const skillMatch =
       !skill ||
       freelancer.skills.some((item) => item.toLowerCase().includes(skill)) ||
@@ -165,7 +158,7 @@ const filteredJobs = computed(() => {
   const skill = skillQuery.value.trim().toLowerCase()
   const location = locationQuery.value.trim().toLowerCase()
 
-  return freelanceJobs.value.filter((job) => {
+  return freelancersStore.freelanceJobs.filter((job) => {
     const skillMatch =
       !skill ||
       job.skills.some((item) => item.toLowerCase().includes(skill)) ||
@@ -234,8 +227,8 @@ watch(hasMoreActiveItems, () => {
 })
 
 onMounted(() => {
-  void loadFreelancers()
-  void loadFreelanceJobs()
+  void freelancersStore.loadFreelancers()
+  void freelancersStore.loadFreelanceJobs()
   nextTick(setupRevealObserver)
 })
 
@@ -247,52 +240,6 @@ onBeforeUnmount(() => {
   }
 })
 
-const loadFreelancers = async () => {
-  isLoadingFreelancers.value = true
-  freelancersError.value = ''
-
-  try {
-    const response = await freelancersService.listFreelancers({ per_page: 100 }, authStore.authToken)
-    freelancers.value = response.data
-  } catch (error) {
-    freelancersError.value = error instanceof ApiError ? error.message : 'Unable to load freelancers.'
-    freelancers.value = []
-  } finally {
-    isLoadingFreelancers.value = false
-  }
-}
-
-const loadFreelanceJobs = async () => {
-  isLoadingFreelanceJobs.value = true
-  freelanceJobsError.value = ''
-
-  try {
-    const response = await freelancersService
-      .listFreelanceJobs({ per_page: 100, status: 'live' }, authStore.authToken, { suppressErrorModal: true })
-      .catch(async (error) => {
-        if (error instanceof ApiError && error.status >= 500) {
-          return freelancersService
-            .listFreelanceJobs({ per_page: 100 }, authStore.authToken, { suppressErrorModal: true })
-            .catch(async (fallbackError) => {
-              if (fallbackError instanceof ApiError && fallbackError.status >= 500) {
-                return freelancersService.listFreelanceJobs({}, authStore.authToken, { suppressErrorModal: true })
-              }
-
-              throw fallbackError
-            })
-        }
-
-        throw error
-      })
-    freelanceJobs.value = response.data.filter((job) => !job.status || job.status === 'live')
-  } catch (error) {
-    freelanceJobsError.value = error instanceof ApiError ? error.message : 'Unable to load freelance jobs.'
-    freelanceJobs.value = []
-  } finally {
-    isLoadingFreelanceJobs.value = false
-  }
-}
-
 const submitFreelancerRegistration = async () => {
   if (!freelancerTermsAgreed.value) {
     toast.error('Accept the terms before submitting.')
@@ -300,20 +247,16 @@ const submitFreelancerRegistration = async () => {
   }
 
   try {
-    const response = await freelancersService.createFreelancer(
-      {
-        name: freelancerForm.value.name,
-        title: freelancerForm.value.title,
-        skills: splitList(freelancerForm.value.skills),
-        location: freelancerForm.value.location,
-        bio: freelancerForm.value.bio,
-        availability: freelancerForm.value.availability,
-        remoteOnly: freelancerForm.value.remoteOnly,
-        agreedToTerms: freelancerTermsAgreed.value,
-      },
-      authStore.authToken,
-    )
-    freelancers.value = [response.data, ...freelancers.value]
+    await freelancersStore.createFreelancer({
+      name: freelancerForm.value.name,
+      title: freelancerForm.value.title,
+      skills: splitList(freelancerForm.value.skills),
+      location: freelancerForm.value.location,
+      bio: freelancerForm.value.bio,
+      availability: freelancerForm.value.availability,
+      remoteOnly: freelancerForm.value.remoteOnly,
+      agreedToTerms: freelancerTermsAgreed.value,
+    })
     toast.success('Freelancer profile submitted', {
       description: 'Your freelancer profile is ready for review.',
     })
@@ -331,24 +274,20 @@ const submitFreelanceJob = async () => {
   }
 
   try {
-    const response = await freelancersService.createFreelanceJob(
-      {
-        title: freelanceJobForm.value.title,
-        skills: splitList(freelanceJobForm.value.skills),
-        location: freelanceJobForm.value.location,
-        type: freelanceJobForm.value.type,
-        description: freelanceJobForm.value.description,
-        qualifications: freelanceJobForm.value.qualifications,
-        minFee: freelanceJobForm.value.minFee ? Number(freelanceJobForm.value.minFee) : undefined,
-        maxFee: freelanceJobForm.value.maxFee ? Number(freelanceJobForm.value.maxFee) : undefined,
-        currency: freelanceJobForm.value.currency,
-        companyName: freelanceJobForm.value.companyName,
-        applicationEndDate: freelanceJobForm.value.applicationEndDate,
-        agreedToTerms: agreedToTerms.value,
-      },
-      authStore.authToken,
-    )
-    freelanceJobs.value = [response.data, ...freelanceJobs.value]
+    await freelancersStore.createFreelanceJob({
+      title: freelanceJobForm.value.title,
+      skills: splitList(freelanceJobForm.value.skills),
+      location: freelanceJobForm.value.location,
+      type: freelanceJobForm.value.type,
+      description: freelanceJobForm.value.description,
+      qualifications: freelanceJobForm.value.qualifications,
+      minFee: freelanceJobForm.value.minFee ? Number(freelanceJobForm.value.minFee) : undefined,
+      maxFee: freelanceJobForm.value.maxFee ? Number(freelanceJobForm.value.maxFee) : undefined,
+      currency: freelanceJobForm.value.currency,
+      companyName: freelanceJobForm.value.companyName,
+      applicationEndDate: freelanceJobForm.value.applicationEndDate,
+      agreedToTerms: agreedToTerms.value,
+    })
     toast.success('Freelance job posted', {
       description: 'Your freelance job is now ready for applicants.',
     })
@@ -356,6 +295,51 @@ const submitFreelanceJob = async () => {
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to post freelance job.'
     toast.error('Freelance job failed', { description: message })
+  }
+}
+
+const openFreelanceJobDetail = async (job: FreelanceJobRecord) => {
+  freelancersStore.currentFreelanceJob = job
+  isFreelanceJobDetailOpen.value = true
+  freelanceApplicationForm.value = {
+    proposal: '',
+    bidAmount: '',
+    currency: job.currency || 'NGN',
+    attachmentMediaIds: '',
+  }
+
+  await freelancersStore.loadFreelanceJob(job.slug || job.id)
+}
+
+const applyToFreelanceJob = async () => {
+  if (!selectedFreelanceJob.value || isApplyingToFreelanceJob.value) {
+    return
+  }
+
+  if (!authStore.authToken) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before applying.',
+    })
+    return
+  }
+
+  isApplyingToFreelanceJob.value = true
+
+  try {
+    await freelancersStore.applyToCurrentFreelanceJob({
+      proposal: freelanceApplicationForm.value.proposal.trim() || undefined,
+      bidAmount: freelanceApplicationForm.value.bidAmount
+        ? Number(freelanceApplicationForm.value.bidAmount)
+        : undefined,
+      currency: freelanceApplicationForm.value.currency || undefined,
+      attachmentMediaIds: parseAttachmentIds(freelanceApplicationForm.value.attachmentMediaIds),
+    })
+    toast.success('Freelance application submitted')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to submit this application.'
+    toast.error('Application failed', { description: message })
+  } finally {
+    isApplyingToFreelanceJob.value = false
   }
 }
 
@@ -501,7 +485,7 @@ const clearPassportUpload = () => {
       <div class="space-y-3">
         <template v-if="activeTab === 'freelancers'">
           <article
-            v-if="isLoadingFreelancers"
+            v-if="freelancersStore.isLoadingFreelancers"
             v-for="item in 3"
             :key="`freelancer-skeleton-${item}`"
             class="animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-soft)]"
@@ -524,7 +508,7 @@ const clearPassportUpload = () => {
           </article>
 
           <RouterLink
-            v-if="!isLoadingFreelancers"
+            v-if="!freelancersStore.isLoadingFreelancers"
             v-for="freelancer in visibleFreelancers"
             :key="freelancer.id"
             :to="getFreelancerPath(freelancer)"
@@ -587,19 +571,27 @@ const clearPassportUpload = () => {
           </button>
 
           <article
-            v-if="!isLoadingFreelancers && visibleFreelancers.length === 0"
+            v-if="!freelancersStore.isLoadingFreelancers && visibleFreelancers.length === 0"
             class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center shadow-[var(--shadow-soft)]"
           >
             <h2 class="text-base font-semibold text-[var(--text-primary)]">No freelancers found.</h2>
             <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              {{ freelancersError || 'Freelancers will appear here once profiles are available for this filter.' }}
+              {{ freelancersStore.freelancersError || 'Freelancers will appear here once profiles are available for this filter.' }}
             </p>
+            <button
+              v-if="!freelancersStore.freelancersError"
+              type="button"
+              class="mt-4 inline-flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+              @click="isRegisterModalOpen = true"
+            >
+              Register as a freelancer
+            </button>
           </article>
         </template>
 
         <template v-else>
           <div
-            v-if="isLoadingFreelanceJobs"
+            v-if="freelancersStore.isLoadingFreelanceJobs"
             class="divide-y divide-[color:var(--border-soft)] rounded-[1rem] bg-[var(--surface-primary)] px-4 py-2 shadow-[var(--shadow-soft)]"
           >
             <article
@@ -638,7 +630,13 @@ const clearPassportUpload = () => {
             >
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="min-w-0">
-                  <h2 class="text-[1.05rem] font-semibold leading-6 text-[var(--text-primary)]">{{ job.title }}</h2>
+                  <button
+                    type="button"
+                    class="text-left text-[1.05rem] font-semibold leading-6 text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+                    @click="openFreelanceJobDetail(job)"
+                  >
+                    {{ job.title }}
+                  </button>
                   <p class="mt-2 line-clamp-2 text-[0.9rem] leading-7 text-[var(--text-secondary)]">{{ job.description }}</p>
                 </div>
                 <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-[0.78rem] font-semibold text-[var(--accent-strong)]">
@@ -665,6 +663,15 @@ const clearPassportUpload = () => {
                 </p>
                 <p class="font-medium text-[var(--text-primary)]">{{ formatDeadline(job.applicationEndDate) }}</p>
               </div>
+              <div class="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  class="inline-flex h-9 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-[0.82rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+                  @click="openFreelanceJobDetail(job)"
+                >
+                  View and apply
+                </button>
+              </div>
             </article>
           </div>
 
@@ -679,32 +686,25 @@ const clearPassportUpload = () => {
           </button>
 
           <article
-            v-if="!isLoadingFreelanceJobs && visibleJobs.length === 0"
+            v-if="!freelancersStore.isLoadingFreelanceJobs && visibleJobs.length === 0"
             class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center shadow-[var(--shadow-soft)]"
           >
             <h2 class="text-base font-semibold text-[var(--text-primary)]">No freelance jobs found.</h2>
             <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              {{ freelanceJobsError || 'Freelance jobs will appear here once clients publish matching work.' }}
+              {{ freelancersStore.freelanceJobsError || 'Freelance jobs will appear here once clients publish matching work.' }}
             </p>
+            <button
+              v-if="!freelancersStore.freelanceJobsError"
+              type="button"
+              class="mt-4 inline-flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+              @click="isPostJobModalOpen = true"
+            >
+              Post a freelance job
+            </button>
           </article>
         </template>
       </div>
 
-      <aside class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)] lg:hidden">
-        <h2 class="text-base font-semibold text-[var(--text-primary)]">Trending Questions</h2>
-        <div class="mt-3 divide-y divide-[color:var(--border-soft)]">
-          <article
-            v-for="question in trendingQuestions"
-            :key="question.title"
-            class="py-3 first:pt-0 last:pb-0"
-          >
-            <p class="text-[0.86rem] font-semibold leading-6 text-[var(--text-primary)]">{{ question.title }}</p>
-            <p class="mt-1 text-[0.74rem] text-[var(--text-secondary)]">
-              {{ question.time }} . by <span class="text-[var(--accent-strong)]">{{ question.author }}</span>
-            </p>
-          </article>
-        </div>
-      </aside>
     </div>
   </section>
 
@@ -876,5 +876,119 @@ const clearPassportUpload = () => {
         </button>
       </div>
     </form>
+  </ResponsiveOverlay>
+
+  <ResponsiveOverlay
+    v-model="isFreelanceJobDetailOpen"
+    label="Freelance job"
+    title="Freelance job details"
+    max-width-class="sm:max-w-4xl"
+  >
+    <div v-if="selectedFreelanceJob" class="space-y-5">
+      <div class="rounded-[1rem] bg-[var(--surface-secondary)] p-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              {{ selectedFreelanceJob.companyName }}
+            </p>
+            <h2 class="mt-2 text-xl font-semibold text-[var(--text-primary)]">{{ selectedFreelanceJob.title }}</h2>
+          </div>
+          <span class="inline-flex w-fit rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">
+            {{ selectedFreelanceJob.verified ? 'Verified' : selectedFreelanceJob.status }}
+          </span>
+        </div>
+
+        <div class="mt-4 grid gap-2 sm:grid-cols-3">
+          <span class="rounded-[0.75rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+            {{ selectedFreelanceJob.location || 'Location not listed' }}
+          </span>
+          <span class="rounded-[0.75rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+            {{ selectedFreelanceJob.type }}
+          </span>
+          <span class="rounded-[0.75rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-secondary)]">
+            {{ formatFee(selectedFreelanceJob) }}
+          </span>
+        </div>
+      </div>
+
+      <div v-if="freelancersStore.isLoadingFreelanceJobDetail" class="rounded-[1rem] border border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
+        Loading details...
+      </div>
+      <div v-else-if="freelancersStore.freelanceJobDetailError" class="rounded-[1rem] border border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
+        {{ freelancersStore.freelanceJobDetailError }}
+      </div>
+
+      <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.8fr)]">
+        <section class="space-y-4">
+          <div>
+            <h3 class="text-base font-semibold text-[var(--text-primary)]">Description</h3>
+            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+              {{ selectedFreelanceJob.description || 'No description has been added yet.' }}
+            </p>
+          </div>
+          <div>
+            <h3 class="text-base font-semibold text-[var(--text-primary)]">Qualifications</h3>
+            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+              {{ selectedFreelanceJob.qualifications || 'No qualifications have been added yet.' }}
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="skill in selectedFreelanceJob.skills"
+              :key="skill"
+              class="rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]"
+            >
+              {{ skill }}
+            </span>
+          </div>
+        </section>
+
+        <form class="space-y-4 rounded-[1rem] border border-[color:var(--border-soft)] p-4" @submit.prevent="applyToFreelanceJob">
+          <h3 class="text-base font-semibold text-[var(--text-primary)]">Apply</h3>
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Proposal</span>
+            <textarea
+              v-model="freelanceApplicationForm.proposal"
+              rows="5"
+              class="mt-2 w-full rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]"
+              placeholder="I can deliver this in 3 weeks."
+            />
+          </label>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <label>
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Bid amount</span>
+              <input
+                v-model="freelanceApplicationForm.bidAmount"
+                type="number"
+                class="mt-2 h-10 w-full rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]"
+                placeholder="300000"
+              />
+            </label>
+            <label>
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Currency</span>
+              <input
+                v-model="freelanceApplicationForm.currency"
+                class="mt-2 h-10 w-full rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]"
+              />
+            </label>
+          </div>
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Attachment media IDs</span>
+            <input
+              v-model="freelanceApplicationForm.attachmentMediaIds"
+              class="mt-2 h-10 w-full rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]"
+              placeholder="media-uuid, another-media-uuid"
+            />
+          </label>
+          <button
+            type="submit"
+            :disabled="isApplyingToFreelanceJob || selectedFreelanceJob.hasApplied === true"
+            class="inline-flex h-10 w-full items-center justify-center rounded-[0.8rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+          >
+            {{ selectedFreelanceJob.hasApplied ? 'Applied' : isApplyingToFreelanceJob ? 'Submitting...' : 'Submit application' }}
+          </button>
+        </form>
+      </div>
+    </div>
   </ResponsiveOverlay>
 </template>

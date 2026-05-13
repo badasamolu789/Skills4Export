@@ -403,14 +403,12 @@ const handleNavigation = () => {
                 <span class="text-[0.88rem] font-medium text-[var(--text-primary)]">{{ page.name }}</span>
               </RouterLink>
             </div>
-            <RouterLink
+            <p
               v-else
-              to="/pages/create"
-              class="block rounded-lg bg-[var(--surface-secondary)] px-3 py-2 text-[0.78rem] font-medium leading-5 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-              @click="handleNavigation"
+              class="rounded-lg border border-dashed border-[color:var(--border-soft)] px-3 py-4 text-[0.78rem] font-medium leading-5 text-[var(--text-tertiary)]"
             >
-              Create your first page
-            </RouterLink>
+              No pages yet.
+            </p>
           </section>
         </div>
 

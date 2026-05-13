@@ -28,7 +28,6 @@ const LoginHistoryView = () => import('@/views/LoginHistoryView.vue')
 const QuestionAnswerView = () => import('@/views/QuestionAnswerView.vue')
 const ReferralsView = () => import('@/views/ReferralsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
-const SignUpSuccessView = () => import('@/views/SignUpSuccessView.vue')
 const SignUpView = () => import('@/views/SignUpView.vue')
 const VerifyEmailView = () => import('@/views/VerifyEmailView.vue')
 
@@ -295,10 +294,7 @@ const router = createRouter({
     {
       path: '/auth/signup/success',
       name: 'signup-success',
-      component: SignUpSuccessView,
-      meta: {
-        layout: 'auth',
-      },
+      redirect: '/feed',
     },
     {
       path: '/auth/forgot-password',
@@ -339,6 +335,10 @@ const getStoredAuthToken = () => {
 
 router.beforeEach((to) => {
   const isAuthenticated = Boolean(getStoredAuthToken())
+
+  if (to.name === 'landing' && isAuthenticated) {
+    return '/feed'
+  }
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     return {
