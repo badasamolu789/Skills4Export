@@ -2,8 +2,11 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { MessageSquareMore, Users, Trophy, Laugh, Quote } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
-import { authService } from '@/services/auth'
+import { authService, extractAuthSession } from '@/services/auth'
+import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,13 +47,14 @@ const featureGroups = [
 const footerLinks = ['Privacy Policy', 'Terms', 'About', 'Careers', 'Advertising', 'Contact', 'Cookie Policy']
 
 const currentQuoteIndex = ref(0)
+const isRedirectingToGoogle = ref(false)
 let autoScrollInterval: ReturnType<typeof setInterval> | null = null
 
 const quotes = [
-  'As the population grows, job opportunities should grow with it. Unemployment should not be a default outcome.',
-  'Communities work best when people can learn, contribute, and turn visibility into meaningful opportunities.',
-  'A stronger network gives talent a better chance to be seen, trusted, and hired across industries.',
-  'When skills are shared in the right spaces, collaboration and opportunity tend to follow naturally.',
+  'As the population grows, so should job opportunities to match the demand created by the growth in population. Unemployment should be a choice.',
+  'Unemployment is an anomaly. Human Capital development and job switch is required to correct the in-balance of underemployment and job loss.',
+  // 'A stronger network gives talent a better chance to be seen, trusted, and hired across industries.',
+  // 'When skills are shared in the right spaces, collaboration and opportunity tend to follow naturally.',
 ]
 
 const currentQuote = computed(() => quotes[currentQuoteIndex.value])
@@ -86,8 +90,46 @@ onBeforeUnmount(() => {
   stopAutoScroll()
 })
 
-const continueWithGoogle = () => {
-  window.location.href = authService.getGoogleRedirectUrl()
+const continueWithGoogle = async () => {
+  if (isRedirectingToGoogle.value) {
+    return
+  }
+
+  isRedirectingToGoogle.value = true
+  const loadingToastId = toast.loading('Connecting to Google...', {
+    description: 'Please wait while we finish your Google authentication.',
+  })
+
+  try {
+    if (!isGoogleClientConfigured()) {
+      throw new Error('Missing Google client ID. Add VITE_GOOGLE_CLIENT_ID to your environment.')
+    }
+
+    const idToken = await requestGoogleIdToken()
+    const response = await authService.googleTokenSignIn({ id_token: idToken })
+    const session = extractAuthSession(response)
+    if (!session) {
+      throw new Error('Google sign-in completed but no auth token was returned.')
+    }
+
+    authStore.setAuthenticatedSession(session.token, session.userId)
+    toast.success('Signed in with Google', {
+      id: loadingToastId,
+      description: 'Your account session is ready. Redirecting now.',
+    })
+    await router.push('/feed')
+  } catch (error) {
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'Google sign-in could not be completed.'
+
+    toast.error('Google sign-in failed', {
+      id: loadingToastId,
+      description: message,
+    })
+    isRedirectingToGoogle.value = false
+  }
 }
 </script>
 
@@ -106,9 +148,7 @@ const continueWithGoogle = () => {
             <div class="flex flex-col justify-start lg:pt-8">
               <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[38rem]">
                 <div class="text-center">
-                  <h1
-                    class="mx-auto max-w-232 font-sans text-[4.65rem] font[200] leading-[1.06] tracking-[0] text-[#5a5a5a] sm:text-[6.35rem] lg:text-[7.6rem] lg:leading-[1.05] xl:text-[8rem] dark:text-(--landing-heading)"
-                  >
+                  <h1 class="landing-hero-title mx-auto max-w-[40rem] text-[#5a5a5a] dark:text-[var(--landing-heading)]">
                     <span class="block">Join Skills4Export</span>
                     <span class="block">Community</span>
                   </h1>
@@ -150,6 +190,7 @@ const continueWithGoogle = () => {
 
                 <button
                   type="button"
+                  :disabled="isRedirectingToGoogle"
                   class="mt-6 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent)] transition hover:bg-[var(--surface-muted)]"
                   @click="continueWithGoogle"
                 >
@@ -159,14 +200,14 @@ const continueWithGoogle = () => {
                     <path fill="#FBBC04" d="M6.43 13.91A5.98 5.98 0 0 1 6.12 12c0-.66.11-1.3.31-1.91V7.51H3.08A9.98 9.98 0 0 0 2 12c0 1.61.39 3.13 1.08 4.49l3.35-2.58Z" />
                     <path fill="#EA4335" d="M12 5.98c1.47 0 2.78.5 3.81 1.48l2.86-2.86C16.95 2.99 14.69 2 12 2A9.98 9.98 0 0 0 3.08 7.51l3.35 2.58C7.21 7.73 9.41 5.98 12 5.98Z" />
                   </svg>
-                  Signup with Google
+                  {{ isRedirectingToGoogle ? 'Connecting to Google...' : 'Signup with Google' }}
                 </button>
               </div>
             </div>
 
             <div class="flex flex-col justify-start lg:pl-4 lg:pt-7">
               <div class="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-152">
-                <p class="max-w-[40rem] text-base leading-8 text-[var(--landing-text)] sm:text-[1.05rem]">
+                <p class="landing-intro-text max-w-[40rem] text-[var(--landing-text)]">
                   A career and business focused Community. where users: showcase skills, share experiences, share ideas, ask and answer career related questions, score & comment others, partake in contests, subscribe to services. Apply for jobs, internships, Freelance jobs.
                 </p>
 
@@ -183,10 +224,10 @@ const continueWithGoogle = () => {
                         </div>
                       </div>
                       <div class="max-w-[32rem]">
-                        <h2 class="text-lg font-light text-[var(--landing-heading)] sm:text-[1.7rem]">
+                        <h2 class="landing-feature-title text-[var(--landing-heading)]">
                           {{ feature.title }}
                         </h2>
-                        <p class="mt-2 text-sm leading-7 text-[var(--landing-text)] sm:text-base">
+                        <p class="landing-feature-text mt-2 text-[var(--landing-text)]">
                           {{ feature.description }}
                         </p>
                       </div>
@@ -199,7 +240,7 @@ const continueWithGoogle = () => {
                     <div class="absolute -bottom-8 left-20 h-0 w-0 border-l-[1.8rem] border-r-[0.35rem] border-t-[2rem] border-l-transparent border-r-transparent border-t-white dark:border-t-[var(--surface-primary)]" />
                     <div class="relative grid grid-cols-[3.25rem_minmax(0,1fr)] gap-3">
                       <Quote class="mt-1 h-9 w-9 fill-[var(--accent)] text-[var(--accent)]" />
-                      <p class="text-[1.55rem] font-light leading-[1.62] tracking-[0] sm:text-[1.9rem]">
+                      <p class="landing-quote-text">
                         {{ currentQuote }}
                       </p>
                     </div>

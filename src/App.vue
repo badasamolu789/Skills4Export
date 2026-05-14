@@ -265,7 +265,7 @@ const handleMenuAction = async (action: 'logout') => {
       :user-menu="userMenu"
     />
 
-    <main :class="[mainClasses, showWorkspaceShell ? 'lg:overflow-hidden' : '']">
+    <main :class="[mainClasses, showHeader ? 'app-main' : 'public-main', showWorkspaceShell ? 'lg:overflow-hidden' : '']">
       <div
         v-if="showHeader"
         :class="workspaceShellClasses"

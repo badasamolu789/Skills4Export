@@ -81,52 +81,36 @@ const continueWithGoogle = async () => {
     description: 'Please wait while we finish your Google authentication.',
   })
 
-  if (isGoogleClientConfigured()) {
-    try {
-      const idToken = await requestGoogleIdToken()
-      const response = await authService.googleTokenSignIn({ id_token: idToken })
-      const session = extractAuthSession(response)
-      if (!session) {
-        throw new Error('Google sign-in completed but no auth token was returned.')
-      }
-
-      authStore.setAuthenticatedSession(session.token, session.userId)
-      toast.success('Signed in with Google', {
-        id: loadingToastId,
-        description: 'Your account session is ready. Redirecting now.',
-      })
-      router.push('/feed')
-      return
-    } catch (error) {
-      const message =
-        error instanceof ApiError || error instanceof Error
-          ? error.message
-          : 'Google sign-in could not be completed.'
-
-      const shouldRedirectToBackend =
-        message.includes('Missing Google client ID') ||
-        message.includes('invalid_id_token') ||
-        message.includes('no auth token')
-
-      if (shouldRedirectToBackend) {
-        toast.error('Google sign-in failed', {
-          id: loadingToastId,
-          description: `${message} Redirecting you to the backend Google flow.`,
-        })
-        window.location.href = authService.getGoogleRedirectUrl()
-        return
-      }
-
-      toast.error('Google sign-in failed', {
-        id: loadingToastId,
-        description: message,
-      })
-      isRedirectingToGoogle.value = false
-      return
+  try {
+    if (!isGoogleClientConfigured()) {
+      throw new Error('Missing Google client ID. Add VITE_GOOGLE_CLIENT_ID to your environment.')
     }
-  }
 
-  window.location.href = authService.getGoogleRedirectUrl()
+    const idToken = await requestGoogleIdToken()
+    const response = await authService.googleTokenSignIn({ id_token: idToken })
+    const session = extractAuthSession(response)
+    if (!session) {
+      throw new Error('Google sign-in completed but no auth token was returned.')
+    }
+
+    authStore.setAuthenticatedSession(session.token, session.userId)
+    toast.success('Signed in with Google', {
+      id: loadingToastId,
+      description: 'Your account session is ready. Redirecting now.',
+    })
+    router.push('/feed')
+  } catch (error) {
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'Google sign-in could not be completed.'
+
+    toast.error('Google sign-in failed', {
+      id: loadingToastId,
+      description: message,
+    })
+    isRedirectingToGoogle.value = false
+  }
 }
 </script>
 
