@@ -24,10 +24,14 @@ type SettingsTab =
 
 const authStore = useAuthStore()
 const activeTab = ref<SettingsTab>('privacy')
-const showPasswords = ref(false)
+const showPasswordFields = ref({
+  current: false,
+  next: false,
+  confirm: false,
+})
 const deleteAccountConfirmed = ref(false)
 const deletePageConfirmed = ref(false)
-const emailAddress = ref('ardensmith81@gmail.com')
+const emailAddress = ref('')
 const { theme, resolvedTheme, setTheme } = useTheme()
 
 const tabs: Array<{ id: SettingsTab; label: string }> = [
@@ -117,8 +121,12 @@ const saveSettings = (label: string) => {
   toast.success(`${label} saved`)
 }
 
-const toggleEmailPreference = (preference: { title: string; enabled: boolean }, enabled: boolean) => {
-  preference.enabled = enabled
+const togglePasswordField = (field: keyof typeof showPasswordFields.value) => {
+  showPasswordFields.value[field] = !showPasswordFields.value[field]
+}
+
+const toggleEmailPreference = (preference: { title: string; enabled: boolean }) => {
+  preference.enabled = !preference.enabled
 }
 
 const deleteCopy = computed(() =>
@@ -225,39 +233,64 @@ const deleteCopy = computed(() =>
         <div class="space-y-4">
           <label class="block">
             <span class="text-sm font-semibold text-[var(--text-primary)]">Current Password</span>
-            <input
-              :type="showPasswords ? 'text' : 'password'"
-              placeholder="Current password"
-              class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
-            />
+            <div class="relative mt-2">
+              <input
+                :type="showPasswordFields.current ? 'text' : 'password'"
+                placeholder="Current password"
+                class="h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 pr-12 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+              />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-tertiary)] transition hover:text-[var(--accent-strong)]"
+                :aria-label="showPasswordFields.current ? 'Hide current password' : 'Show current password'"
+                @click="togglePasswordField('current')"
+              >
+                <EyeOff v-if="showPasswordFields.current" class="h-5 w-5" />
+                <Eye v-else class="h-5 w-5" />
+              </button>
+            </div>
           </label>
           <label class="block">
             <span class="text-sm font-semibold text-[var(--text-primary)]">New Password</span>
-            <input
-              :type="showPasswords ? 'text' : 'password'"
-              placeholder="New password"
-              class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
-            />
+            <div class="relative mt-2">
+              <input
+                :type="showPasswordFields.next ? 'text' : 'password'"
+                placeholder="New password"
+                class="h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 pr-12 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+              />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-tertiary)] transition hover:text-[var(--accent-strong)]"
+                :aria-label="showPasswordFields.next ? 'Hide new password' : 'Show new password'"
+                @click="togglePasswordField('next')"
+              >
+                <EyeOff v-if="showPasswordFields.next" class="h-5 w-5" />
+                <Eye v-else class="h-5 w-5" />
+              </button>
+            </div>
           </label>
           <label class="block">
             <span class="text-sm font-semibold text-[var(--text-primary)]">New Password (again)</span>
-            <input
-              :type="showPasswords ? 'text' : 'password'"
-              placeholder="New password again"
-              class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
-            />
+            <div class="relative mt-2">
+              <input
+                :type="showPasswordFields.confirm ? 'text' : 'password'"
+                placeholder="New password again"
+                class="h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 pr-12 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+              />
+              <button
+                type="button"
+                class="absolute right-3 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-[var(--text-tertiary)] transition hover:text-[var(--accent-strong)]"
+                :aria-label="showPasswordFields.confirm ? 'Hide password confirmation' : 'Show password confirmation'"
+                @click="togglePasswordField('confirm')"
+              >
+                <EyeOff v-if="showPasswordFields.confirm" class="h-5 w-5" />
+                <Eye v-else class="h-5 w-5" />
+              </button>
+            </div>
           </label>
           <p class="text-sm leading-6 text-[var(--text-secondary)]">
             Passwords must contain at least eight characters, including at least 1 letter and 1 number.
           </p>
-          <button
-            type="button"
-            class="inline-flex h-10 w-12 items-center justify-center rounded-[0.7rem] border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            @click="showPasswords = !showPasswords"
-          >
-            <EyeOff v-if="showPasswords" class="h-5 w-5" />
-            <Eye v-else class="h-5 w-5" />
-          </button>
           <div>
             <button
               type="button"
@@ -284,6 +317,7 @@ const deleteCopy = computed(() =>
               <input
                 v-model="emailAddress"
                 type="email"
+                placeholder="you@example.com"
                 class="h-12 min-w-0 flex-1 bg-transparent px-4 text-sm text-[var(--text-primary)] outline-none"
               />
               <button
@@ -303,29 +337,20 @@ const deleteCopy = computed(() =>
           >
             <h3 class="text-base font-semibold text-[var(--text-primary)]">{{ preference.title }}</h3>
             <p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{{ preference.description }}</p>
-            <div
-              class="mt-5 inline-flex overflow-hidden rounded-[0.55rem] border border-[color:var(--accent)] text-sm font-semibold"
+            <button
+              type="button"
               role="switch"
               :aria-checked="preference.enabled"
               :aria-label="`${preference.title} email preference`"
+              class="mt-5 inline-flex h-8 w-14 items-center rounded-full p-1 transition"
+              :class="preference.enabled ? 'bg-[var(--accent)]' : 'bg-[var(--surface-muted)]'"
+              @click="toggleEmailPreference(preference)"
             >
-              <button
-                type="button"
-                class="px-4 py-2 transition"
-                :class="preference.enabled ? 'bg-[var(--surface-primary)] text-[var(--accent-strong)]' : 'bg-[var(--accent)] text-white'"
-                @click="toggleEmailPreference(preference, false)"
-              >
-                Off
-              </button>
-              <button
-                type="button"
-                class="px-4 py-2 transition"
-                :class="preference.enabled ? 'bg-[var(--accent)] text-white' : 'bg-[var(--surface-primary)] text-[var(--accent-strong)]'"
-                @click="toggleEmailPreference(preference, true)"
-              >
-                On
-              </button>
-            </div>
+              <span
+                class="h-6 w-6 rounded-full bg-white transition"
+                :class="preference.enabled ? 'translate-x-6' : 'translate-x-0'"
+              />
+            </button>
           </article>
         </div>
       </section>

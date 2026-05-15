@@ -938,9 +938,19 @@ const editModalTitle = computed(() => {
             </div>
 
             <div class="min-w-0">
-              <h2 class="text-xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-2xl">
-                {{ profile.name }}
-              </h2>
+              <div class="flex items-center justify-center gap-2 sm:justify-start">
+                <h2 class="text-xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-2xl">
+                  {{ profile.name }}
+                </h2>
+                <button
+                  type="button"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--accent-strong)] transition hover:border-[color:var(--accent)] hover:bg-[var(--surface-secondary)]"
+                  aria-label="Edit display name"
+                  @click="openProfileDetailsModal"
+                >
+                  <Edit2 class="h-4 w-4" />
+                </button>
+              </div>
               <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-sm leading-5 text-[var(--text-secondary)] sm:justify-start">
                 <span>{{ profileSkillLabel }}</span>
                 <span>-</span>
