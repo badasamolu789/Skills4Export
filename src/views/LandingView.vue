@@ -141,7 +141,7 @@ const continueWithGoogle = async () => {
       <main class="flex-1">
         <div class="pt-5 sm:pt-7 lg:pt-8">
           <div class="flex justify-center">
-            <img src="/logo_1.svg" alt="Skills4Export logo" class="h-14 w-auto sm:h-16 lg:h-[4.4rem]" />
+            <img src="/nlogo.png" alt="Skills4Export logo" class="h-16 w-auto sm:h-20 lg:h-24" />
           </div>
 
           <div class="grid gap-8 py-8 sm:py-10 lg:grid-cols-[minmax(20rem,0.92fr)_minmax(24rem,1.08fr)] lg:gap-12 lg:py-12">
@@ -149,7 +149,7 @@ const continueWithGoogle = async () => {
               <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[38rem]">
                 <div class="text-center">
                   <h1 class="landing-hero-title mx-auto max-w-[40rem] text-[#5a5a5a] dark:text-[var(--landing-heading)]">
-                    <span class="block">Join Skills4Export</span>
+                    <span class="landing-title-line block">Join Skills4Export</span>
                     <span class="block">Community</span>
                   </h1>
                 </div>

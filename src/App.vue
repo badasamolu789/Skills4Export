@@ -72,6 +72,7 @@ const showNetworkOverlay = computed(
 const currentLayout = computed(() => String(route.meta.layout ?? 'public'))
 const showHeader = computed(() => currentLayout.value === 'app')
 const hideSidebar = computed(() => Boolean(route.meta.hideSidebar))
+const hideRightRail = computed(() => Boolean(route.meta.hideRightRail))
 const forceRightRail = computed(() => Boolean(route.meta.showRightRail))
 const usesWorkspaceShell = computed(
   () =>
@@ -84,6 +85,7 @@ const showSidebar = computed(() => usesWorkspaceShell.value && !hideSidebar.valu
 const showWorkspaceShell = computed(() => showSidebar.value || forceRightRail.value)
 const showRightRail = computed(
   () =>
+    !hideRightRail.value &&
     (showWorkspaceShell.value || usesWorkspaceShell.value) &&
     route.path !== '/communities' &&
     route.path !== '/settings',

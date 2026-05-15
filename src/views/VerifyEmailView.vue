@@ -12,6 +12,7 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const otp = ref('')
+const otpDigits = ref(['', '', '', '', '', ''])
 const isSubmitting = ref(false)
 const isResendingOtp = ref(false)
 
@@ -100,6 +101,71 @@ const verifyOtp = async () => {
   }
 }
 
+const syncOtpFromDigits = () => {
+  otp.value = otpDigits.value.join('')
+}
+
+const focusOtpInput = (index: number) => {
+  const input = document.querySelector<HTMLInputElement>(`[data-otp-index="${index}"]`)
+  input?.focus()
+  input?.select()
+}
+
+const handleOtpInput = (index: number, event: Event) => {
+  const target = event.target as HTMLInputElement
+  const value = target.value.replace(/\D/g, '')
+
+  if (!value) {
+    otpDigits.value[index] = ''
+    syncOtpFromDigits()
+    return
+  }
+
+  if (value.length > 1) {
+    value
+      .slice(0, 6 - index)
+      .split('')
+      .forEach((digit, offset) => {
+        otpDigits.value[index + offset] = digit
+      })
+    syncOtpFromDigits()
+    focusOtpInput(Math.min(index + value.length, 5))
+    return
+  }
+
+  otpDigits.value[index] = value
+  syncOtpFromDigits()
+
+  if (index < 5) {
+    focusOtpInput(index + 1)
+  }
+}
+
+const handleOtpKeydown = (index: number, event: KeyboardEvent) => {
+  if (event.key !== 'Backspace' || otpDigits.value[index]) {
+    return
+  }
+
+  if (index > 0) {
+    focusOtpInput(index - 1)
+  }
+}
+
+const handleOtpPaste = (index: number, event: ClipboardEvent) => {
+  const value = event.clipboardData?.getData('text').replace(/\D/g, '').slice(0, 6 - index) ?? ''
+
+  if (!value) {
+    return
+  }
+
+  event.preventDefault()
+  value.split('').forEach((digit, offset) => {
+    otpDigits.value[index + offset] = digit
+  })
+  syncOtpFromDigits()
+  focusOtpInput(Math.min(index + value.length, 5))
+}
+
 const resendOtp = async () => {
   if (isResendingOtp.value) {
     return
@@ -114,6 +180,7 @@ const resendOtp = async () => {
     const response = await authService.resendRegistrationOtp(authStore.signUpDraft.email)
     authStore.signUpDraft.verificationSentAt = new Date().toISOString()
     otp.value = ''
+    otpDigits.value = ['', '', '', '', '', '']
 
     toast.success('OTP sent again', {
       id: loadingToastId,
@@ -165,21 +232,28 @@ const resendOtp = async () => {
       <form class="mt-6 space-y-4" @submit.prevent="verifyOtp">
         <div class="space-y-2">
           <label class="text-sm font-semibold text-[var(--text-primary)] sm:text-base">One-time password</label>
-          <input
-            v-model="otp"
-            type="text"
-            inputmode="numeric"
-            autocomplete="one-time-code"
-            maxlength="6"
-            required
-            placeholder="123456"
-            class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-center text-lg tracking-[0.45em] outline-none transition focus:border-[var(--accent)] sm:h-13"
-          />
+          <div class="grid grid-cols-6 gap-2 sm:gap-3">
+            <input
+              v-for="(_, index) in otpDigits"
+              :key="index"
+              :data-otp-index="index"
+              :value="otpDigits[index]"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="1"
+              required
+              class="h-12 min-w-0 rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-center text-lg font-semibold text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] sm:h-13"
+              @input="handleOtpInput(index, $event)"
+              @keydown="handleOtpKeydown(index, $event)"
+              @paste="handleOtpPaste(index, $event)"
+            />
+          </div>
         </div>
 
         <div class="rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm text-[var(--text-secondary)]">
           <p class="font-semibold text-[var(--text-primary)]">Check your inbox</p>
-          <p class="mt-1">Your backend now handles OTP delivery. Use the code sent to your email to complete verification.</p>
+          <p class="mt-1">You will receive a one-time password at your email address. Please enter it above to complete verification.</p>
         </div>
 
         <button

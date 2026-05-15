@@ -11,7 +11,7 @@ defineProps<{
   <section
     :class="
       centered
-        ? 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-2xl items-center justify-center'
+        ? 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-lg items-center justify-center'
         : 'mx-auto grid w-full max-w-7xl gap-6 lg:grid-cols-[0.92fr_1.08fr] lg:gap-8'
     "
   >
@@ -39,7 +39,7 @@ defineProps<{
     <div
       :class="
         centered
-          ? 'w-full rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-5 shadow-[var(--shadow-elevated)] sm:px-5 sm:py-6'
+          ? 'w-full rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-5 shadow-[var(--shadow-elevated)] sm:px-4 sm:py-6'
           : 'rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-8'
       "
     >

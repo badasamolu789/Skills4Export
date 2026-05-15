@@ -130,11 +130,11 @@ const continueWithGoogle = async () => {
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <img src="/logo_1.svg" alt="Skills4Export logo" class="h-10 w-auto sm:h-12" />
+        <img src="/logo_1.svg" alt="Skills4Export logo" class="h-14 w-auto sm:h-16" />
       </div>
 
-      <p class="mb-4 text-center text-xl tracking-[0.08em] text-[var(--accent-strong)] sm:text-2xl">
-        Sign In
+      <p class="mb-4 text-center text-xl font-semibold tracking-[0.04em] text-[var(--accent-strong)] sm:text-2xl">
+        Log In
       </p>
 
       <form class="space-y-3.5 sm:space-y-4" @submit.prevent="submitLogin">

@@ -78,6 +78,8 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        hideRightRail: true,
       },
     },
     {

@@ -127,10 +127,10 @@ const signUpWithGoogle = async () => {
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <img src="/logo_1.svg" alt="Skills4Export logo" class="h-10 w-auto sm:h-12" />
+        <img src="/logo_1.svg" alt="Skills4Export logo" class="h-14 w-auto sm:h-16" />
       </div>
 
-      <p class="mb-4 text-center text-xl tracking-[0.08em] text-(--accent-strong) sm:text-2xl">
+      <p class="mb-4 text-center text-xl font-semibold tracking-[0.04em] text-(--accent-strong) sm:text-2xl">
         Sign Up
       </p>
 

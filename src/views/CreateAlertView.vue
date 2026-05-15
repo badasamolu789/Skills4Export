@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Bell, BriefcaseBusiness, GraduationCap, Trophy, X } from 'lucide-vue-next'
+import { BriefcaseBusiness, GraduationCap, Trophy, X } from 'lucide-vue-next'
 
 const contestAlert = ref(true)
 const sponsorshipAlert = ref(false)
-const scholarshipType = ref('')
+const scholarshipTypes = ref<string[]>([])
 const jobAlert = ref(true)
 const jobSearchInput = ref('')
 const jobSearchTags = ref<string[]>([])
@@ -81,7 +81,7 @@ const removeJobSearchTag = (tag: string) => {
 </script>
 
 <template>
-  <section class="space-y-5">
+  <section class="mx-auto max-w-3xl space-y-5">
     <div class="space-y-3 px-1">
       <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
         <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
@@ -94,34 +94,13 @@ const removeJobSearchTag = (tag: string) => {
         <h1 class="text-[1.55rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.85rem] lg:text-[2rem]">
           Create alerts
         </h1>
-        <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-          Choose the alert types you want and tailor sponsorship and job updates around your goals.
-        </p>
-      </div>
-    </div>
-
-    <div
-      class="overflow-hidden rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
-    >
-      <div class="bg-[linear-gradient(135deg,#e8e9ff,#fef3c7)] p-5 sm:p-6">
-        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-          Alerts Setup
-        </p>
-        <p class="mt-3 max-w-2xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-          Toggle contest and sponsorship alerts, then add the jobs or skills you want tracked for tailored updates.
-        </p>
       </div>
     </div>
 
     <section
       class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
     >
-      <div class="flex items-center gap-2">
-        <Bell class="h-5 w-5 text-[var(--accent-strong)]" />
-        <h2 class="text-[1.05rem] font-semibold text-[var(--text-primary)] sm:text-[1.12rem]">Alert Preferences</h2>
-      </div>
-
-      <div class="mt-5 space-y-5">
+      <div class="space-y-5">
         <label
           class="flex items-center justify-between gap-4 rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-4"
         >
@@ -130,9 +109,6 @@ const removeJobSearchTag = (tag: string) => {
               <Trophy class="h-4 w-4 text-[var(--accent-strong)]" />
               <p class="font-semibold text-[var(--text-primary)]">Contest Alert</p>
             </div>
-            <p class="mt-1 text-sm text-[var(--text-secondary)]">
-              Turn contest notifications on or off with one simple toggle.
-            </p>
           </div>
           <input v-model="contestAlert" type="checkbox" class="h-5 w-5 accent-[var(--accent)]" />
         </label>
@@ -144,36 +120,25 @@ const removeJobSearchTag = (tag: string) => {
                 <GraduationCap class="h-4 w-4 text-[var(--accent-strong)]" />
                 <p class="font-semibold text-[var(--text-primary)]">Sponsorship Alert</p>
               </div>
-              <p class="mt-1 text-sm text-[var(--text-secondary)]">
-                Enable sponsorship updates and choose the scholarship types you want to follow.
-              </p>
             </div>
             <input v-model="sponsorshipAlert" type="checkbox" class="mt-1 h-5 w-5 accent-[var(--accent)]" />
           </div>
 
-          <div v-if="sponsorshipAlert" class="mt-4 space-y-3">
-            <div>
-              <p class="text-sm font-semibold text-[var(--text-primary)]">Scholarship Type:</p>
-              <p class="mt-1 text-sm text-[var(--text-secondary)]">
-                Select the sponsorship category you want alerts for.
-              </p>
-            </div>
-
+          <div v-if="sponsorshipAlert" class="mt-4">
             <div class="grid gap-3 sm:grid-cols-2">
               <label
                 v-for="option in scholarshipOptions"
                 :key="option"
                 class="flex cursor-pointer items-center gap-3 rounded-[1rem] border px-4 py-3 transition"
                 :class="
-                  scholarshipType === option
+                  scholarshipTypes.includes(option)
                     ? 'border-[color:var(--accent-soft)] bg-white'
                     : 'border-[color:var(--border-soft)] bg-[var(--surface-primary)]'
                 "
               >
                 <input
-                  v-model="scholarshipType"
-                  type="radio"
-                  name="scholarshipType"
+                  v-model="scholarshipTypes"
+                  type="checkbox"
                   :value="option"
                   class="h-4 w-4 accent-[var(--accent)]"
                 />
@@ -190,9 +155,6 @@ const removeJobSearchTag = (tag: string) => {
                 <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
                 <p class="font-semibold text-[var(--text-primary)]">Job Alert</p>
               </div>
-              <p class="mt-1 text-sm text-[var(--text-secondary)]">
-                Add the jobs or skills you are searching for so we can tailor alert matches.
-              </p>
             </div>
             <input v-model="jobAlert" type="checkbox" class="mt-1 h-5 w-5 accent-[var(--accent)]" />
           </div>
@@ -201,7 +163,6 @@ const removeJobSearchTag = (tag: string) => {
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p class="text-sm font-semibold text-[var(--text-primary)]">Jobs you are searching for</p>
-                <p class="mt-1 text-sm text-[var(--text-secondary)]">Add up to 10 jobs/skills.</p>
               </div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-tertiary)]">
                 {{ remainingJobSearchSlots }} slots left
@@ -237,10 +198,6 @@ const removeJobSearchTag = (tag: string) => {
                 @keydown.enter.prevent="finalizeJobSearchInput"
               />
             </div>
-
-            <p class="text-xs text-[var(--text-secondary)]">
-              Type a job title or skill and separate it with a comma to turn it into a pill.
-            </p>
           </div>
         </div>
       </div>

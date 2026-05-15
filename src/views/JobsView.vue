@@ -84,19 +84,17 @@ onMounted(() => {
       </div>
     </div>
 
-    <div
-      class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)] sm:p-5"
-    >
+    <div>
       <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div class="grid w-full grid-cols-1 gap-2 rounded-[1.2rem] bg-[var(--surface-secondary)] p-1 sm:grid-cols-2 xl:w-auto xl:min-w-[28rem]">
+        <div class="flex gap-6 border-b border-[color:var(--border-soft)]">
           <button
             type="button"
             :class="
               activeTab === 'posted'
-                ? 'bg-[var(--accent)] text-white shadow-[var(--shadow-soft)]'
-                : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                ? 'border-[color:var(--accent)] text-[var(--accent-strong)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
             "
-            class="inline-flex min-w-0 items-center justify-center gap-2 rounded-[0.95rem] px-3.5 py-2.5 text-[0.92rem] font-semibold transition"
+            class="inline-flex min-w-0 items-center justify-center gap-2 border-b-2 px-0 pb-3 text-[0.95rem] font-semibold transition"
             @click="activeTab = 'posted'"
           >
             <BriefcaseBusiness class="h-4 w-4 shrink-0" />
@@ -106,10 +104,10 @@ onMounted(() => {
             type="button"
             :class="
               activeTab === 'applied'
-                ? 'bg-[var(--accent)] text-white shadow-[var(--shadow-soft)]'
-                : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                ? 'border-[color:var(--accent)] text-[var(--accent-strong)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
             "
-            class="inline-flex min-w-0 items-center justify-center gap-2 rounded-[0.95rem] px-3.5 py-2.5 text-[0.92rem] font-semibold transition"
+            class="inline-flex min-w-0 items-center justify-center gap-2 border-b-2 px-0 pb-3 text-[0.95rem] font-semibold transition"
             @click="activeTab = 'applied'"
           >
             <Send class="h-4 w-4 shrink-0" />
