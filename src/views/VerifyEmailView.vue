@@ -7,6 +7,7 @@ import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { useFormFieldStates } from '@/composables/useFormFieldStates'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -15,6 +16,14 @@ const otp = ref('')
 const otpDigits = ref(['', '', '', '', '', ''])
 const isSubmitting = ref(false)
 const isResendingOtp = ref(false)
+const {
+  getFieldAttrs,
+  getFieldError,
+  setFieldError,
+  setApiFieldErrors,
+  clearFieldError,
+  clearFieldErrors,
+} = useFormFieldStates<'otp' | 'otpCode' | 'verificationCode'>()
 
 const hasAccountBasics = computed(
   () =>
@@ -50,11 +59,12 @@ const verifyOtp = async () => {
   }
 
   if (otp.value.length !== 6) {
-    toast.error('Enter the 6-digit OTP first.')
+    setFieldError('otp', 'Enter the 6-digit OTP first.')
     return
   }
 
   isSubmitting.value = true
+  clearFieldErrors()
   const loadingToastId = toast.loading('Verifying your email...', {
     description: 'Please wait while we confirm your OTP.',
   })
@@ -92,6 +102,10 @@ const verifyOtp = async () => {
     const message =
       error instanceof ApiError ? error.message : 'We could not verify that code. Please try again.'
 
+    if (!setApiFieldErrors(error)) {
+      setFieldError('otp', message)
+    }
+
     toast.error('Verification failed', {
       id: loadingToastId,
       description: message,
@@ -118,6 +132,7 @@ const handleOtpInput = (index: number, event: Event) => {
   if (!value) {
     otpDigits.value[index] = ''
     syncOtpFromDigits()
+    clearFieldError('otp')
     return
   }
 
@@ -129,12 +144,14 @@ const handleOtpInput = (index: number, event: Event) => {
         otpDigits.value[index + offset] = digit
       })
     syncOtpFromDigits()
+    clearFieldError('otp')
     focusOtpInput(Math.min(index + value.length, 5))
     return
   }
 
   otpDigits.value[index] = value
   syncOtpFromDigits()
+  clearFieldError('otp')
 
   if (index < 5) {
     focusOtpInput(index + 1)
@@ -243,12 +260,16 @@ const resendOtp = async () => {
               autocomplete="one-time-code"
               maxlength="1"
               required
+              v-bind="getFieldAttrs('otp')"
               class="h-12 min-w-0 rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-center text-lg font-semibold text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] sm:h-13"
               @input="handleOtpInput(index, $event)"
               @keydown="handleOtpKeydown(index, $event)"
               @paste="handleOtpPaste(index, $event)"
             />
           </div>
+          <p v-if="getFieldError('otp')" class="input-feedback input-feedback--error">
+            {{ getFieldError('otp') }}
+          </p>
         </div>
 
         <div class="rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm text-[var(--text-secondary)]">

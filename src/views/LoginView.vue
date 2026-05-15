@@ -8,6 +8,7 @@ import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
+import { useFormFieldStates } from '@/composables/useFormFieldStates'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -15,6 +16,14 @@ const router = useRouter()
 const isSubmitting = ref(false)
 const isRedirectingToGoogle = ref(false)
 const passwordToggle = usePasswordToggle()
+const {
+  getFieldAttrs,
+  getFieldError,
+  setFieldErrors,
+  setApiFieldErrors,
+  clearFieldError,
+  clearFieldErrors,
+} = useFormFieldStates<'email' | 'password'>()
 const form = ref({
   email: '',
   password: '',
@@ -27,6 +36,7 @@ const submitLogin = async () => {
   }
 
   isSubmitting.value = true
+  clearFieldErrors()
   const loadingToastId = toast.loading('Signing you in...', {
     description: 'Please wait while we validate your credentials.',
   })
@@ -61,6 +71,13 @@ const submitLogin = async () => {
       error instanceof ApiError || error instanceof Error
         ? error.message
         : 'We could not sign you in. Please try again.'
+
+    if (!setApiFieldErrors(error)) {
+      setFieldErrors({
+        email: message,
+        password: message,
+      })
+    }
 
     toast.error('Sign in failed', {
       id: loadingToastId,
@@ -145,8 +162,13 @@ const continueWithGoogle = async () => {
           type="email"
           required
           placeholder="you@example.com"
+          v-bind="getFieldAttrs('email')"
           class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] sm:h-13 sm:text-base"
+          @input="clearFieldError('email')"
         />
+        <p v-if="getFieldError('email')" class="input-feedback input-feedback--error">
+          {{ getFieldError('email') }}
+        </p>
       </div>
 
       <div class="space-y-2">
@@ -157,7 +179,9 @@ const continueWithGoogle = async () => {
             :type="passwordToggle.getInputType()"
             required
             placeholder="Enter your password"
+            v-bind="getFieldAttrs('password')"
             class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 pr-12 text-sm outline-none transition focus:border-[var(--accent)] sm:h-13 sm:text-base"
+            @input="clearFieldError('password')"
           />
           <button
             type="button"
@@ -175,6 +199,9 @@ const continueWithGoogle = async () => {
             </svg>
           </button>
         </div>
+        <p v-if="getFieldError('password')" class="input-feedback input-feedback--error">
+          {{ getFieldError('password') }}
+        </p>
       </div>
 
       <div class="flex flex-col gap-3 text-sm text-[var(--text-secondary)] sm:flex-row sm:items-center sm:justify-between sm:text-base">

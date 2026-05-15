@@ -770,7 +770,7 @@ const clearPassportUpload = () => {
         <input v-model="agreedToTerms" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
         <span>
           <span class="text-[var(--danger)]">*</span>
-          By posting, you agreed to the <RouterLink to="/" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.
+          By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.
         </span>
       </label>
       <div class="flex justify-between gap-2 border-t border-[color:var(--border-soft)] pt-4">
@@ -861,7 +861,7 @@ const clearPassportUpload = () => {
         <label class="mt-4 flex items-start gap-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]">
           <input v-model="freelancerTermsAgreed" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
           <span>
-            By Submitting, you agree to the <RouterLink to="/" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.
+            By Submitting, you agree to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.
           </span>
         </label>
 

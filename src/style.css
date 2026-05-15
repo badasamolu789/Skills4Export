@@ -174,12 +174,94 @@ textarea {
   background: transparent !important;
   box-shadow: none;
   outline: none;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background-color 180ms ease;
 }
 
 :where(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']), select, textarea):focus {
   background: transparent !important;
   box-shadow: none;
   outline: none;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']):focus,
+select:focus,
+textarea:focus,
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color'])[data-state='active'],
+select[data-state='active'],
+textarea[data-state='active'] {
+  border-color: var(--accent) !important;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color'])[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'],
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color'])[data-state='error'],
+select[data-state='error'],
+textarea[data-state='error'],
+.input-shell[data-state='error'] {
+  border-color: var(--danger) !important;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color'])[data-state='success'],
+select[data-state='success'],
+textarea[data-state='success'],
+.input-shell[data-state='success'] {
+  border-color: var(--success) !important;
+}
+
+.input-shell {
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.input-shell:focus-within,
+.input-shell[data-state='active'] {
+  border-color: var(--accent) !important;
+}
+
+.input-feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.input-feedback--error {
+  color: var(--danger);
+}
+
+.input-feedback--success {
+  color: color-mix(in srgb, var(--success) 72%, var(--text-primary));
+}
+
+.input-feedback--error::before,
+.input-feedback--success::before {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.input-feedback--error::before {
+  content: "!";
+}
+
+.input-feedback--success::before {
+  content: "✓";
 }
 
 :where(input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']), select, textarea)::selection {

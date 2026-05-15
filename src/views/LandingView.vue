@@ -44,7 +44,15 @@ const featureGroups = [
   },
 ]
 
-const footerLinks = ['Privacy Policy', 'Terms', 'About', 'Careers', 'Advertising', 'Contact', 'Cookie Policy']
+const footerLinks = [
+  { label: 'Privacy Policy', to: '/privacy-policy' },
+  { label: 'Terms', to: '/terms-and-conditions' },
+  { label: 'About', to: '' },
+  { label: 'Careers', to: '' },
+  { label: 'Advertising', to: '' },
+  { label: 'Contact', to: '' },
+  { label: 'Cookie Policy', to: '/cookie-policy' },
+]
 
 const currentQuoteIndex = ref(0)
 const isRedirectingToGoogle = ref(false)
@@ -176,10 +184,11 @@ const continueWithGoogle = async () => {
 
                 <p class="mt-3 max-w-[38rem] text-center text-sm leading-7 text-[var(--landing-muted)]">
                   By signing up, you agree to the
-                  <a href="#" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Terms of Service</a>
+                  <RouterLink to="/terms-and-conditions" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Terms of Service</RouterLink>
                   and
-                  <a href="#" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Privacy Policy</a>,
-                  including Cookie Use.
+                  <RouterLink to="/privacy-policy" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Privacy Policy</RouterLink>,
+                  including
+                  <RouterLink to="/cookie-policy" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Cookie Use</RouterLink>.
                 </p>
 
                 <div class="mt-8 max-w-[38rem] flex items-center gap-4">
@@ -255,14 +264,14 @@ const continueWithGoogle = async () => {
       <footer class="mt-6 rounded-[1.5rem] border border-[color:var(--landing-border)] bg-[var(--surface-primary)] px-6 py-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-elevated)] sm:px-8">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex flex-wrap gap-x-5 gap-y-2">
-            <a
+            <RouterLink
               v-for="item in footerLinks"
-              :key="item"
-              href="#"
+              :key="item.label"
+              :to="item.to || '/'"
               class="transition hover:text-[var(--accent-strong)]"
             >
-              {{ item }}
-            </a>
+              {{ item.label }}
+            </RouterLink>
           </div>
           <p class="text-[var(--text-secondary)]">© 2026 Skills4Export</p>
         </div>

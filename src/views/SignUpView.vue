@@ -8,12 +8,20 @@ import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
+import { useFormFieldStates } from '@/composables/useFormFieldStates'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const isSubmitting = ref(false)
 const isRedirectingToGoogle = ref(false)
 const passwordToggle = usePasswordToggle()
+const {
+  getFieldAttrs,
+  getFieldError,
+  setApiFieldErrors,
+  clearFieldError,
+  clearFieldErrors,
+} = useFormFieldStates<'name' | 'email' | 'password' | 'acceptedTerms'>()
 const form = ref({
   name: authStore.signUpDraft.name,
   email: authStore.signUpDraft.email,
@@ -28,6 +36,7 @@ const continueSignUp = async () => {
   }
 
   isSubmitting.value = true
+  clearFieldErrors()
   const loadingToastId = toast.loading('Creating your account...', {
     description: 'Please wait while we send your verification code.',
   })
@@ -58,6 +67,8 @@ const continueSignUp = async () => {
       error instanceof ApiError || error instanceof Error
         ? error.message
         : 'We could not start your registration. Please try again.'
+
+    setApiFieldErrors(error)
 
     toast.error('Sign up failed', {
       id: loadingToastId,
@@ -142,8 +153,13 @@ const signUpWithGoogle = async () => {
             type="text"
             required
             placeholder="Your full name"
+            v-bind="getFieldAttrs('name')"
             class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
+            @input="clearFieldError('name')"
           />
+          <p v-if="getFieldError('name')" class="input-feedback input-feedback--error">
+            {{ getFieldError('name') }}
+          </p>
         </div>
 
         <div class="space-y-2">
@@ -153,8 +169,13 @@ const signUpWithGoogle = async () => {
             type="email"
             required
             placeholder="you@example.com"
+            v-bind="getFieldAttrs('email')"
             class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
+            @input="clearFieldError('email')"
           />
+          <p v-if="getFieldError('email')" class="input-feedback input-feedback--error">
+            {{ getFieldError('email') }}
+          </p>
         </div>
 
         <div class="space-y-2">
@@ -166,7 +187,9 @@ const signUpWithGoogle = async () => {
               required
               minlength="8"
               placeholder="Create a secure password"
+              v-bind="getFieldAttrs('password')"
               class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 pr-12 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
+              @input="clearFieldError('password')"
             />
             <button
               type="button"
@@ -184,6 +207,9 @@ const signUpWithGoogle = async () => {
               </svg>
             </button>
           </div>
+          <p v-if="getFieldError('password')" class="input-feedback input-feedback--error">
+            {{ getFieldError('password') }}
+          </p>
         </div>
 
         <div class="flex flex-col gap-5 pt-1 text-sm text-(--text-secondary) sm:text-base">
@@ -205,7 +231,7 @@ const signUpWithGoogle = async () => {
             />
             <span>
               I accept the
-              <RouterLink class="font-semibold text-(--accent-strong)" to="/">
+              <RouterLink class="font-semibold text-(--accent-strong)" to="/terms-and-conditions">
                 Terms & Conditions
               </RouterLink>
             </span>

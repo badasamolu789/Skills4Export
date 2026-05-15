@@ -87,11 +87,11 @@ const menuGroups: SidebarMenuGroup[] = [
 ]
 
 const footerLinks = [
-  'Advertising',
-  'Terms',
-  'Privacy',
-  'Cookie Policy',
-  'Community Rules',
+  { label: 'Advertising', to: '/' },
+  { label: 'Terms', to: '/terms-and-conditions' },
+  { label: 'Privacy', to: '/privacy-policy' },
+  { label: 'Cookie Policy', to: '/cookie-policy' },
+  { label: 'Community Rules', to: '/' },
 ]
 
 const pagesStore = usePagesStore()
@@ -416,11 +416,11 @@ const handleNavigation = () => {
           <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[0.56rem] font-medium leading-4 text-[var(--text-tertiary)]">
             <RouterLink
               v-for="item in footerLinks"
-              :key="item"
-              to="/"
+              :key="item.label"
+              :to="item.to"
               class="text-[0.56rem] leading-4 transition hover:text-[var(--accent-strong)]"
             >
-              {{ item }}
+              {{ item.label }}
             </RouterLink>
             <span class="text-[0.56rem] leading-4">|</span>
             <span class="text-[0.56rem] leading-4">© 2026 Skills4export.com</span>

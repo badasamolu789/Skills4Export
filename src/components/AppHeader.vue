@@ -1008,7 +1008,7 @@ onBeforeUnmount(() => {
         </button>
         <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
           <input v-model="agreedToPostTerms" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
-          <span>By posting, you agreed to the <span class="text-[var(--accent-strong)]">Terms of Service</span> and <span class="text-[var(--accent-strong)]">Privacy Policy</span>.</span>
+          <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
         </label>
       </div>
     </ResponsiveOverlay>

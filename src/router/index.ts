@@ -12,6 +12,7 @@ const LandingView = () => import('@/views/LandingView.vue')
 const JobDetailView = () => import('@/views/JobDetailView.vue')
 const JobFeedView = () => import('@/views/JobFeedView.vue')
 const JobsView = () => import('@/views/JobsView.vue')
+const CookiePolicyView = () => import('@/views/CookiePolicyView.vue')
 const LoginView = () => import('@/views/LoginView.vue')
 const MobileNotificationsView = () => import('@/views/MobileNotificationsView.vue')
 const MobileAccountView = () => import('@/views/MobileAccountView.vue')
@@ -23,12 +24,14 @@ const NotFoundView = () => import('@/views/NotFoundView.vue')
 const EditProfileView = () => import('@/views/EditProfileView.vue')
 const ProfileView = () => import('@/views/ProfileView.vue')
 const PublicProfileView = () => import('@/views/PublicProfileView.vue')
+const PrivacyPolicyView = () => import('@/views/PrivacyPolicyView.vue')
 const FollowersView = () => import('@/views/FollowersView.vue')
 const LoginHistoryView = () => import('@/views/LoginHistoryView.vue')
 const QuestionAnswerView = () => import('@/views/QuestionAnswerView.vue')
 const ReferralsView = () => import('@/views/ReferralsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 const SignUpView = () => import('@/views/SignUpView.vue')
+const TermsConditionsView = () => import('@/views/TermsConditionsView.vue')
 const VerifyEmailView = () => import('@/views/VerifyEmailView.vue')
 
 const router = createRouter({
@@ -38,6 +41,30 @@ const router = createRouter({
       path: '/',
       name: 'landing',
       component: LandingView,
+      meta: {
+        layout: 'public',
+      },
+    },
+    {
+      path: '/privacy-policy',
+      name: 'privacy-policy',
+      component: PrivacyPolicyView,
+      meta: {
+        layout: 'public',
+      },
+    },
+    {
+      path: '/terms-and-conditions',
+      name: 'terms-and-conditions',
+      component: TermsConditionsView,
+      meta: {
+        layout: 'public',
+      },
+    },
+    {
+      path: '/cookie-policy',
+      name: 'cookie-policy',
+      component: CookiePolicyView,
       meta: {
         layout: 'public',
       },

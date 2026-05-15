@@ -6,6 +6,7 @@ import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
 import { authService } from '@/services/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
+import { useFormFieldStates } from '@/composables/useFormFieldStates'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +34,14 @@ const resetForm = ref({
 
 const newPasswordToggle = usePasswordToggle()
 const confirmPasswordToggle = usePasswordToggle()
+const {
+  getFieldAttrs,
+  getFieldError,
+  setFieldError,
+  setApiFieldErrors,
+  clearFieldError,
+  clearFieldErrors,
+} = useFormFieldStates<'email' | 'newPassword' | 'confirmPassword' | 'password' | 'password_confirmation'>()
 
 const isRequestingOtp = ref(false)
 const isResettingPassword = ref(false)
@@ -64,6 +73,7 @@ const requestResetLink = async () => {
   }
 
   isRequestingOtp.value = true
+  clearFieldErrors()
   const loadingToastId = toast.loading('Sending reset link...', {
     description: 'Please wait while we prepare your password reset email.',
   })
@@ -78,6 +88,10 @@ const requestResetLink = async () => {
   } catch (error) {
     const message =
       error instanceof ApiError ? error.message : 'We could not send the reset link. Please try again.'
+
+    if (!setApiFieldErrors(error)) {
+      setFieldError('email', message)
+    }
 
     toast.error('Unable to send reset link', {
       id: loadingToastId,
@@ -94,6 +108,7 @@ const submitReset = async () => {
   }
 
   if (!isResetLinkFlow.value) {
+    setFieldError('email', 'Open the password reset link from your email to continue.')
     toast.error('Reset link required', {
       description: 'Open the password reset link from your email to continue.',
     })
@@ -101,6 +116,7 @@ const submitReset = async () => {
   }
 
   if (resetForm.value.newPassword !== resetForm.value.confirmPassword) {
+    setFieldError('confirmPassword', 'Please make sure both password fields are the same.')
     toast.error('Passwords do not match', {
       description: 'Please make sure both password fields are the same.',
     })
@@ -108,6 +124,7 @@ const submitReset = async () => {
   }
 
   isResettingPassword.value = true
+  clearFieldErrors()
   const loadingToastId = toast.loading('Resetting your password...', {
     description: 'Please wait while we update your password.',
   })
@@ -130,6 +147,10 @@ const submitReset = async () => {
   } catch (error) {
     const message =
       error instanceof ApiError ? error.message : 'We could not reset your password. Please try again.'
+
+    if (!setApiFieldErrors(error)) {
+      setFieldError('newPassword', message)
+    }
 
     toast.error('Reset failed', {
       id: loadingToastId,
@@ -176,8 +197,13 @@ const submitReset = async () => {
             type="email"
             required
             placeholder="you@example.com"
+            v-bind="getFieldAttrs('email')"
             class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
+            @input="clearFieldError('email')"
           />
+          <p v-if="getFieldError('email')" class="input-feedback input-feedback--error">
+            {{ getFieldError('email') }}
+          </p>
         </div>
 
         <button
@@ -216,7 +242,9 @@ const submitReset = async () => {
               required
               minlength="8"
               placeholder="Enter your new password"
+              v-bind="getFieldAttrs('newPassword')"
               class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 pr-12 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
+              @input="clearFieldError('newPassword'); clearFieldError('password')"
             />
             <button
               type="button"
@@ -234,6 +262,9 @@ const submitReset = async () => {
               </svg>
             </button>
           </div>
+          <p v-if="getFieldError('newPassword') || getFieldError('password')" class="input-feedback input-feedback--error">
+            {{ getFieldError('newPassword') || getFieldError('password') }}
+          </p>
         </div>
 
         <div class="space-y-2">
@@ -245,7 +276,9 @@ const submitReset = async () => {
               required
               minlength="8"
               placeholder="Re-enter your new password"
+              v-bind="getFieldAttrs('confirmPassword')"
               class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 pr-12 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
+              @input="clearFieldError('confirmPassword'); clearFieldError('password_confirmation')"
             />
             <button
               type="button"
@@ -263,6 +296,9 @@ const submitReset = async () => {
               </svg>
             </button>
           </div>
+          <p v-if="getFieldError('confirmPassword') || getFieldError('password_confirmation')" class="input-feedback input-feedback--error">
+            {{ getFieldError('confirmPassword') || getFieldError('password_confirmation') }}
+          </p>
         </div>
 
         <button
