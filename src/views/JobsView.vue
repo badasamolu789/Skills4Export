@@ -78,9 +78,6 @@ onMounted(() => {
         <h1 class="text-[1.55rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.85rem] lg:text-[2rem]">
           Manage your jobs
         </h1>
-        <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-          Switch between roles you have posted and jobs you have applied for, then search through either list quickly.
-        </p>
       </div>
     </div>
 
