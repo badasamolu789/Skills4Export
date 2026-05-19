@@ -3,13 +3,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, MoreHorizontal, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import AppFeedPost from '@/components/AppFeedPost.vue'
+import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { usersService } from '@/services/users'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
-import { feedPosts } from '@/data/feedPosts'
-import type { UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience } from '@/services/users'
+import { mapApiPostToFeedPost } from '@/utils/postMapper'
+import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience } from '@/services/users'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -35,15 +37,8 @@ const followers = ref<Array<{
   followingId?: string
   createdAt?: string
 }>>([])
-const recentActivities = ref<Array<{
-  id: string
-  title: string
-  description: string
-  typeLabel: string
-  time: string
-  to: string
-  createdAt: string
-}>>([])
+const profileResponseData = ref<MyProfileData | null>(null)
+const recentActivities = ref<FeedPost[]>([])
 const following = ref<Array<{
   id: string
   name: string
@@ -72,7 +67,42 @@ const optionalField = (value?: string | null) => {
   return trimmed || undefined
 }
 
+const getStringField = (record: Record<string, unknown> | null | undefined, keys: string[]) => {
+  for (const key of keys) {
+    const value = record?.[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
 const toDateInputValue = (value?: string | null) => optionalField(value)?.slice(0, 10) || ''
+
+const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown }) => {
+  const record = skill as Record<string, unknown>
+  const directValue = [record.name, record.skillName, record.skill_name, record.title, record.skill]
+    .find((value) => typeof value === 'string' && value.trim())
+
+  if (typeof directValue === 'string') {
+    return directValue.trim()
+  }
+
+  const nestedSkill = record.skill
+
+  if (nestedSkill && typeof nestedSkill === 'object') {
+    const nestedRecord = nestedSkill as Record<string, unknown>
+    const nestedValue = [nestedRecord.name, nestedRecord.skill, nestedRecord.title, nestedRecord.label]
+      .find((value) => typeof value === 'string' && value.trim())
+
+    if (typeof nestedValue === 'string') {
+      return nestedValue.trim()
+    }
+  }
+
+  return ''
+}
 
 const toggleActionMenu = (type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience', id: string | undefined) => {
   if (!id) {
@@ -335,22 +365,26 @@ const loadRecentActivity = async (userId: string) => {
 
   try {
     const [postsResult, questionsResult] = await Promise.allSettled([
-      postsService.listPosts(authStore.authToken),
-      questionsService.listQuestions(authStore.authToken),
+      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
     ])
 
     const postActivities =
       postsResult.status === 'fulfilled'
-        ? postsResult.value.data
+        ? await Promise.all(postsResult.value.data
           .filter((post: PostRecord) => post.user_id === userId)
-          .map((post) => ({
-            id: post.id,
-            title: post.title,
-            description: getPostDescription(post.content),
-            typeLabel: post.community_id ? 'Community post' : 'Post',
-            time: formatActivityTime(post.created_at),
-            to: `/posts/${post.id}`,
-            createdAt: post.created_at,
+          .map(async (post) => {
+            const [mediaResponse, commentsResponse] = await Promise.all([
+              postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
+              postsService.listComments(post.id, authStore.authToken).catch(() => null),
+            ])
+            const mappedPost = mapApiPostToFeedPost(post, mediaResponse?.data ?? [], profileResponseData.value)
+
+            return {
+              ...mappedPost,
+              description: getPostDescription(post.content),
+              comments: commentsResponse?.total ?? ('comments' in mappedPost ? mappedPost.comments : 0),
+            }
           }))
         : []
 
@@ -360,17 +394,25 @@ const loadRecentActivity = async (userId: string) => {
           .filter((question: QuestionRecord) => question.userId === userId)
           .map((question) => ({
             id: question.id,
+            apiId: question.id,
+            userId: question.userId,
+            type: 'question' as const,
+            slug: question.id,
+            communityId: question.communityId,
+            communityName: 'Question',
             title: question.title,
-            description: question.body,
-            typeLabel: 'Question',
+            body: question.body,
             time: formatActivityTime(question.createdAt),
-            to: `/questions/${question.id}`,
+            authorName: profile.value.name || 'Community member',
+            authorTo: '/profile',
+            tag: profileSkillLabel.value || 'Skills4Export member',
+            answers: 0,
             createdAt: question.createdAt,
           }))
         : []
 
     recentActivities.value = [...postActivities, ...questionActivities]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
       .slice(0, 5)
   } catch {
     recentActivities.value = []
@@ -397,7 +439,9 @@ const loadProfile = async () => {
     }
 
     const profileResponse = profileResult.value
+    profileResponseData.value = profileResponse.data ?? null
 
+    authStore.setCurrentUser(profileResponse.data?.user ?? null)
     authStore.setUserProfile(profileResponse.data?.profile ?? null)
 
     if (profileResponse.data?.user?.id) {
@@ -415,9 +459,10 @@ const loadProfile = async () => {
     // Sync profile data to store for persistence across reloads
     if (profileResponse.data?.profile) {
       const profile = profileResponse.data.profile
+      authStore.signUpDraft.name = profile.displayName || authStore.signUpDraft.name
       authStore.signUpDraft.username = profile.username || authStore.signUpDraft.username
       authStore.signUpDraft.headline = profile.bio || authStore.signUpDraft.headline
-      authStore.signUpDraft.location = profile.location || authStore.signUpDraft.location
+      authStore.signUpDraft.location = authStore.userProfile?.location || ''
       if (profile.avatar) {
         authStore.signUpDraft.avatar = profile.avatar
       }
@@ -475,9 +520,9 @@ const loadProfile = async () => {
 
     skills.value = sourceSkills.map((skill) => ({
       id: skill.id || '',
-      name: skill.skill || skill.name || '',
+      name: getSkillDisplayName(skill),
       level: skill.level,
-    }))
+    })).filter((skill) => skill.name)
 
     portfolios.value = sourcePortfolios
 
@@ -521,8 +566,13 @@ const loadFollowersData = async (userId: string) => {
 
 const openProfileDetailsModal = () => {
   profileDetailsForm.value = {
-    displayName: authStore.signUpDraft.name || authStore.userProfile?.username || '',
-    location: authStore.userProfile?.location || authStore.signUpDraft.location || '',
+    displayName:
+      authStore.userProfile?.displayName ||
+      authStore.currentUser?.name ||
+      authStore.signUpDraft.name ||
+      authStore.userProfile?.username ||
+      '',
+    location: authStore.userProfile?.location || '',
     currentWorkplace: featuredExperience.value?.company || '',
     currentJobTitle: featuredExperience.value?.title || '',
   }
@@ -559,13 +609,22 @@ const upsertCurrentExperience = async () => {
     title,
     employmentType: existingExperience?.employmentType || 'full-time',
     startDate: existingExperience?.startDate || new Date().toISOString().slice(0, 10),
-    endDate: existingExperience?.endDate ?? null,
     isCurrent: existingExperience?.isCurrent === undefined ? true : Boolean(existingExperience.isCurrent),
     description: existingExperience?.description || '',
   }
 
+  const payloadWithOptionalEndDate = {
+    ...payload,
+    ...(!payload.isCurrent && existingExperience?.endDate ? { endDate: existingExperience.endDate } : {}),
+  }
+
   if (existingExperience?.id) {
-    const response = await usersService.addUserExperience(authStore.userId, payload, authStore.authToken)
+    const response = await usersService.addUserExperience(
+      authStore.userId,
+      payloadWithOptionalEndDate,
+      authStore.authToken,
+      { suppressErrorModal: true },
+    )
     await usersService.deleteUserExperience(authStore.userId, existingExperience.id, authStore.authToken)
     experiences.value = experiences.value.map((experience) =>
       experience.id === existingExperience.id ? response.data : experience,
@@ -573,7 +632,12 @@ const upsertCurrentExperience = async () => {
     return
   }
 
-  const response = await usersService.addUserExperience(authStore.userId, payload, authStore.authToken)
+  const response = await usersService.addUserExperience(
+    authStore.userId,
+    payloadWithOptionalEndDate,
+    authStore.authToken,
+    { suppressErrorModal: true },
+  )
   experiences.value = [response.data, ...experiences.value]
 }
 
@@ -585,8 +649,10 @@ const saveProfileDetails = async () => {
   isSavingProfileDetails.value = true
 
   try {
-    const payload = {
+    const displayName = profileDetailsForm.value.displayName.trim()
+    const profilePayload = {
       username: authStore.userProfile?.username || authStore.signUpDraft.username,
+      displayName,
       bio: authStore.userProfile?.bio || authStore.signUpDraft.headline,
       location: profileDetailsForm.value.location.trim(),
       website: authStore.userProfile?.website || authStore.signUpDraft.website || '',
@@ -594,15 +660,78 @@ const saveProfileDetails = async () => {
       github: authStore.userProfile?.github || authStore.signUpDraft.github || '',
     }
 
-    const profileResponse = authStore.userProfile?.id
-      ? await usersService.updateUserProfile(authStore.userId, payload, authStore.authToken)
-      : await usersService.createUserProfile(authStore.userId, payload, authStore.authToken)
+    const userResponse = displayName
+      ? await usersService.updateUser(
+          authStore.userId,
+          {
+            name: displayName,
+            displayName,
+          },
+          authStore.authToken,
+        )
+      : null
 
-    await upsertCurrentExperience()
+    let savedProfile = authStore.userProfile
 
-    authStore.signUpDraft.name = profileDetailsForm.value.displayName.trim()
+    try {
+      const profileResponse = authStore.userProfile?.id
+        ? await usersService.updateUserProfile(authStore.userId, profilePayload, authStore.authToken, { suppressErrorModal: true })
+        : await usersService.createUserProfile(authStore.userId, profilePayload, authStore.authToken, { suppressErrorModal: true })
+
+      savedProfile = profileResponse.data ?? savedProfile
+    } catch (error) {
+      const isExistingProfileConflict =
+        error instanceof ApiError &&
+        error.status === 409 &&
+        error.payload?.error &&
+        typeof error.payload.error === 'object' &&
+        error.payload.error.code === 'profile_already_exists'
+
+      if (!isExistingProfileConflict) {
+        throw error
+      }
+
+      const existingProfileResponse = await usersService.getUserProfile(
+        authStore.userId,
+        authStore.authToken,
+      )
+      savedProfile = existingProfileResponse.data ?? savedProfile
+    }
+
+    try {
+      await upsertCurrentExperience()
+    } catch {
+      const company = profileDetailsForm.value.currentWorkplace.trim()
+      const title = profileDetailsForm.value.currentJobTitle.trim()
+
+      if (company && title) {
+        experiences.value = [
+          {
+            id: `local-current-${authStore.userId}`,
+            userId: authStore.userId,
+            company,
+            title,
+            employmentType: 'full-time',
+            startDate: new Date().toISOString().slice(0, 10),
+            endDate: null,
+            isCurrent: true,
+            description: '',
+          },
+          ...experiences.value.filter((experience) => experience.id !== `local-current-${authStore.userId}`),
+        ]
+      }
+    }
+
+    authStore.signUpDraft.name = displayName
     authStore.signUpDraft.location = profileDetailsForm.value.location.trim()
-    authStore.setUserProfile(profileResponse.data ?? null)
+    if (userResponse?.data?.user) {
+      authStore.setCurrentUser(userResponse.data.user)
+    }
+    authStore.setUserProfileOverride({
+      ...(userResponse?.data?.profile ?? savedProfile ?? {}),
+      displayName,
+      location: profileDetailsForm.value.location.trim(),
+    })
 
     isProfileDetailsModalOpen.value = false
     toast.success('Profile updated.')
@@ -642,7 +771,15 @@ const replaceSectionItem = async () => {
         authStore.authToken,
       )
       await usersService.deleteUserSkill(authStore.userId, id, authStore.authToken)
-      skills.value = skills.value.map((skill) => (skill.id === id ? response.data : skill))
+      skills.value = skills.value.map((skill) =>
+        skill.id === id
+          ? {
+              id: response.data.id || id,
+              name: response.data.name || response.data.skill || editSkillForm.value.skill.trim(),
+              level: response.data.level || editSkillForm.value.level,
+            }
+          : skill,
+      )
     }
 
     if (type === 'portfolio') {
@@ -781,12 +918,17 @@ watch(
 const profile = computed(() => {
   const draft = authStore.signUpDraft
   const apiProfile = authStore.userProfile
-  const name = draft.name || apiProfile?.username || 'Samuel Bada'
-  const username = apiProfile?.username || draft.username || 'samuelbada'
-  const email = draft.email || 'samuel@example.com'
-  const phone = draft.phone || '+234 800 000 0000'
-  const location = apiProfile?.location || draft.location || 'Lagos, Nigeria'
+  const apiUser = authStore.currentUser
+  const name =
+    apiProfile?.displayName ||
+    getStringField(apiUser, ['name', 'displayName', 'fullName', 'full_name']) ||
+    draft.name
+  const username = apiProfile?.username || getStringField(apiUser, ['username']) || draft.username
+  const email = getStringField(apiUser, ['email']) || draft.email
+  const phone = getStringField(apiProfile, ['phone', 'phoneNumber', 'phone_number']) || getStringField(apiUser, ['phone', 'phoneNumber', 'phone_number']) || draft.phone
+  const location = apiProfile?.location || ''
   const bio = apiProfile?.bio || ''
+  const initialsSource = name || username || email
 
   return {
     name,
@@ -795,15 +937,15 @@ const profile = computed(() => {
     email,
     phone,
     location,
-    website: apiProfile?.website || draft.website || `skills4export.com/@${username}`,
+    website: apiProfile?.website || draft.website,
     avatar: apiProfile?.avatar || draft.avatar || '',
     banner: apiProfile?.banner || draft.banner || '',
-    initials: name
+    initials: initialsSource
       .split(' ')
       .map((part) => part[0])
       .join('')
       .slice(0, 2)
-    .toUpperCase(),
+      .toUpperCase() || 'U',
   }
 })
 
@@ -811,38 +953,18 @@ const featuredExperience = computed(() => experiences.value[0] ?? null)
 
 const featuredSkill = computed(() => skills.value[0]?.name || authStore.signUpDraft.interests[0] || '')
 
-const profileSkillLabel = computed(() => featuredExperience.value?.title || featuredSkill.value || 'Software Developer')
-const profileCompanyLabel = computed(() => featuredExperience.value?.company || 'Amaka Global')
-const profileCountryLabel = computed(() => profile.value.location || 'Nigeria')
-
-const scoreEntries = computed(() =>
-  feedPosts
-    .filter((post) =>
-      post.type === 'personal'
-        ? post.author.name === profile.value.name
-        : post.type === 'question'
-          ? post.authorName === profile.value.name
-          : post.author.name === profile.value.name,
-    )
-    .map((post) => ({
-      id: post.slug,
-      title: post.title,
-      community: post.type === 'question' ? post.communityName : 'Personal post',
-      score: 'score' in post ? post.score : 0,
-      typeLabel: post.type === 'question' ? 'Question' : 'Post',
-    })),
+const profileSkillLabel = computed(() => featuredExperience.value?.title || featuredSkill.value || '')
+const profileCompanyLabel = computed(() => featuredExperience.value?.company || '')
+const profileCountryLabel = computed(() => profile.value.location || '')
+const profileHeadlineParts = computed(() =>
+  [profileSkillLabel.value, profileCompanyLabel.value, profileCountryLabel.value].filter(Boolean),
 )
 
-const totalTScore = computed(() =>
-  scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
-)
+const scoreEntries = computed<Array<{ id: string; title: string; community: string; score: number; typeLabel: string }>>(() => [])
 
-const questionCount = computed(
-  () =>
-    feedPosts.filter(
-      (post) => post.type === 'question' && post.authorName === profile.value.name,
-    ).length,
-)
+const totalTScore = computed(() => 0)
+
+const questionCount = computed(() => 0)
 
 const summaryCards = computed(() => [
   {
@@ -897,7 +1019,8 @@ const editModalTitle = computed(() => {
 <template>
   <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
     <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
-      <div class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
+      <!-- Banner hidden for now until live banner data is ready for display. -->
+      <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
         <img
           v-if="profile.banner"
           :src="profile.banner"
@@ -922,7 +1045,7 @@ const editModalTitle = computed(() => {
 
         <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-            <div class="-mt-12 h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:-mt-14">
+            <div class="h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
               <img
                 v-if="profile.avatar"
                 :src="profile.avatar"
@@ -939,24 +1062,26 @@ const editModalTitle = computed(() => {
 
             <div class="min-w-0">
               <div class="flex items-center justify-center gap-2 sm:justify-start">
-                <h2 class="text-xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-2xl">
-                  {{ profile.name }}
+                <h2
+                  class="text-lg font-semibold tracking-tight sm:text-xl"
+                  :class="profile.name ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'"
+                >
+                  {{ profile.name || 'Add full name' }}
                 </h2>
                 <button
                   type="button"
-                  class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--accent-strong)] transition hover:border-[color:var(--accent)] hover:bg-[var(--surface-secondary)]"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--accent-strong)] transition hover:bg-[var(--surface-secondary)]"
                   aria-label="Edit display name"
                   @click="openProfileDetailsModal"
                 >
                   <Edit2 class="h-4 w-4" />
                 </button>
               </div>
-              <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-sm leading-5 text-[var(--text-secondary)] sm:justify-start">
-                <span>{{ profileSkillLabel }}</span>
-                <span>-</span>
-                <span>{{ profileCompanyLabel }}</span>
-                <span>-</span>
-                <span>{{ profileCountryLabel }}</span>
+              <div v-if="profileHeadlineParts.length" class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-sm leading-5 text-[var(--text-secondary)] sm:justify-start">
+                <template v-for="(part, index) in profileHeadlineParts" :key="part">
+                  <span v-if="index">-</span>
+                  <span>{{ part }}</span>
+                </template>
               </div>
               <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold leading-5 sm:justify-start sm:text-sm">
                 <button
@@ -1058,7 +1183,7 @@ const editModalTitle = computed(() => {
               class="inline-flex max-w-full items-center gap-3 rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 shadow-[var(--shadow-soft)]"
             >
               <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
-                {{ skill.name || 'Unnamed skill' }}
+                {{ skill.name }}
               </span>
               <span
                 class="inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em]"
@@ -1475,26 +1600,14 @@ const editModalTitle = computed(() => {
             </RouterLink>
           </div>
 
-          <div v-else class="space-y-3">
-            <RouterLink
+          <div v-else class="grid gap-4 lg:grid-cols-2">
+            <AppFeedPost
               v-for="activity in recentActivities"
-              :key="`${activity.typeLabel}-${activity.id}`"
-              :to="activity.to"
-              class="block rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 transition hover:border-[color:var(--accent-soft)] hover:bg-[var(--surface-primary)]"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-2 text-[0.75rem] text-[var(--text-tertiary)]">
-                <span class="rounded-full bg-[var(--surface-primary)] px-2.5 py-1 font-semibold uppercase tracking-[0.14em] text-[var(--accent-strong)]">
-                  {{ activity.typeLabel }}
-                </span>
-                <span>{{ activity.time }}</span>
-              </div>
-              <h3 class="mt-3 line-clamp-2 text-sm font-semibold text-[var(--text-primary)]">
-                {{ activity.title }}
-              </h3>
-              <p v-if="activity.description" class="mt-2 line-clamp-2 text-sm leading-6 text-[var(--text-secondary)]">
-                {{ activity.description }}
-              </p>
-            </RouterLink>
+              :key="activity.apiId || activity.slug"
+              :post="activity"
+              expanded
+              allow-edit
+            />
           </div>
         </section>
       </div>

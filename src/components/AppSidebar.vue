@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BriefcaseBusiness,
@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { usePagesStore } from '@/stores/pages'
+import { useAuthStore } from '@/stores/auth'
 
 type SidebarMenuGroup = {
   label: string
@@ -95,6 +96,7 @@ const footerLinks = [
 ]
 
 const pagesStore = usePagesStore()
+const authStore = useAuthStore()
 const route = useRoute()
 const latestLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'latest' } }))
 const isJobsRoute = computed(() => route.path.startsWith('/jobs'))
@@ -135,10 +137,19 @@ const yourPages = computed(() =>
       .join('')
       .slice(0, 2)
       .toUpperCase(),
-    to: `/pages/${page.slug}`,
+    to: `/pages/${page.id}`,
   })),
 )
 const hasYourPages = computed(() => yourPages.value.length > 0)
+
+const loadUserPages = () => {
+  if (!authStore.authToken) {
+    pagesStore.clearPages()
+    return
+  }
+
+  void pagesStore.loadPages()
+}
 
 const getCurrentQueryValue = (key: string) => {
   const value = route.query[key]
@@ -194,6 +205,13 @@ const handleNavigation = () => {
     closeSidebar()
   }
 }
+
+onMounted(loadUserPages)
+
+watch(
+  () => [authStore.userId, authStore.authToken] as const,
+  loadUserPages,
+)
 </script>
 
 <template>

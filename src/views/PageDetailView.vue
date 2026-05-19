@@ -19,14 +19,14 @@ import { usePagesStore } from '@/stores/pages'
 const route = useRoute()
 const pagesStore = usePagesStore()
 
-const page = computed(() => pagesStore.getPageBySlug(String(route.params.slug)))
+const page = computed(() => pagesStore.getPageByIdOrSlug(String(route.params.slug)))
 
 const loadPagesForSlug = async () => {
   if (page.value) {
     return
   }
 
-  await pagesStore.loadPages()
+  await pagesStore.loadPage(String(route.params.slug))
 }
 
 const categoryCopy: Record<ManagedPage['category'], { label: string; icon: unknown; summary: string }> = {

@@ -2,55 +2,161 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { BriefcaseBusiness, Building2, Code2, Compass, Lock, Palette, Rocket, Users } from 'lucide-vue-next'
+import AppFeedPost from '@/components/AppFeedPost.vue'
+import type { FeedPost } from '@/data/feedPosts'
+import { ClipboardList, Plus } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
 import {
   communitiesService,
   type CommunityMemberRecord,
   type CommunityRecord,
 } from '@/services/communities'
+import { postsService, type PostRecord } from '@/services/posts'
+import { questionsService, type QuestionRecord } from '@/services/questions'
+import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { getPostCommunityId, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getQuestionCommunityId, getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const community = ref<CommunityRecord | null>(null)
 const members = ref<CommunityMemberRecord[]>([])
 const isLoadingCommunity = ref(false)
+const isLoadingCommunityFeed = ref(false)
 const isJoining = ref(false)
 const communityError = ref('')
+const communityFeedError = ref('')
+const communityFeed = ref<FeedPost[]>([])
 
-const iconList = [Palette, Code2, Rocket, BriefcaseBusiness, Building2, Users]
-const isMember = computed(() => members.value.some((member) => member.userId === authStore.userId))
-const visibilityLabel = computed(() =>
-  community.value?.default_post_visibility === 'community' ? 'Community posts' : 'Open community',
-)
+const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 
-const communityIcon = computed(() => {
-  const value = `${community.value?.category?.name || ''} ${community.value?.name || ''}`.toLowerCase()
+const getMemberUserId = (member: CommunityMemberRecord) => member.userId || member.user_id || member.user?.id || ''
 
-  if (value.includes('design')) return Palette
-  if (value.includes('tech') || value.includes('code')) return Code2
-  if (value.includes('founder') || value.includes('business')) return Building2
-  if (value.includes('job') || value.includes('freelance')) return BriefcaseBusiness
-  if (value.includes('opportun')) return Rocket
+const getStoredCommunityFollows = () => {
+  if (typeof window === 'undefined') {
+    return {} as Record<string, string[]>
+  }
 
-  return iconList[0]
+  try {
+    return JSON.parse(window.localStorage.getItem(COMMUNITY_FOLLOWS_KEY) || '{}') as Record<string, string[]>
+  } catch {
+    return {}
+  }
+}
+
+const setStoredCommunityFollow = (communityId: string, isFollowing: boolean) => {
+  if (typeof window === 'undefined' || !authStore.userId) {
+    return
+  }
+
+  const follows = getStoredCommunityFollows()
+  const userFollows = new Set(follows[authStore.userId] ?? [])
+
+  if (isFollowing) {
+    userFollows.add(communityId)
+  } else {
+    userFollows.delete(communityId)
+  }
+
+  follows[authStore.userId] = [...userFollows]
+  window.localStorage.setItem(COMMUNITY_FOLLOWS_KEY, JSON.stringify(follows))
+}
+
+const hasStoredCommunityFollow = computed(() => {
+  if (!community.value?.id || !authStore.userId) {
+    return false
+  }
+
+  return getStoredCommunityFollows()[authStore.userId]?.includes(community.value.id) ?? false
 })
 
-const focusAreas = computed(() =>
-  [
-    community.value?.category?.name,
-    community.value?.default_post_visibility ? `${community.value.default_post_visibility} visibility` : '',
-    `${community.value?.posts_count || 0} posts`,
-    `${community.value?.comments_count || 0} comments`,
-  ].filter(Boolean),
+const isMember = computed(() =>
+  Boolean(authStore.userId) &&
+  (
+    members.value.some((member) => getMemberUserId(member) === authStore.userId) ||
+    hasStoredCommunityFollow.value
+  ),
 )
+const sortedCommunityFeed = computed(() =>
+  [...communityFeed.value].sort((first, second) => {
+    const firstDate = new Date(first.createdAt || first.updatedAt || '').getTime()
+    const secondDate = new Date(second.createdAt || second.updatedAt || '').getTime()
+
+    return (Number.isFinite(secondDate) ? secondDate : 0) - (Number.isFinite(firstDate) ? firstDate : 0)
+  }),
+)
+
+const loadCommunityPost = async (post: PostRecord) => {
+  const [mediaResponse, authorResponse] = await Promise.all([
+    postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
+    post.user_id
+      ? usersService.getUserProfile(post.user_id, authStore.authToken).catch(() => null)
+      : Promise.resolve(null),
+  ])
+
+  return {
+    ...mapApiPostToFeedPost(post, mediaResponse?.data ?? [], authorResponse?.data ?? null),
+    communityName: community.value?.name || 'Community post',
+  } satisfies FeedPost
+}
+
+const loadCommunityQuestion = async (question: QuestionRecord) => {
+  const userId = getQuestionUserId(question)
+  const authorResponse = userId
+    ? await usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
+    : null
+
+  return {
+    ...mapApiQuestionToFeedPost(question, authorResponse?.data ?? null),
+    communityName: community.value?.name || 'Community question',
+  } satisfies FeedPost
+}
+
+const loadCommunityFeed = async (communityId: string) => {
+  isLoadingCommunityFeed.value = true
+  communityFeedError.value = ''
+  communityFeed.value = []
+
+  try {
+    const [postsResult, questionsResult] = await Promise.allSettled([
+      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions(
+        { per_page: 100, sort: '-createdAt' },
+        authStore.authToken,
+        { suppressErrorModal: true },
+      ),
+    ])
+
+    const communityPosts =
+      postsResult.status === 'fulfilled'
+        ? postsResult.value.data.filter((post) => getPostCommunityId(post) === communityId)
+        : []
+    const communityQuestions =
+      questionsResult.status === 'fulfilled'
+        ? questionsResult.value.data.filter((question) => getQuestionCommunityId(question) === communityId)
+        : []
+
+    const [mappedPosts, mappedQuestions] = await Promise.all([
+      Promise.all(communityPosts.map((post) => loadCommunityPost(post))),
+      Promise.all(communityQuestions.map((question) => loadCommunityQuestion(question))),
+    ])
+
+    communityFeed.value = [...mappedPosts, ...mappedQuestions]
+  } catch (error) {
+    communityFeedError.value = error instanceof ApiError ? error.message : 'Unable to load community feed.'
+  } finally {
+    isLoadingCommunityFeed.value = false
+  }
+}
 
 const loadCommunity = async (id: string) => {
   isLoadingCommunity.value = true
   communityError.value = ''
   community.value = null
   members.value = []
+  communityFeed.value = []
 
   try {
     const [communityResponse, membersResponse] = await Promise.all([
@@ -59,6 +165,7 @@ const loadCommunity = async (id: string) => {
     ])
     community.value = communityResponse.data
     members.value = membersResponse?.data ?? []
+    await loadCommunityFeed(communityResponse.data.id)
   } catch (error) {
     communityError.value = error instanceof ApiError ? error.message : 'Unable to load this community.'
   } finally {
@@ -83,28 +190,28 @@ const toggleMembership = async () => {
   try {
     if (isMember.value) {
       await communitiesService.leaveCommunity(community.value.id, authStore.authToken)
-      members.value = members.value.filter((member) => member.userId !== authStore.userId)
-      toast.success('Left community')
+      members.value = members.value.filter((member) => getMemberUserId(member) !== authStore.userId)
+      setStoredCommunityFollow(community.value.id, false)
+      toast.success('Unfollowed community')
       return
     }
 
     const response = await communitiesService.joinCommunity(community.value.id, authStore.authToken)
-    members.value = [response.data, ...members.value]
-    toast.success('Joined community')
+    members.value = [
+      {
+        ...response.data,
+        userId: response.data.userId || response.data.user_id || authStore.userId,
+        communityId: response.data.communityId || response.data.community_id || community.value.id,
+      },
+      ...members.value.filter((member) => getMemberUserId(member) !== authStore.userId),
+    ]
+    setStoredCommunityFollow(community.value.id, true)
+    toast.success('Following community')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update community membership.'
     toast.error('Community failed', { description: message })
   } finally {
     isJoining.value = false
-  }
-}
-
-const shareCommunity = async () => {
-  try {
-    await navigator.clipboard.writeText(window.location.href)
-    toast.success('Community link copied')
-  } catch {
-    toast.error('Unable to copy link')
   }
 }
 
@@ -119,109 +226,113 @@ watch(
 
 <template>
   <section v-if="isLoadingCommunity" class="space-y-6">
-    <div class="animate-pulse space-y-4 px-1">
-      <div class="h-4 w-64 rounded-full bg-[var(--surface-secondary)]" />
-      <div class="flex items-start gap-4">
-        <div class="h-16 w-16 rounded-[1.4rem] bg-[var(--surface-secondary)]" />
-        <div class="flex-1 space-y-3">
-          <div class="h-7 w-1/2 rounded-full bg-[var(--surface-secondary)]" />
+    <div class="animate-pulse rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 shadow-[var(--shadow-soft)]">
+      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+        <div class="space-y-4">
+          <div class="h-8 w-64 max-w-full rounded-full bg-[var(--surface-secondary)]" />
           <div class="h-4 w-full max-w-3xl rounded-full bg-[var(--surface-secondary)]" />
-          <div class="h-4 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
+          <div class="h-4 w-2/3 max-w-2xl rounded-full bg-[var(--surface-secondary)]" />
+          <div class="h-11 w-44 rounded-[0.75rem] bg-[var(--surface-secondary)]" />
         </div>
+        <div class="h-12 rounded-[0.75rem] bg-[var(--surface-secondary)]" />
       </div>
     </div>
-    <article class="animate-pulse rounded-3xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-6">
-      <div class="flex gap-2">
-        <span class="h-9 w-28 rounded-full bg-[var(--surface-secondary)]" />
-        <span class="h-9 w-36 rounded-full bg-[var(--surface-secondary)]" />
-      </div>
-      <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div class="space-y-4">
-          <div class="h-6 w-48 rounded-full bg-[var(--surface-secondary)]" />
-          <div class="flex flex-wrap gap-2">
-            <span class="h-9 w-28 rounded-full bg-[var(--surface-secondary)]" />
-            <span class="h-9 w-32 rounded-full bg-[var(--surface-secondary)]" />
-            <span class="h-9 w-24 rounded-full bg-[var(--surface-secondary)]" />
-          </div>
-        </div>
-        <aside class="space-y-3">
-          <span class="block h-12 rounded-2xl bg-[var(--surface-secondary)]" />
-          <span class="block h-12 rounded-2xl bg-[var(--surface-secondary)]" />
-        </aside>
-      </div>
-    </article>
   </section>
 
   <section v-else-if="community" class="space-y-6">
-    <div class="space-y-3 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-        <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
-        <span>/</span>
-        <RouterLink to="/communities" class="transition hover:text-[var(--accent-strong)]">Communities</RouterLink>
-        <span>/</span>
-        <span class="font-medium text-[var(--accent-strong)]">{{ community.name }}</span>
-      </div>
-
-      <div class="flex items-start gap-4">
-        <span class="inline-flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
-          <component :is="communityIcon" class="h-8 w-8" />
-        </span>
-        <div>
-          <h1 class="text-[1.8rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[2.15rem]">
-            {{ community.name }}
-          </h1>
-          <p class="mt-2 max-w-3xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-            {{ community.description || 'No community description has been added yet.' }}
-          </p>
-        </div>
-      </div>
+    <div class="flex flex-wrap items-center gap-2 px-1 text-sm text-[var(--text-secondary)]">
+      <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
+      <span>/</span>
+      <RouterLink to="/communities" class="transition hover:text-[var(--accent-strong)]">Communities</RouterLink>
     </div>
 
-    <article class="rounded-3xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-6">
-      <div class="flex flex-wrap gap-2">
-        <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-secondary)]">
-          <Users class="h-4 w-4 text-[var(--accent-strong)]" />
-          {{ members.length }} member{{ members.length === 1 ? '' : 's' }}
-        </span>
-        <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-secondary)]">
-          <component :is="community.default_post_visibility === 'community' ? Lock : Compass" class="h-4 w-4 text-[var(--accent-strong)]" />
-          {{ visibilityLabel }}
-        </span>
+    <section class="relative overflow-hidden rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 shadow-[var(--shadow-elevated)] sm:p-8">
+      <div class="pointer-events-none absolute right-8 top-0 hidden h-full w-48 opacity-60 lg:block">
+        <div class="absolute right-10 top-0 h-full w-px rotate-[-32deg] bg-[var(--border-soft)]" />
+        <div class="absolute right-20 top-0 h-full w-px rotate-[-32deg] bg-[var(--border-soft)]" />
+        <div class="absolute right-[7.5rem] top-0 h-full w-px rotate-[-32deg] bg-[var(--border-soft)]" />
       </div>
 
-      <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div>
-          <h2 class="text-xl font-semibold text-[var(--text-primary)]">Community Details</h2>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <span
-              v-for="item in focusAreas"
-              :key="item"
-              class="inline-flex items-center rounded-full bg-[var(--surface-secondary)] px-4 py-2 text-sm text-[var(--text-secondary)]"
+      <div class="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+        <div class="flex min-w-0 items-start gap-4">
+          <span class="mt-1 flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.4rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
+            <i :class="getCommunityLineAwesomeClass(community)" class="text-[2rem] leading-none" aria-hidden="true" />
+          </span>
+
+          <div class="min-w-0">
+            <h1 class="text-[2rem] font-semibold leading-tight tracking-normal text-[var(--text-primary)] sm:text-[2.4rem]">
+              {{ community.name }}
+            </h1>
+            <p
+              class="mt-4 max-w-4xl overflow-hidden text-sm leading-7 text-[var(--text-secondary)] sm:text-base"
+              style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;"
             >
-              {{ item }}
-            </span>
+              {{ community.description || 'No community description has been added yet.' }}
+            </p>
+
+            <RouterLink
+              to="/community-regulations"
+              class="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--surface-secondary)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]"
+            >
+              <ClipboardList class="h-4 w-4" />
+              View Regulations
+            </RouterLink>
           </div>
         </div>
 
-        <aside class="space-y-3">
+        <div class="flex items-start justify-start lg:justify-end lg:pt-10">
           <button
             type="button"
             :disabled="isJoining"
-            class="inline-flex w-full items-center justify-center rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+            class="inline-flex h-12 min-w-40 items-center justify-center gap-2 rounded-[0.75rem] px-5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+            :class="
+              isMember
+                ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+                : 'bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]'
+            "
             @click="toggleMembership"
+            title="Follow this community to get alerted with updates."
           >
-            {{ isJoining ? 'Updating...' : isMember ? 'Leave community' : 'Join community' }}
+            <Plus v-if="!isMember" class="h-4 w-4" />
+            {{ isJoining ? 'Updating...' : isMember ? 'Following' : 'Follow' }}
           </button>
-          <button
-            type="button"
-            class="inline-flex w-full items-center justify-center rounded-2xl border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            @click="shareCommunity"
-          >
-            Share
-          </button>
-        </aside>
+        </div>
       </div>
-    </article>
+    </section>
+
+    <section class="space-y-4">
+      <div v-if="isLoadingCommunityFeed" class="space-y-3">
+        <article
+          v-for="item in 2"
+          :key="item"
+          class="animate-pulse rounded-3xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-soft)]"
+        >
+          <div class="h-4 w-32 rounded-full bg-[var(--surface-secondary)]" />
+          <div class="mt-4 h-6 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
+          <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-secondary)]" />
+          <div class="mt-2 h-4 w-4/5 rounded-full bg-[var(--surface-secondary)]" />
+        </article>
+      </div>
+
+      <div v-else-if="communityFeedError" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+        {{ communityFeedError }}
+      </div>
+
+      <div v-else-if="sortedCommunityFeed.length" class="space-y-4">
+        <AppFeedPost
+          v-for="post in sortedCommunityFeed"
+          :key="post.apiId || post.slug"
+          :post="post"
+        />
+      </div>
+
+      <div v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
+        <p class="text-sm font-semibold text-[var(--text-primary)]">No community posts yet.</p>
+        <p class="mt-1 text-sm text-[var(--text-secondary)]">
+          Select this community when posting or asking a question to start the feed.
+        </p>
+      </div>
+    </section>
   </section>
 
   <section v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">

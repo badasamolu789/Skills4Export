@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const CreateAlertView = () => import('@/views/CreateAlertView.vue')
 const CreatePageView = () => import('@/views/CreatePageView.vue')
 const CommunityDetailView = () => import('@/views/CommunityDetailView.vue')
+const CommunityRegulationsView = () => import('@/views/CommunityRegulationsView.vue')
 const ExploreCommunitiesView = () => import('@/views/ExploreCommunitiesView.vue')
 const FreelancersView = () => import('@/views/FreelancersView.vue')
 const HomeView = () => import('@/views/HomeView.vue')
@@ -70,6 +71,14 @@ const router = createRouter({
       },
     },
     {
+      path: '/community-regulations',
+      name: 'community-regulations',
+      component: CommunityRegulationsView,
+      meta: {
+        layout: 'public',
+      },
+    },
+    {
       path: '/feed',
       name: 'home',
       component: HomeView,
@@ -116,6 +125,8 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        hideRightRail: true,
       },
     },
     {

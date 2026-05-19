@@ -38,8 +38,8 @@ const bannerFileInput = ref<HTMLInputElement | null>(null)
 const avatarObjectUrl = ref('')
 const bannerObjectUrl = ref('')
 const activeProfileModal = ref<'education' | 'experience' | 'skills' | 'project' | 'certificate' | null>(null)
-const currentWorkplace = ref('Amaka Global')
-const currentJobTitle = ref('Software Developer')
+const currentWorkplace = ref('')
+const currentJobTitle = ref('')
 
 // Skills
 const skills = ref<Array<{ id: string; name: string; level?: string }>>([])
@@ -87,11 +87,11 @@ const newExperience = ref({
 })
 
 const form = ref({
-  name: authStore.signUpDraft.name || 'Samuel Bada',
-  username: authStore.userProfile?.username || authStore.signUpDraft.username || 'samuelbada',
-  email: authStore.signUpDraft.email || 'samuel@example.com',
-  phone: authStore.signUpDraft.phone || '+234 800 000 0000',
-  location: authStore.userProfile?.location || authStore.signUpDraft.location || 'Lagos, Nigeria',
+  name: authStore.currentUser?.name || authStore.signUpDraft.name || '',
+  username: authStore.userProfile?.username || authStore.currentUser?.username || authStore.signUpDraft.username || '',
+  email: authStore.currentUser?.email || authStore.signUpDraft.email || '',
+  phone: authStore.signUpDraft.phone || '',
+  location: authStore.userProfile?.location || '',
   bio: authStore.userProfile?.bio || '',
   website: authStore.userProfile?.website || '',
   linkedin: authStore.userProfile?.linkedin || '',
@@ -101,16 +101,16 @@ const form = ref({
 })
 
 const profileInitials = computed(() =>
-  form.value.name
+  (form.value.name || form.value.username || form.value.email)
     .split(' ')
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase(),
+    .toUpperCase() || 'U',
 )
 
 const displayName = computed(() => {
-  return form.value.name || authStore.signUpDraft.name || 'Samuel Bada'
+  return form.value.name || authStore.currentUser?.name || form.value.username || form.value.email || 'Profile'
 })
 
 const avatarPreviewUrl = computed(() => avatarObjectUrl.value || form.value.avatar || authStore.userProfile?.avatar || '')
@@ -120,6 +120,61 @@ const bannerPreviewUrl = computed(() => bannerObjectUrl.value || form.value.bann
 const optionalField = (value?: string | null) => {
   const trimmed = value?.trim()
   return trimmed || undefined
+}
+
+const getProfileUsernameValue = () => {
+  const explicitUsername =
+    form.value.username.trim() ||
+    authStore.userProfile?.username ||
+    authStore.currentUser?.username ||
+    authStore.signUpDraft.username
+
+  if (explicitUsername) {
+    return explicitUsername
+  }
+
+  const source = form.value.email || authStore.currentUser?.email || form.value.name || authStore.currentUser?.name || ''
+  const generated = source
+    .split('@')[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '')
+
+  return generated || undefined
+}
+
+const getStringField = (record: Record<string, unknown> | null | undefined, keys: string[]) => {
+  for (const key of keys) {
+    const value = record?.[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown }) => {
+  const record = skill as Record<string, unknown>
+  const directValue = [record.name, record.skillName, record.skill_name, record.title, record.skill]
+    .find((value) => typeof value === 'string' && value.trim())
+
+  if (typeof directValue === 'string') {
+    return directValue.trim()
+  }
+
+  const nestedSkill = record.skill
+
+  if (nestedSkill && typeof nestedSkill === 'object') {
+    const nestedRecord = nestedSkill as Record<string, unknown>
+    const nestedValue = [nestedRecord.name, nestedRecord.skill, nestedRecord.title, nestedRecord.label]
+      .find((value) => typeof value === 'string' && value.trim())
+
+    if (typeof nestedValue === 'string') {
+      return nestedValue.trim()
+    }
+  }
+
+  return ''
 }
 
 const syncProfileImage = (kind: 'avatar' | 'banner', url: string) => {
@@ -227,6 +282,7 @@ const loadProfile = async () => {
   try {
     const response = await usersService.getMyProfile(authStore.authToken)
     const profile = response.data?.profile ?? null
+    authStore.setCurrentUser(response.data?.user ?? null)
     authStore.setUserProfile(profile)
 
     const loadedUserId = response.data?.user?.id || authStore.userId
@@ -240,9 +296,26 @@ const loadProfile = async () => {
       authStore.signUpDraft.email = response.data.user.email
     }
 
+    if (response.data?.user?.name && typeof response.data.user.name === 'string') {
+      form.value.name = response.data.user.name
+      authStore.signUpDraft.name = response.data.user.name
+    }
+
+    if (response.data?.user?.username && typeof response.data.user.username === 'string') {
+      form.value.username = response.data.user.username
+      authStore.signUpDraft.username = response.data.user.username
+    }
+
+    const userPhone = getStringField(response.data?.user, ['phone', 'phoneNumber', 'phone_number'])
+    if (userPhone) {
+      form.value.phone = userPhone
+      authStore.signUpDraft.phone = userPhone
+    }
+
     if (profile) {
+      form.value.name = profile.displayName || form.value.name
       form.value.username = profile.username || form.value.username
-      form.value.location = profile.location || form.value.location
+      form.value.location = authStore.userProfile?.location || ''
       form.value.bio = profile.bio || form.value.bio
       form.value.website = profile.website || form.value.website
       form.value.linkedin = profile.linkedin || form.value.linkedin
@@ -251,8 +324,9 @@ const loadProfile = async () => {
       form.value.banner = profile.banner || form.value.banner
 
       // Sync server data to store for persistence
+      authStore.signUpDraft.name = profile.displayName || authStore.signUpDraft.name
       authStore.signUpDraft.username = profile.username || authStore.signUpDraft.username
-      authStore.signUpDraft.location = profile.location || authStore.signUpDraft.location
+      authStore.signUpDraft.location = authStore.userProfile?.location || ''
       if (profile.avatar) {
         authStore.signUpDraft.avatar = profile.avatar
       }
@@ -289,9 +363,9 @@ const loadProfile = async () => {
 
       skills.value = sourceSkills.map((skill: UserSkill) => ({
         id: skill.id || '',
-        name: skill.skill || skill.name || 'Unnamed skill',
+        name: getSkillDisplayName(skill),
         level: skill.level,
-      }))
+      })).filter((skill) => skill.name)
 
       portfolios.value = sourcePortfolios.map((portfolio: UserPortfolio) => ({
         id: portfolio.id || '',
@@ -326,6 +400,10 @@ const loadProfile = async () => {
         isCurrent: experience.isCurrent === 1 || experience.isCurrent === true,
         description: experience.description,
       }))
+
+      const primaryExperience = experiences.value.find((experience) => experience.isCurrent) || experiences.value[0]
+      currentWorkplace.value = primaryExperience?.company || ''
+      currentJobTitle.value = primaryExperience?.title || ''
     }
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
@@ -474,9 +552,9 @@ const loadSkills = async () => {
     const response = await usersService.listUserSkills(authStore.userId, authStore.authToken)
     skills.value = response.data.map((skill) => ({
       id: skill.id || '',
-      name: skill.skill || skill.name || '',
+      name: getSkillDisplayName(skill),
       level: skill.level,
-    }))
+    })).filter((skill) => skill.name)
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
       toast.error('Unable to load skills.')
@@ -621,10 +699,11 @@ const addSkill = async () => {
     )
 
     const createdSkill = response.data
+    const createdSkillName = getSkillDisplayName(createdSkill) || newSkill.value.skill.trim()
     skills.value = [
       {
         id: createdSkill.id || `skill-${Date.now()}`,
-        name: createdSkill.name || newSkill.value.skill,
+        name: createdSkillName,
         level: createdSkill.level || newSkill.value.level,
       },
       ...skills.value,
@@ -974,6 +1053,7 @@ const deleteExperience = async (experienceId: string) => {
 
 const upsertProfile = async (payload: {
   username?: string
+  displayName?: string
   bio?: string
   location?: string
   avatar?: string | null
@@ -989,12 +1069,38 @@ const upsertProfile = async (payload: {
   }
 
   if (!authStore.userProfile?.id) {
-    return usersService.createUserProfile(id, payload, authStore.authToken)
+    try {
+      return await usersService.createUserProfile(id, payload, authStore.authToken, { suppressErrorModal: true })
+    } catch (error) {
+      const isExistingProfileConflict =
+        error instanceof ApiError &&
+        error.status === 409 &&
+        error.payload?.error &&
+        typeof error.payload.error === 'object' &&
+        error.payload.error.code === 'profile_already_exists'
+
+      if (!isExistingProfileConflict) {
+        throw error
+      }
+
+      return usersService.getUserProfile(id, authStore.authToken)
+    }
   }
 
   try {
-    return await usersService.updateUserProfile(id, payload, authStore.authToken)
+    return await usersService.updateUserProfile(id, payload, authStore.authToken, { suppressErrorModal: true })
   } catch (error) {
+    const isExistingProfileConflict =
+      error instanceof ApiError &&
+      error.status === 409 &&
+      error.payload?.error &&
+      typeof error.payload.error === 'object' &&
+      error.payload.error.code === 'profile_already_exists'
+
+    if (isExistingProfileConflict) {
+      return usersService.getUserProfile(id, authStore.authToken)
+    }
+
     if (error instanceof ApiError && error.status === 404) {
       throw new Error(
         'The backend does not expose the profile save route documented for /api/users/:id/profile.',
@@ -1003,6 +1109,108 @@ const upsertProfile = async (payload: {
 
     throw error
   }
+}
+
+const saveDisplayName = async () => {
+  if (!authStore.userId) {
+    throw new Error('No authenticated user ID is available for this profile update.')
+  }
+
+  const displayName = form.value.name.trim()
+
+  if (!displayName) {
+    throw new Error('Display name is required.')
+  }
+
+  const response = await usersService.updateUser(
+    authStore.userId,
+    {
+      name: displayName,
+      displayName,
+    },
+    authStore.authToken,
+  )
+
+  authStore.signUpDraft.name = displayName
+
+  if (response.data?.user) {
+    authStore.setCurrentUser(response.data.user)
+  }
+
+  if (response.data?.profile) {
+    authStore.setUserProfile(response.data.profile)
+  }
+}
+
+const saveCurrentExperience = async () => {
+  if (!authStore.userId) {
+    throw new Error('No authenticated user ID is available for this experience update.')
+  }
+
+  const company = currentWorkplace.value.trim()
+  const title = currentJobTitle.value.trim()
+
+  if (!company && !title) {
+    return
+  }
+
+  if (!company || !title) {
+    throw new Error('Current workplace and current job title are required together.')
+  }
+
+  const existingExperience = experiences.value.find((experience) => experience.isCurrent) || experiences.value[0]
+  const payload = {
+    company,
+    title,
+    employmentType: existingExperience?.employmentType || 'full-time',
+    startDate: existingExperience?.startDate || new Date().toISOString().slice(0, 10),
+    isCurrent: existingExperience?.isCurrent === undefined ? true : Boolean(existingExperience.isCurrent),
+    description: existingExperience?.description || '',
+  }
+  const payloadWithOptionalEndDate = {
+    ...payload,
+    ...(!payload.isCurrent && existingExperience?.endDate ? { endDate: existingExperience.endDate } : {}),
+  }
+
+  const response = await usersService.addUserExperience(
+    authStore.userId,
+    payloadWithOptionalEndDate,
+    authStore.authToken,
+    { suppressErrorModal: true },
+  )
+
+  if (existingExperience?.id) {
+    await usersService.deleteUserExperience(authStore.userId, existingExperience.id, authStore.authToken)
+    experiences.value = experiences.value.map((experience) =>
+      experience.id === existingExperience.id
+        ? {
+            id: response.data.id || existingExperience.id,
+            company: response.data.company || company,
+            title: response.data.title || title,
+            employmentType: response.data.employmentType,
+            startDate: response.data.startDate || payload.startDate,
+            endDate: response.data.endDate,
+            isCurrent: response.data.isCurrent === 1 || response.data.isCurrent === true,
+            description: response.data.description,
+          }
+        : experience,
+    )
+    return
+  }
+
+  experiences.value = [
+    {
+      id: response.data.id || '',
+      company: response.data.company || company,
+      title: response.data.title || title,
+      employmentType: response.data.employmentType,
+      startDate: response.data.startDate || payload.startDate,
+      endDate: response.data.endDate,
+      isCurrent: response.data.isCurrent === 1 || response.data.isCurrent === true,
+      description: response.data.description,
+    },
+    ...experiences.value,
+  ]
 }
 
 const saveContactSection = async () => {
@@ -1018,7 +1226,8 @@ const saveContactSection = async () => {
   isSavingContact.value = true
   try {
     const profileResponse = await upsertProfile({
-      username: form.value.username,
+      username: getProfileUsernameValue(),
+      displayName: form.value.name.trim(),
       location: form.value.location,
       bio: authStore.userProfile?.bio || form.value.bio,
       website: authStore.userProfile?.website || form.value.website,
@@ -1026,11 +1235,16 @@ const saveContactSection = async () => {
       github: authStore.userProfile?.github || form.value.github,
     })
 
+    await saveDisplayName()
     authStore.signUpDraft.name = form.value.name
     authStore.signUpDraft.email = form.value.email
     authStore.signUpDraft.phone = form.value.phone
-    authStore.signUpDraft.location = form.value.location
-    authStore.setUserProfile(profileResponse.data ?? null)
+    const savedProfile = {
+      ...(profileResponse.data ?? {}),
+      location: form.value.location.trim(),
+    }
+    authStore.signUpDraft.location = form.value.location.trim()
+    authStore.setUserProfileOverride(savedProfile)
     await loadProfile()
 
     toast.success('Contact details updated successfully.')
@@ -1053,15 +1267,16 @@ const saveProfessionalSection = async () => {
     return
   }
 
-  if (!form.value.username.trim() || !form.value.bio.trim()) {
-    toast.error('Username and bio are required.')
+  if (!form.value.bio.trim()) {
+    toast.error('About me is required.')
     return
   }
 
   isSavingProfessional.value = true
   try {
     const profileResponse = await upsertProfile({
-      username: form.value.username,
+      username: getProfileUsernameValue(),
+      displayName: form.value.name.trim(),
       bio: form.value.bio,
       location: form.value.location,
       website: form.value.website,
@@ -1069,11 +1284,17 @@ const saveProfessionalSection = async () => {
       github: form.value.github,
     })
 
+    await saveDisplayName()
+    await saveCurrentExperience()
     authStore.signUpDraft.name = form.value.name
     authStore.signUpDraft.username = form.value.username
-    authStore.signUpDraft.location = form.value.location
+    const savedProfile = {
+      ...(profileResponse.data ?? {}),
+      location: form.value.location.trim(),
+    }
+    authStore.signUpDraft.location = form.value.location.trim()
     authStore.signUpDraft.headline = form.value.bio
-    authStore.setUserProfile(profileResponse.data ?? null)
+    authStore.setUserProfileOverride(savedProfile)
     await loadProfile()
 
     toast.success('Professional profile updated successfully.')
@@ -1172,7 +1393,8 @@ const addExperienceFromModal = async () => {
     </div>
 
     <section class="overflow-hidden rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
-      <div class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
+      <!-- Banner hidden for now until live banner display is re-enabled. -->
+      <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
         <img
           v-if="bannerPreviewUrl"
           :src="bannerPreviewUrl"
@@ -1219,8 +1441,8 @@ const addExperienceFromModal = async () => {
         </div>
       </div>
 
-      <div class="relative px-5 pb-5 pt-24 sm:px-7 sm:pb-7 sm:pt-24">
-        <div class="absolute -top-16 left-5 sm:left-7">
+      <div class="relative px-5 py-5 sm:px-7 sm:py-7">
+        <div class="mb-4">
           <div class="relative h-32 w-32 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
             <img
               v-if="avatarPreviewUrl"
@@ -1251,7 +1473,7 @@ const addExperienceFromModal = async () => {
             <p class="mt-1 text-sm text-[var(--text-secondary)]">
               {{ currentJobTitle || 'Add your role' }} <span class="text-[var(--border-strong,var(--border-soft))]">-</span> {{ currentWorkplace || 'Add your workplace' }}
             </p>
-            <p v-if="avatarFile || bannerFile" class="mt-2 text-xs font-semibold text-[var(--accent-strong)]">
+            <p v-if="avatarFile" class="mt-2 text-xs font-semibold text-[var(--accent-strong)]">
               Preview updated. Save the selected image to publish it.
             </p>
           </div>

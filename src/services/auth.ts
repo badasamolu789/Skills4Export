@@ -130,6 +130,8 @@ const AUTH_ROUTES = {
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',
   logout: '/logout',
+  changePassword: '/user/change-password',
+  changeEmail: '/user/change-email',
   googleRedirect: '/auth/google',
   googleCallback: '/auth/google/callback',
   googleToken: '/auth/google/token',
@@ -230,6 +232,16 @@ export const authService = {
   },
   logout(token?: string | null) {
     return api.post<AuthMessageResponse>(AUTH_ROUTES.logout, undefined, { token })
+  },
+  changePassword(payload: {
+    current_password: string
+    password: string
+    password_confirmation: string
+  }, token?: string | null) {
+    return api.put<AuthMessageResponse>(AUTH_ROUTES.changePassword, payload, { token })
+  },
+  changeEmail(payload: { new_email: string }, token?: string | null) {
+    return api.put<AuthMessageResponse>(AUTH_ROUTES.changeEmail, payload, { token })
   },
   googleCallback() {
     return api.get<AuthSuccessResponse>(AUTH_ROUTES.googleCallback)

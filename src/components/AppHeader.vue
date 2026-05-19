@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowRight,
@@ -29,7 +29,9 @@ import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
 import { postsService } from '@/services/posts'
 import { questionsService } from '@/services/questions'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
+import { isDirectMediaUrl } from '@/utils/mediaUrl'
 
 type HeaderLink = {
   label: string
@@ -80,6 +82,9 @@ const authStore = useAuthStore()
 const askTitle = ref('')
 const askQuestion = ref('')
 const postAudienceId = ref('')
+const communities = ref<CommunityRecord[]>([])
+const isLoadingCommunities = ref(false)
+const hasLoadedCommunities = ref(false)
 const postTitle = ref('')
 const postUrl = ref('')
 const postContent = ref('')
@@ -120,6 +125,12 @@ const postFileRecommendation = computed(() => {
 
   return 'Best: 1080 x 1350 portrait. Also supports square 1080 x 1080 and landscape 1200 x 627.'
 })
+const communityOptions = computed(() =>
+  communities.value
+    .filter((community) => community.id && community.name)
+    .filter((community, index, list) => list.findIndex((item) => item.id === community.id) === index)
+    .sort((first, second) => first.name.localeCompare(second.name)),
+)
 
 const iconByLink = {
   Home: House,
@@ -132,6 +143,7 @@ const openComposer = (type: 'ask' | 'post') => {
   activeComposer.value = type
   isUserMenuOpen.value = false
   isNotificationsOpen.value = false
+  void loadCommunities()
 }
 
 const closeComposer = () => {
@@ -210,6 +222,25 @@ const handleMenuItemClick = (item: MenuItem) => {
 
   if (item.action) {
     emit('menu-action', item.action)
+  }
+}
+
+const loadCommunities = async () => {
+  if (isLoadingCommunities.value || hasLoadedCommunities.value) {
+    return
+  }
+
+  isLoadingCommunities.value = true
+
+  try {
+    const response = await communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken)
+    communities.value = response.data ?? []
+    hasLoadedCommunities.value = true
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to load communities.'
+    toast.error('Communities failed', { description: message })
+  } finally {
+    isLoadingCommunities.value = false
   }
 }
 
@@ -397,6 +428,13 @@ const submitPost = async () => {
     return
   }
 
+  if (mediaUrl && !isDirectMediaUrl(mediaUrl)) {
+    toast.error('Use a direct media URL', {
+      description: 'Paste a direct image or video URL that ends in .jpg, .png, .webp, .gif, .mp4, or use the file upload.',
+    })
+    return
+  }
+
   isSubmittingPost.value = true
   const loadingToastId = toast.loading(postFile.value ? 'Uploading media...' : 'Creating post...')
 
@@ -407,16 +445,15 @@ const submitPost = async () => {
       toast.loading('Creating post...', { id: loadingToastId })
     }
 
-    const response = await postsService.createPost(
-      {
-        userId: authStore.userId || undefined,
-        communityId: postAudienceId.value || undefined,
-        title,
-        content,
-        mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
-      },
-      authStore.authToken,
-    )
+    const selectedCommunityId = postAudienceId.value || null
+    const postPayload = {
+      communityId: selectedCommunityId,
+      title,
+      content,
+      mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
+    }
+
+    const response = await postsService.createPost(postPayload, authStore.authToken)
 
     if (uploadedMedia.fallbackUrl) {
       await postsService.attachPostMedia(
@@ -490,6 +527,10 @@ onBeforeUnmount(() => {
   if (postFilePreviewUrl.value) {
     URL.revokeObjectURL(postFilePreviewUrl.value)
   }
+})
+
+onMounted(() => {
+  void loadCommunities()
 })
 </script>
 
@@ -823,7 +864,15 @@ onBeforeUnmount(() => {
             class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
           >
             <option value="">Everyone</option>
+            <option
+              v-for="community in communityOptions"
+              :key="community.id"
+              :value="community.id"
+            >
+              {{ community.name }}
+            </option>
           </select>
+          <span v-if="isLoadingCommunities" class="mt-1 block text-xs text-[var(--text-tertiary)]">Loading communities...</span>
         </label>
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Question title<span class="text-[var(--danger)]">*</span></span>
@@ -862,12 +911,20 @@ onBeforeUnmount(() => {
       <div class="space-y-5">
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Everyone or a Community<span class="text-[var(--danger)]">*</span></span>
-          <select class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]">
-            <option>Everyone</option>
-            <option>Design Community</option>
-            <option>Export Community</option>
-            <option>Technology Community</option>
+          <select
+            v-model="postAudienceId"
+            class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
+          >
+            <option value="">Everyone</option>
+            <option
+              v-for="community in communityOptions"
+              :key="community.id"
+              :value="community.id"
+            >
+              {{ community.name }}
+            </option>
           </select>
+          <span v-if="isLoadingCommunities" class="mt-1 block text-xs text-[var(--text-tertiary)]">Loading communities...</span>
         </label>
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Post Title<span class="text-[var(--danger)]">*</span></span>
@@ -879,13 +936,16 @@ onBeforeUnmount(() => {
           />
         </label>
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Post Url</span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Direct media URL</span>
           <input
             v-model="postUrl"
             type="url"
-            placeholder="post url"
+            placeholder="https://site.com/uploads/image.jpg"
             class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
           />
+          <span class="mt-1 block text-xs text-[var(--text-tertiary)]">
+            Use a direct image/video URL, not a webpage URL. File upload is safer.
+          </span>
         </label>
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Content</span>

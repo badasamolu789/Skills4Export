@@ -61,6 +61,8 @@ export const getOptionalCount = (...values: unknown[]) => {
   return 0
 }
 
+export const getPostCommunityId = (post: PostRecord) => post.community_id || post.communityId || null
+
 export const mapApiPostToFeedPost = (
   post: PostRecord,
   media: PostMediaRecord[] = [],
@@ -79,12 +81,13 @@ export const mapApiPostToFeedPost = (
   }
 
   const basePost = {
-    type: post.community_id ? 'community' : 'personal',
+    type: getPostCommunityId(post) ? 'community' : 'personal',
     apiId: post.id,
     userId: post.user_id,
-    communityId: post.community_id,
-    communityName: post.community_id ? 'Community post' : undefined,
+    communityId: getPostCommunityId(post),
+    communityName: getPostCommunityId(post) ? 'Community post' : undefined,
     pageId: post.page_id,
+    originalPostId: post.originalPostId || post.parent_post_id || null,
     createdAt: post.created_at,
     updatedAt: post.updated_at,
     slug: post.id || slugify(post.title),
@@ -102,9 +105,12 @@ export const mapApiPostToFeedPost = (
     })),
     score: getOptionalCount(post.score, post.reactions_count, post.reaction_count),
     comments: getOptionalCount(post.comments_count, post.comment_count, post.commentsCount),
+    isSaved: Boolean(post.is_saved),
+    isScored: Boolean(post.is_liked),
+    isFollowing: Boolean(post.is_follow),
   }
 
-  if (post.community_id) {
+  if (getPostCommunityId(post)) {
     return {
       ...basePost,
       type: 'community',

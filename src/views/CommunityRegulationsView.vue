@@ -1,0 +1,78 @@
+<script setup lang="ts">
+import LegalPageLayout from '@/components/LegalPageLayout.vue'
+
+const documentText = String.raw`Our Community regulations
+These regulations apply to your use of skills4export.com’s products and services and will help you and the rest of the skills4export.com community have an enjoyable experience. Please also look for and follow any additional rules that may apply to specific products or services.
+
+As a skills4export.com user, you play an important part in keeping our communities vibrant and safe for all of our users. We greatly appreciate your help in ensuring that our products and services remain the positive, diverse and welcoming communities that we work so hard to foster.
+
+Regulations:
+Interact, connect, and treat others with respect. Don’t engage in name-calling, insults or gratuitous attacks on others. Refrain from posting content that stereotypes people in an insulting, harmful or abusive way.
+
+Keep your content relevant and moderate it correctly.
+
+Your activity on skills4export.com properties is subject to these Community regulations and the skills4export.com Terms of Service, as well as any product-specific rules.
+
+If you see content that violates these Community regulations, please report it using the report abuse tool provided in each of our products.
+
+If you don't follow these rules, we may take action on your account, which could include content removal, suspension of commenting privileges, warnings, suspension, and/or account termination. We do our best to ensure fair outcomes, but in all cases we reserve the right to suspend accounts, or remove content, without notice, for any reason, but particularly to protect our services, infrastructure, users, and community. While these regulations don't create a contractual obligation for us to act in any particular manner, we will try our best to enforce these regulations consistent with our principles and values.
+
+Threats of violence directed at individuals or groups, including public figures, are prohibited and, when warranted, will be reported to law enforcement. Content that promotes, incites or supports violent or otherwise criminal behavior is also prohibited (e.g. encouraging others to commit violence against an individual or group, or expressing support for acts of violence).
+
+Threatening violence:
+Threats of violence directed at individuals or groups, including public figures, are prohibited and, when warranted, will be reported to law enforcement. Content that promotes, incites or supports violent or otherwise criminal behavior is also prohibited (e.g. encouraging others to commit violence against an individual or group, or expressing support for acts of violence).
+
+Support for Violence:
+Content that promotes, encourages, or incites acts of international terrorism or domestic violent extremism is prohibited. This prohibition includes content that supports or celebrates terrorist or extremist organizations, their leaders, or associated violent activities as well as content designed to recruit individuals to join terrorist or extremist organizations.
+
+Child Exploitation:
+Do not post, send, or solicit content that sexualizes minors or facilitates or promotes child sexual abuse. This includes digitally-manipulated and cartoon content. The possession, distribution, and solicitation of child sexual abuse material is a serious crime that we report to law enforcement authorities across the world via the National Center for Missing and Exploited Children.
+
+Hate Speech:
+We prohibit content of any type that incites hatred or advocates violence against a person or group based on their actual or perceived race, color, ethnicity, national origin, religion, gender, gender identity, age, veteran status, sexual orientation, disability, health condition, disease, or political views or affiliation. We also prohibit the use of our services by groups and organizations that advocate or engage in violence and hatred against others based on the characteristics described above (e.g. using our services to promote an event or gathering for a hate group). Read these tips for confronting hate speech from the Anti-Defamation League.
+
+Suicide and Self-Harm:
+Do not post content that promotes or glorifies suicide or self-harm. This includes content that encourages others to harm themselves (e.g. posting content that promotes an eating disorder).
+
+Gore and Mutilation:
+Content that depicts or promotes severe bodily injury, torture or mutilation of humans or animals is prohibited.
+
+Adult Content:
+Do not post content that features nudity, including male or female genitals or the exposed female breast including the nipple. We recognize exceptions to this rule for posts with artistic, educational, political, or scientific value, and in other cases where the content was not intended to trigger sexual arousal (e.g, breastfeeding, childbirth, and protest nudity). Content that depicts sexual acts, or bodily fluids or functions for the purpose of sexual arousal, is not allowed.
+
+Harassment and Bullying:
+Personal attacks on others, especially other skills4export.com community users, are prohibited on our platforms. This prohibition includes content designed to intimidate, shame, degrade, sexually harass, or otherwise harm, as well as content that has the effect of suppressing discussion or driving users away from our platforms (e.g., using language to bully people with whom you disagree through repetitive or off-topic posts). We recognize that bullying directed at minors can be particularly harmful and apply heightened scrutiny to disparaging content directed to those under the age of 18.
+
+Human Trafficking and Prostitution:
+The use of skills4export.com services to facilitate sex trafficking, other forms of human trafficking, or commercial sexual activity is prohibited. If you see human trafficking on skills4export.com services, report it, and encourage victims to contact law enforcement.
+
+illegal drug:
+Depictions of illegal drug use and descriptions of how to manufacture or procure illegal drugs are prohibited. The purchase and sale of drugs of any type on our platforms is also prohibited.
+
+illegal activities:
+Content that promotes or facilitates illegal activity is prohibited. This includes the distribution, purchase and sale of illegal items.
+
+Sensitive personal information:
+Do not publicly post sensitive personal information pertaining to yourself or others. This prohibition includes passwords, identification numbers, bank account information, birthdates, home or work addresses, and other commonly recognized personally identifiable information.
+
+Invasion of privacy:
+Do not post content that promotes, facilitates, or documents the invasion of another person’s legitimate expectation of privacy. This prohibition includes voyeur-style media, intimate images and video posted without consent, and threats to publicly post images for the purpose of embarrassing or harassing another.
+
+Misinformation:
+Content designed to or that could mislead, defraud, or otherwise harm our users is prohibited. This includes attempts to disenfranchise voters or otherwise maliciously interfere in elections. You may not attempt to cause confusion between you and any other person, organization, or company, or mislead users about the origin of the content you post or your affiliation with any other person, organization, or company; however, certain exceptions such as parody and satire may be permissible if clearly identified.
+
+Scam:
+Do not scam, defraud, deceive others. Do not use skills4export.com to facilitate romance scams, promote pyramid schemes, or otherwise defraud members. Do not share malicious software that puts our members, platform, or services at risk. Phishing attempts are not tolerated.
+Spam:
+You may not use our products to send bulk unsolicited messages or post content of any type that is repetitive, off-topic, or designed to direct commercial activity to another site. You may not create or use multiple accounts for the purpose of promoting or suppressing content posted by you or others, or to defeat the security and content moderation tools used by skills4export.com. Do not use our products for phishing or to transmit viruses, malware, or any other items of a destructive nature. Do not take actions that would interfere with the operation of networks, servers, or other infrastructure belonging to skills4export.com limited or others.
+
+Abandoned Accounts:
+If you have not accessed your account in more than one year, your account may be subject to deactivation and all content in your account — including stored email — may be deleted. Please visit our help page for more information on closing or deactivating your account, and how to download your data.
+
+Copyright and Intellectual Property:
+Do not post content that violates a copyright, trademark, or other intellectual property right held by someone else. We will remove such content if we discover it, or upon the request of the rights holder. To learn more, please review our Copyright and Intellectual Property policy.`
+</script>
+
+<template>
+  <LegalPageLayout title="Community Regulations" :text="documentText" />
+</template>

@@ -74,6 +74,7 @@ const showHeader = computed(() => currentLayout.value === 'app')
 const hideSidebar = computed(() => Boolean(route.meta.hideSidebar))
 const hideRightRail = computed(() => Boolean(route.meta.hideRightRail))
 const forceRightRail = computed(() => Boolean(route.meta.showRightRail))
+const hideRightRailQuestions = computed(() => route.path.startsWith('/communities/'))
 const usesWorkspaceShell = computed(
   () =>
     showHeader.value &&
@@ -308,7 +309,7 @@ const handleMenuAction = async (action: 'logout') => {
           class="app-scroll hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
         >
           <div class="lg:pt-3">
-            <AppRightRail :pinned-layout="true" />
+            <AppRightRail :pinned-layout="true" :hide-trending-questions="hideRightRailQuestions" />
           </div>
         </div>
       </div>

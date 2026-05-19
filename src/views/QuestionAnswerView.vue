@@ -35,7 +35,10 @@ const loadQuestions = async () => {
   questionsError.value = ''
 
   try {
-    const response = await questionsService.listQuestions(authStore.authToken)
+    const response = await questionsService.listQuestions(
+      { per_page: 100, sort: '-createdAt' },
+      authStore.authToken,
+    )
     apiQuestions.value = await Promise.all(response.data.map((question) => loadQuestion(question)))
     hasLoadedApiQuestions.value = true
   } catch (error) {

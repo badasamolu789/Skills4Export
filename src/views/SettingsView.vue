@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import {
   Eye,
   EyeOff,
+  Loader2,
   Monitor,
   Moon,
   Settings2,
@@ -11,8 +12,11 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import { ApiError } from '@/lib/api'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
+import { authService } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { usePagesStore } from '@/stores/pages'
 
 type SettingsTab =
   | 'theme'
@@ -23,6 +27,7 @@ type SettingsTab =
   | 'delete-page'
 
 const authStore = useAuthStore()
+const pagesStore = usePagesStore()
 const activeTab = ref<SettingsTab>('privacy')
 const showPasswordFields = ref({
   current: false,
@@ -31,7 +36,16 @@ const showPasswordFields = ref({
 })
 const deleteAccountConfirmed = ref(false)
 const deletePageConfirmed = ref(false)
-const emailAddress = ref('')
+const emailAddress = ref(authStore.currentUser?.email || authStore.signUpDraft.email || '')
+const selectedDeletePageId = ref('')
+const isSavingPassword = ref(false)
+const isSavingEmail = ref(false)
+const isDeletingPage = ref(false)
+const passwordForm = ref({
+  current: '',
+  next: '',
+  confirm: '',
+})
 const { theme, resolvedTheme, setTheme } = useTheme()
 
 const tabs: Array<{ id: SettingsTab; label: string }> = [
@@ -39,53 +53,9 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'change-password', label: 'Change Password' },
   { id: 'email-settings', label: 'Email Settings' },
   { id: 'privacy', label: 'Privacy' },
-  { id: 'delete-account', label: 'Delete Account' },
+  // The current API spec does not expose account deletion, so this tab is not rendered.
   { id: 'delete-page', label: 'Delete Page' },
 ]
-
-const privacyFields = [
-  'Profile Picture',
-  'Country',
-  'Biography',
-]
-
-const emailPreferences = ref([
-  {
-    title: 'Features & Announcements',
-    description: 'New products and feature updates, as well as occasional announcements',
-    enabled: false,
-  },
-  {
-    title: 'The Skills4export.com',
-    description: 'An email rounding up the best news, entertainment, and culture from around the world',
-    enabled: false,
-  },
-  {
-    title: 'Tips & Reminders',
-    description: 'Timely advice and reminders to help you make the most of our features',
-    enabled: false,
-  },
-  {
-    title: 'Inbox',
-    description: 'Answers to your questions, comments, chat notifications',
-    enabled: false,
-  },
-  {
-    title: 'Research',
-    description: 'Invitations to participate in surveys, usability tests, and more.',
-    enabled: false,
-  },
-  {
-    title: 'Recommended Jobs',
-    description: 'emails highlighting special jobs and companies',
-    enabled: false,
-  },
-  {
-    title: 'Alerts',
-    description: 'Content from those you follow',
-    enabled: false,
-  },
-])
 
 const themeOptions: Array<{
   value: ThemeMode
@@ -117,29 +87,131 @@ const resolvedThemeLabel = computed(() =>
   resolvedTheme.value === 'dark' ? 'Dark mode is currently active.' : 'Light mode is currently active.',
 )
 
-const saveSettings = (label: string) => {
-  toast.success(`${label} saved`)
-}
-
 const togglePasswordField = (field: keyof typeof showPasswordFields.value) => {
   showPasswordFields.value[field] = !showPasswordFields.value[field]
-}
-
-const toggleEmailPreference = (preference: { title: string; enabled: boolean }) => {
-  preference.enabled = !preference.enabled
 }
 
 const deleteCopy = computed(() =>
   activeTab.value === 'delete-page'
     ? {
         title: 'Delete Page',
-        button: 'Delete your account',
+        button: 'Delete page',
       }
     : {
         title: 'Delete Account',
         button: 'Delete your account',
       },
 )
+
+const requireAuthToken = () => {
+  if (authStore.authToken) {
+    return true
+  }
+
+  toast.error('Sign in required', {
+    description: 'Please sign in again before updating settings.',
+  })
+  return false
+}
+
+const changePassword = async () => {
+  if (!requireAuthToken() || isSavingPassword.value) {
+    return
+  }
+
+  if (!passwordForm.value.current || !passwordForm.value.next || !passwordForm.value.confirm) {
+    toast.error('Fill all password fields.')
+    return
+  }
+
+  if (passwordForm.value.next !== passwordForm.value.confirm) {
+    toast.error('New passwords do not match.')
+    return
+  }
+
+  isSavingPassword.value = true
+
+  try {
+    await authService.changePassword(
+      {
+        current_password: passwordForm.value.current,
+        password: passwordForm.value.next,
+        password_confirmation: passwordForm.value.confirm,
+      },
+      authStore.authToken,
+    )
+    passwordForm.value = { current: '', next: '', confirm: '' }
+    toast.success('Password changed.')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to change password.'
+    toast.error('Password failed', { description: message })
+  } finally {
+    isSavingPassword.value = false
+  }
+}
+
+const changeEmail = async () => {
+  if (!requireAuthToken() || isSavingEmail.value) {
+    return
+  }
+
+  const email = emailAddress.value.trim()
+
+  if (!email) {
+    toast.error('Enter an email address.')
+    return
+  }
+
+  isSavingEmail.value = true
+
+  try {
+    await authService.changeEmail({ new_email: email }, authStore.authToken)
+    authStore.signUpDraft.email = email
+    if (authStore.currentUser) {
+      authStore.setCurrentUser({ ...authStore.currentUser, email })
+    }
+    toast.success('Email address saved.')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to change email.'
+    toast.error('Email failed', { description: message })
+  } finally {
+    isSavingEmail.value = false
+  }
+}
+
+const deleteSelectedPage = async () => {
+  if (!requireAuthToken() || isDeletingPage.value) {
+    return
+  }
+
+  if (!selectedDeletePageId.value) {
+    toast.error('Select a page to delete.')
+    return
+  }
+
+  if (!deletePageConfirmed.value) {
+    toast.error('Confirm page deletion first.')
+    return
+  }
+
+  isDeletingPage.value = true
+
+  try {
+    await pagesStore.deletePageFromApi(selectedDeletePageId.value)
+    selectedDeletePageId.value = ''
+    deletePageConfirmed.value = false
+    toast.success('Page deleted.')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to delete page.'
+    toast.error('Delete failed', { description: message })
+  } finally {
+    isDeletingPage.value = false
+  }
+}
+
+onMounted(() => {
+  void pagesStore.loadPages()
+})
 </script>
 
 <template>
@@ -235,6 +307,7 @@ const deleteCopy = computed(() =>
             <span class="text-sm font-semibold text-[var(--text-primary)]">Current Password</span>
             <div class="relative mt-2">
               <input
+                v-model="passwordForm.current"
                 :type="showPasswordFields.current ? 'text' : 'password'"
                 placeholder="Current password"
                 class="h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 pr-12 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
@@ -254,6 +327,7 @@ const deleteCopy = computed(() =>
             <span class="text-sm font-semibold text-[var(--text-primary)]">New Password</span>
             <div class="relative mt-2">
               <input
+                v-model="passwordForm.next"
                 :type="showPasswordFields.next ? 'text' : 'password'"
                 placeholder="New password"
                 class="h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 pr-12 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
@@ -273,6 +347,7 @@ const deleteCopy = computed(() =>
             <span class="text-sm font-semibold text-[var(--text-primary)]">New Password (again)</span>
             <div class="relative mt-2">
               <input
+                v-model="passwordForm.confirm"
                 :type="showPasswordFields.confirm ? 'text' : 'password'"
                 placeholder="New password again"
                 class="h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 pr-12 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
@@ -294,10 +369,12 @@ const deleteCopy = computed(() =>
           <div>
             <button
               type="button"
-              class="mt-4 inline-flex h-11 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
-              @click="saveSettings('Password')"
+              :disabled="isSavingPassword"
+              class="mt-4 inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+              @click="changePassword"
             >
-              Change Password
+              <Loader2 v-if="isSavingPassword" class="h-4 w-4 animate-spin" />
+              {{ isSavingPassword ? 'Changing...' : 'Change Password' }}
             </button>
           </div>
         </div>
@@ -322,35 +399,21 @@ const deleteCopy = computed(() =>
               />
               <button
                 type="button"
-                class="border-l border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
-                @click="saveSettings('Email address')"
+                :disabled="isSavingEmail"
+                class="inline-flex items-center gap-2 border-l border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                @click="changeEmail"
               >
-                Save
+                <Loader2 v-if="isSavingEmail" class="h-4 w-4 animate-spin" />
+                {{ isSavingEmail ? 'Saving...' : 'Save' }}
               </button>
             </div>
           </label>
 
-          <article
-            v-for="preference in emailPreferences"
-            :key="preference.title"
-            class="border-t border-[color:var(--border-soft)] pt-7"
-          >
-            <h3 class="text-base font-semibold text-[var(--text-primary)]">{{ preference.title }}</h3>
-            <p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">{{ preference.description }}</p>
-            <button
-              type="button"
-              role="switch"
-              :aria-checked="preference.enabled"
-              :aria-label="`${preference.title} email preference`"
-              class="mt-5 inline-flex h-8 w-14 items-center rounded-full p-1 transition"
-              :class="preference.enabled ? 'bg-[var(--accent)]' : 'bg-[var(--surface-muted)]'"
-              @click="toggleEmailPreference(preference)"
-            >
-              <span
-                class="h-6 w-6 rounded-full bg-white transition"
-                :class="preference.enabled ? 'translate-x-6' : 'translate-x-0'"
-              />
-            </button>
+          <article class="rounded-[0.9rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
+            <p class="text-sm font-semibold text-[var(--text-primary)]">Email notification preferences are not available in the current API spec.</p>
+            <p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+              The app will wire these toggles when a documented email-preferences endpoint is available.
+            </p>
           </article>
         </div>
       </section>
@@ -361,26 +424,11 @@ const deleteCopy = computed(() =>
           <p class="mt-1 text-sm text-[var(--text-secondary)]">Select who may see your profile details</p>
         </div>
 
-        <div class="space-y-5">
-          <label
-            v-for="field in privacyFields"
-            :key="field"
-            class="block"
-          >
-            <span class="text-sm font-semibold text-[var(--text-primary)]">{{ field }}</span>
-            <select class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]">
-              <option>Public</option>
-              <option>Members only</option>
-              <option>Only me</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            class="inline-flex h-11 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
-            @click="saveSettings('Privacy settings')"
-          >
-            Save changes
-          </button>
+        <div class="rounded-[0.9rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
+          <p class="text-sm font-semibold text-[var(--text-primary)]">Privacy settings are not available in the current API spec.</p>
+          <p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+            No privacy-settings endpoint is documented yet, so this page no longer saves placeholder visibility data.
+          </p>
         </div>
       </section>
 
@@ -404,6 +452,18 @@ const deleteCopy = computed(() =>
         <p class="mt-5 text-sm leading-7 text-[var(--text-primary)]">
           Once you delete your account, there is no going back. Please be certain.
         </p>
+        <label v-if="activeTab === 'delete-page'" class="mt-5 block">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Page to delete</span>
+          <select
+            v-model="selectedDeletePageId"
+            class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
+          >
+            <option value="">Select a page</option>
+            <option v-for="page in pagesStore.pages" :key="page.id" :value="page.id">
+              {{ page.name }}
+            </option>
+          </select>
+        </label>
         <label class="mt-5 flex items-start gap-2 text-sm leading-6 text-[var(--text-primary)]">
           <input
             v-if="activeTab === 'delete-account'"
@@ -423,12 +483,13 @@ const deleteCopy = computed(() =>
         </label>
         <button
           type="button"
-          class="mt-6 inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--danger)_45%,white)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--danger)]"
+          class="mt-6 inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--danger)_45%,white)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="activeTab === 'delete-account' ? !deleteAccountConfirmed : !deletePageConfirmed"
-          @click="saveSettings(deleteCopy.title)"
+          @click="activeTab === 'delete-page' ? deleteSelectedPage() : undefined"
         >
-          <Trash2 class="h-4 w-4" />
-          {{ deleteCopy.button }}
+          <Loader2 v-if="isDeletingPage" class="h-4 w-4 animate-spin" />
+          <Trash2 v-else class="h-4 w-4" />
+          {{ isDeletingPage ? 'Deleting...' : deleteCopy.button }}
         </button>
       </section>
     </div>

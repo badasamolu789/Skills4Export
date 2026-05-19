@@ -39,9 +39,23 @@ const getSalaryLabel = (job: JobRecord) => {
   return min || max || 'Salary not listed'
 }
 
-const getJobPath = (job: JobRecord) => `/jobs/${job.slug || job.id}`
+const getJobPath = (job: JobRecord) => `/jobs/${job.id || job.slug}`
 
-const getJobExperience = (job: JobRecord) => job.experience || 'Experience not listed'
+const getJobExperience = (job: JobRecord) => {
+  const experience = job.experience?.trim()
+
+  if (!experience) {
+    return 'Experience not listed'
+  }
+
+  const compactExperience = experience.replace(/\s*-\s*/g, '-')
+
+  if (/yrs?\)?$/i.test(compactExperience) || /years?$/i.test(compactExperience)) {
+    return compactExperience.replace(/\s*years?$/i, '(yrs)')
+  }
+
+  return `${compactExperience}(yrs)`
+}
 
 const filteredJobs = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -140,13 +154,6 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-3 px-1">
-        <p class="text-sm font-medium text-[var(--text-secondary)]">
-          {{ jobsStore.isLoadingJobs ? 'Loading jobs...' : `${filteredJobs.length} job${filteredJobs.length === 1 ? '' : 's'} found` }}
-        </p>
-        <p class="text-sm text-[var(--text-secondary)]">Live opportunities across your network</p>
-      </div>
-
       <article
         v-if="jobsStore.isLoadingJobs"
         v-for="item in 4"
@@ -158,10 +165,10 @@ onBeforeUnmount(() => {
           <div class="h-4 w-48 rounded-full bg-[var(--surface-secondary)]" />
           <div class="h-3 w-full max-w-3xl rounded-full bg-[var(--surface-secondary)]" />
           <div class="h-3 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
-          <div class="grid gap-2 sm:grid-cols-3">
-            <span class="h-8 rounded-full bg-[var(--surface-secondary)]" />
-            <span class="h-8 rounded-full bg-[var(--surface-secondary)]" />
-            <span class="h-8 rounded-full bg-[var(--surface-secondary)]" />
+          <div class="flex flex-wrap gap-2">
+            <span class="h-8 w-36 rounded-full bg-[var(--surface-secondary)]" />
+            <span class="h-8 w-28 rounded-full bg-[var(--surface-secondary)]" />
+            <span class="h-8 w-40 rounded-full bg-[var(--surface-secondary)]" />
           </div>
         </div>
       </article>
@@ -189,24 +196,24 @@ onBeforeUnmount(() => {
             {{ job.description }}
           </p>
 
-          <div class="mt-3 grid gap-2 sm:grid-cols-3">
+          <div class="mt-3 flex flex-wrap gap-2">
               <span
-              class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)]"
+              class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]"
               >
-                <MapPin class="h-4 w-4 text-[var(--accent-strong)]" />
-            {{ job.location || 'Location not listed' }}
+                <MapPin class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
+            <span class="truncate">{{ job.location || 'Location not listed' }}</span>
               </span>
               <span
-              class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)]"
+              class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[12rem]"
               >
-              <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ getJobExperience(job) }}
+              <BriefcaseBusiness class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
+              <span class="truncate">{{ getJobExperience(job) }}</span>
               </span>
               <span
-              class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)]"
+              class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]"
               >
-                <Wallet class="h-4 w-4 text-[var(--accent-strong)]" />
-                {{ getSalaryLabel(job) }}
+                <Wallet class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
+                <span class="truncate">{{ getSalaryLabel(job) }}</span>
               </span>
             </div>
 

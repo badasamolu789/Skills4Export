@@ -65,6 +65,15 @@ export type CreateAnswerRequest = {
   parentAnswerId?: string | null
 }
 
+export type ListQuestionsParams = {
+  page?: number
+  per_page?: number
+  q?: string
+  sort?: string
+  communityId?: string | null
+  visibility?: string
+}
+
 type QuestionRequestOptions = Pick<ApiRequestOptions, 'suppressErrorModal' | 'signal'>
 
 const QUESTION_ROUTES = {
@@ -74,13 +83,31 @@ const QUESTION_ROUTES = {
   questionAnswers: (questionId: string) => `/questions/${questionId}/answers`,
 } as const
 
+const withQuery = (path: string, params: Record<string, unknown> = {}) => {
+  const query = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+
+    query.set(key, String(value))
+  })
+
+  const value = query.toString()
+  return value ? `${path}?${value}` : path
+}
+
 export const questionsService = {
   createQuestion(payload: CreateQuestionRequest, token?: string | null) {
     return api.post<ApiSuccessResponse<QuestionRecord>>(QUESTION_ROUTES.questions, payload, { token })
   },
 
-  listQuestions(token?: string | null, options?: QuestionRequestOptions) {
-    return api.get<PaginatorPayload<QuestionRecord>>(QUESTION_ROUTES.questions, { token, ...options })
+  listQuestions(params: ListQuestionsParams = {}, token?: string | null, options?: QuestionRequestOptions) {
+    return api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, params), {
+      token,
+      ...options,
+    })
   },
 
   getQuestion(id: string, token?: string | null, includeAnswers = true) {

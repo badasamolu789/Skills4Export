@@ -15,6 +15,7 @@ export type UserProfile = {
   id?: string
   userId?: string
   username?: string
+  displayName?: string
   bio?: string
   location?: string
   avatar?: string | null
@@ -38,7 +39,10 @@ export type UserSkill = {
   id?: string
   skill?: string
   name?: string
+  skillName?: string
+  skill_name?: string
   level?: 'beginner' | 'intermediate' | 'expert' | string
+  [key: string]: unknown
 }
 
 export type UserPortfolio = {
@@ -192,12 +196,39 @@ const normalizeUserProfile = (profile?: UserProfile | null): UserProfile | null 
   }
 }
 
+const normalizeUserSkill = (skill: UserSkill): UserSkill => {
+  const record = skill as Record<string, unknown>
+  const nestedSkill = isRecord(record.skill) ? record.skill : null
+  const nestedName = nestedSkill ? getStringFromRecord(nestedSkill, ['name', 'skill', 'title']) : ''
+  const name =
+    getStringFromRecord(record, ['name', 'skillName', 'skill_name', 'title', 'label']) ||
+    (typeof record.skill === 'string' ? record.skill.trim() : '') ||
+    nestedName
+
+  return {
+    ...skill,
+    name,
+    skill: typeof skill.skill === 'string' ? skill.skill : name,
+  }
+}
+
+const normalizeUserSkillResponse = <T extends { data?: UserSkill | null }>(response: T): T => ({
+  ...response,
+  data: response.data ? normalizeUserSkill(response.data) as T['data'] : response.data,
+})
+
+const normalizeUserSkillsListResponse = <T extends { data?: UserSkill[] }>(response: T): T => ({
+  ...response,
+  data: response.data?.map(normalizeUserSkill) ?? response.data,
+})
+
 const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileResponse => ({
   ...response,
   data: response.data
     ? {
       ...response.data,
       profile: normalizeUserProfile(response.data.profile),
+      skills: response.data.skills?.map(normalizeUserSkill) ?? response.data.skills,
     }
     : response.data,
 })
@@ -246,6 +277,7 @@ export type CreateUserRequest = {
 
 export type UpsertUserProfileRequest = {
   username?: string
+  displayName?: string
   bio?: string
   location?: string
   avatar?: string | null
@@ -253,6 +285,20 @@ export type UpsertUserProfileRequest = {
   website?: string
   linkedin?: string
   github?: string
+}
+
+export type UpdateUserRequest = {
+  name?: string
+  displayName?: string
+}
+
+export type UpdateUserResponse = {
+  success?: boolean
+  message?: string
+  data?: {
+    user?: UserRecord | null
+    profile?: UserProfile | null
+  } | null
 }
 
 // Skills
@@ -453,19 +499,42 @@ export const usersService = {
   createUser(payload: CreateUserRequest, token?: string | null) {
     return api.post<UserResponse>(USER_ROUTES.users, payload, { token })
   },
+  updateUser(id: string, payload: UpdateUserRequest, token?: string | null) {
+    return api
+      .patch<UpdateUserResponse>(USER_ROUTES.userById(id), payload, { token })
+      .then((response) => ({
+        ...response,
+        data: response.data
+          ? {
+            ...response.data,
+            profile: normalizeUserProfile(response.data.profile),
+          }
+          : response.data,
+      }))
+  },
   getUserProfile(id: string, token?: string | null) {
     return api
       .get<UserProfileResponse>(USER_ROUTES.userProfile(id), { token })
       .then(normalizeUserProfileResponse)
   },
-  createUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
+  createUserProfile(
+    id: string,
+    payload: UpsertUserProfileRequest,
+    token?: string | null,
+    options?: UserRequestOptions,
+  ) {
     return api
-      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
       .then(normalizeUserProfileResponse)
   },
-  updateUserProfile(id: string, payload: UpsertUserProfileRequest, token?: string | null) {
+  updateUserProfile(
+    id: string,
+    payload: UpsertUserProfileRequest,
+    token?: string | null,
+    options?: UserRequestOptions,
+  ) {
     return api
-      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
       .then(normalizeUserProfileResponse)
   },
   uploadUserAvatar(
@@ -512,7 +581,9 @@ export const usersService = {
    * @param options - Optional API request options
    */
   listUserSkills(userId: string, token?: string | null, options?: ApiRequestOptions) {
-    return api.get<UserSkillsListResponse>(USER_ROUTES.userSkills(userId), { token, ...options })
+    return api
+      .get<UserSkillsListResponse>(USER_ROUTES.userSkills(userId), { token, ...options })
+      .then(normalizeUserSkillsListResponse)
   },
 
   /**
@@ -521,8 +592,15 @@ export const usersService = {
    * @param payload - The skill data (skill name and optional level)
    * @param token - Optional authorization token
    */
-  addUserSkill(userId: string, payload: AddUserSkillRequest, token?: string | null) {
-    return api.post<UserSkillResponse>(USER_ROUTES.userSkills(userId), payload, { token })
+  addUserSkill(
+    userId: string,
+    payload: AddUserSkillRequest,
+    token?: string | null,
+    options?: UserRequestOptions,
+  ) {
+    return api
+      .post<UserSkillResponse>(USER_ROUTES.userSkills(userId), payload, { token, ...options })
+      .then(normalizeUserSkillResponse)
   },
 
   /**
@@ -660,8 +738,16 @@ export const usersService = {
    * @param payload - The experience data
    * @param token - Optional authorization token
    */
-  addUserExperience(userId: string, payload: AddUserExperienceRequest, token?: string | null) {
-    return api.post<UserExperienceResponse>(USER_ROUTES.userExperiences(userId), payload, { token })
+  addUserExperience(
+    userId: string,
+    payload: AddUserExperienceRequest,
+    token?: string | null,
+    options?: UserRequestOptions,
+  ) {
+    return api.post<UserExperienceResponse>(USER_ROUTES.userExperiences(userId), payload, {
+      token,
+      ...options,
+    })
   },
 
   updateUserExperience(userId: string, experienceId: string, payload: AddUserExperienceRequest, token?: string | null) {

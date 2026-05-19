@@ -20,6 +20,8 @@ const authStore = useAuthStore()
 const jobsStore = useJobsStore()
 const skillInput = ref('')
 const skillTags = ref<string[]>([])
+const qualificationInput = ref('')
+const qualificationItems = ref<string[]>([])
 const isSubmitting = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -54,6 +56,10 @@ const closeModal = () => {
 
 const syncSkillsField = () => {
   form.value.skills = skillTags.value.join(', ')
+}
+
+const syncQualificationsField = () => {
+  form.value.qualifications = qualificationItems.value.join('\n')
 }
 
 const addSkillTag = (rawSkill: string) => {
@@ -112,6 +118,27 @@ const removeSkillTag = (skill: string) => {
   syncSkillsField()
 }
 
+const addQualificationItem = (rawItem: string) => {
+  const item = rawItem.trim()
+
+  if (!item) {
+    return
+  }
+
+  qualificationItems.value.push(item)
+  qualificationInput.value = ''
+  syncQualificationsField()
+}
+
+const finalizeQualificationInput = () => {
+  addQualificationItem(qualificationInput.value)
+}
+
+const removeQualificationItem = (index: number) => {
+  qualificationItems.value = qualificationItems.value.filter((_, itemIndex) => itemIndex !== index)
+  syncQualificationsField()
+}
+
 const getTrimmedValue = (value: string) => value.trim()
 
 const getApiErrorDescription = (error: unknown, fallback: string) => {
@@ -148,6 +175,7 @@ const getApiErrorDescription = (error: unknown, fallback: string) => {
 
 const submitForm = async () => {
   finalizeSkillInput()
+  finalizeQualificationInput()
 
   const title = getTrimmedValue(form.value.title)
   const companyName = getTrimmedValue(form.value.companyName)
@@ -183,7 +211,7 @@ const submitForm = async () => {
   try {
     const job = await jobsStore.createJob({
       title,
-      skills: form.value.skills || undefined,
+      skills: skillTags.value.length ? [...skillTags.value] : undefined,
       location: getTrimmedValue(form.value.location) || undefined,
       type: form.value.jobType || undefined,
       workMode: form.value.jobType === 'remote' || form.value.jobType === 'hybrid' ? form.value.jobType : undefined,
@@ -191,7 +219,6 @@ const submitForm = async () => {
       companyName,
       description,
       qualifications: getTrimmedValue(form.value.qualifications) || undefined,
-      tasks: getTrimmedValue(form.value.qualifications) || undefined,
       workExperience: form.value.workExperience || undefined,
       minSalary: form.value.minSalary ? Number(form.value.minSalary) : undefined,
       maxSalary: form.value.maxSalary ? Number(form.value.maxSalary) : null,
@@ -220,6 +247,7 @@ watch(
   (isOpen) => {
     if (isOpen) {
       skillInput.value = ''
+      qualificationInput.value = ''
       return
     }
 
@@ -368,13 +396,43 @@ watch(
               />
             </label>
             <label class="space-y-2 md:col-span-2">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Qualifications and Tasks:*</span>
-              <textarea
-                v-model="form.qualifications"
-                rows="4"
-                placeholder="Outline the qualifications, certifications, and core tasks for the role."
-                :class="textareaClass"
-              />
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Qualifications:*</span>
+              <div class="rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3 transition focus-within:border-[color:var(--accent-soft)]">
+                <ul v-if="qualificationItems.length" class="mb-3 space-y-2">
+                  <li
+                    v-for="(item, index) in qualificationItems"
+                    :key="`${item}-${index}`"
+                    class="flex items-start gap-2 rounded-[0.6rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-primary)]"
+                  >
+                    <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-strong)]" />
+                    <span class="min-w-0 flex-1 leading-6">{{ item }}</span>
+                    <button
+                      type="button"
+                      class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]"
+                      @click="removeQualificationItem(index)"
+                    >
+                      <X class="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                </ul>
+                <div class="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    v-model="qualificationInput"
+                    type="text"
+                    placeholder="Add one qualification, then press Enter"
+                    class="h-10 min-w-0 flex-1 border-none bg-transparent text-[0.86rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+                    @keydown.enter.prevent="finalizeQualificationInput"
+                  />
+                  <button
+                    type="button"
+                    class="inline-flex h-10 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent-soft)]"
+                    @click="finalizeQualificationInput"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+              <input v-model="form.qualifications" type="hidden" />
             </label>
 
             <label class="space-y-2">

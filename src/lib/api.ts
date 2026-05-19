@@ -296,9 +296,10 @@ const logApiResponse = ({
 }
 
 // Request optimization utilities
-const getRequestKey = (method: ApiMethod, path: string, body?: unknown) => {
+const getRequestKey = (method: ApiMethod, path: string, body?: unknown, token?: string | null) => {
   const bodyKey = body ? JSON.stringify(body) : ''
-  return `${method}:${path}:${bodyKey}`
+  const tokenKey = token ? `token:${token}` : 'public'
+  return `${method}:${path}:${bodyKey}:${tokenKey}`
 }
 
 const getCacheKey = (method: ApiMethod, path: string) => {
@@ -312,6 +313,7 @@ const DYNAMIC_CACHE_BYPASS_PREFIXES = [
   '/freelancers',
   '/freelance-jobs',
   '/communities',
+  '/pages',
   '/user/',
   '/users/',
   '/media/',
@@ -463,11 +465,11 @@ export const apiRequest = async <T>(
     retry = true,
   }: ApiRequestOptions = {},
 ): Promise<T> => {
-  const requestKey = getRequestKey(method, path, body)
+  const requestKey = getRequestKey(method, path, body, token)
   const cacheKey = getCacheKey(method, path)
 
   // Check cache for GET requests
-  if (isCacheable(method, path)) {
+  if (!token && isCacheable(method, path)) {
     const cached = getCachedResponse(method, path)
     if (cached) {
       logApiResponse({
@@ -552,7 +554,7 @@ export const apiRequest = async <T>(
       }
 
       // Cache successful GET responses
-      if (isCacheable(method, path)) {
+      if (!token && isCacheable(method, path)) {
         setCachedResponse(method, path, payload)
       } else if (method !== 'GET') {
         invalidateRelatedCacheEntries(path)

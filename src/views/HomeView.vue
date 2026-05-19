@@ -5,6 +5,7 @@ import FeedAdvertCard from '@/components/FeedAdvertCard.vue'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
+import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
@@ -20,7 +21,7 @@ type FeedItem = {
 type FeedAdvertItem = {
   id: string
   type: 'advert'
-  variant: 'campaign' | 'jobs'
+  advert?: AdvertRecord | null
 }
 
 type FeedRenderItem =
@@ -40,6 +41,7 @@ const isLoadingMore = ref(false)
 const isLoadingFeed = ref(false)
 const feedError = ref('')
 const apiPosts = ref<FeedPost[]>([])
+const adverts = ref<AdvertRecord[]>([])
 const authStore = useAuthStore()
 const currentUser = useCurrentUserIdentity()
 
@@ -64,6 +66,29 @@ const feedItems = computed<FeedItem[]>(() => {
 })
 
 const visiblePosts = computed(() => feedItems.value.slice(0, visiblePostCount.value))
+const usableAdverts = computed(() =>
+  adverts.value.filter((advert) =>
+    Boolean(advert.imageUrl) &&
+    !advert.isExpired &&
+    (advert.status === 'active' || advert.status === 'approved'),
+  ),
+)
+
+const feedAdverts = computed(() => {
+  const feedMatches = usableAdverts.value.filter((advert) => {
+    const locationName = advert.location?.name?.toLowerCase() ?? ''
+
+    return (
+      locationName.includes('feed') &&
+      !locationName.includes('right') &&
+      !locationName.includes('rail') &&
+      !locationName.includes('sidebar')
+    )
+  })
+
+  return feedMatches.length ? feedMatches : usableAdverts.value
+})
+
 const visibleFeedItems = computed<FeedRenderItem[]>(() => {
   const entries: FeedRenderItem[] = []
 
@@ -75,10 +100,16 @@ const visibleFeedItems = computed<FeedRenderItem[]>(() => {
     })
 
     if ((index + 1) % 4 === 0) {
+      const advertIndex = feedAdverts.value.length
+        ? Math.floor(index / 4) % feedAdverts.value.length
+        : -1
+
       entries.push({
-        id: `advert-${index + 1}`,
+        id: feedAdverts.value[advertIndex]?.id
+          ? `advert-${feedAdverts.value[advertIndex]?.id}-${index + 1}`
+          : `advert-placeholder-${index + 1}`,
         type: 'advert',
-        variant: ((index + 1) / 4) % 2 === 0 ? 'jobs' : 'campaign',
+        advert: feedAdverts.value[advertIndex] ?? null,
       })
     }
   })
@@ -175,9 +206,16 @@ const loadFeed = async () => {
   feedError.value = ''
 
   try {
-    const [postsResult, questionsResult] = await Promise.allSettled([
-      postsService.listPosts(authStore.authToken),
-      questionsService.listQuestions(authStore.authToken),
+    const [postsResult, questionsResult, advertsResult] = await Promise.allSettled([
+      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      advertsService.listAdverts(
+        {
+          per_page: 100,
+          sort: '-createdAt',
+        },
+        authStore.authToken,
+      ),
     ])
 
     const posts =
@@ -190,6 +228,7 @@ const loadFeed = async () => {
         ? await Promise.all(questionsResult.value.data.map((question) => loadFeedQuestion(question)))
         : []
 
+    adverts.value = advertsResult.status === 'fulfilled' ? advertsResult.value.data ?? [] : []
     apiPosts.value = shuffleFeedPosts([...posts, ...questions])
     visiblePostCount.value = INITIAL_POST_COUNT
 
@@ -213,6 +252,7 @@ const loadFeed = async () => {
     feedError.value =
       error instanceof ApiError ? error.message : 'Unable to load the feed from the server.'
     apiPosts.value = []
+    adverts.value = []
   } finally {
     isLoadingFeed.value = false
   }
@@ -289,7 +329,7 @@ onBeforeUnmount(() => {
         />
         <FeedAdvertCard
           v-else
-          :variant="item.variant"
+          :advert="item.advert"
         />
       </template>
     </div>

@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ArrowUpRight, BadgeHelp } from 'lucide-vue-next'
+import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
 
 const props = withDefaults(
   defineProps<{
     pinnedLayout?: boolean
+    hideTrendingQuestions?: boolean
   }>(),
   {
     pinnedLayout: false,
+    hideTrendingQuestions: false,
   },
 )
 
@@ -26,6 +29,8 @@ const authStore = useAuthStore()
 const questions = ref<QuestionRecord[]>([])
 const isLoadingQuestions = ref(false)
 const hasLoadedQuestions = ref(false)
+const adverts = ref<AdvertRecord[]>([])
+const isLoadingAdverts = ref(false)
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
@@ -84,13 +89,37 @@ const trendingQuestions = computed<TrendingQuestion[]>(() =>
     })),
 )
 
+const usableAdverts = computed(() =>
+  adverts.value.filter((advert) =>
+    Boolean(advert.imageUrl) &&
+    !advert.isExpired &&
+    (advert.status === 'active' || advert.status === 'approved'),
+  ),
+)
+
+const rightRailAdvert = computed(() => {
+  const rightRailMatch = usableAdverts.value.find((advert) => {
+    const locationName = advert.location?.name?.toLowerCase() ?? ''
+
+    return (
+      locationName.includes('right') ||
+      locationName.includes('rail') ||
+      locationName.includes('sidebar')
+    )
+  })
+
+  return rightRailMatch ?? usableAdverts.value[0] ?? null
+})
+
 const loadTrendingQuestions = async () => {
   isLoadingQuestions.value = true
 
   try {
-    const response = await questionsService.listQuestions(authStore.authToken, {
-      suppressErrorModal: true,
-    })
+    const response = await questionsService.listQuestions(
+      { per_page: 5, sort: '-createdAt' },
+      authStore.authToken,
+      { suppressErrorModal: true },
+    )
     questions.value = response.data ?? []
   } catch {
     questions.value = []
@@ -100,8 +129,28 @@ const loadTrendingQuestions = async () => {
   }
 }
 
+const loadAdverts = async () => {
+  isLoadingAdverts.value = true
+
+  try {
+    const response = await advertsService.listAdverts(
+      {
+        per_page: 100,
+        sort: '-createdAt',
+      },
+      authStore.authToken,
+    )
+    adverts.value = response.data ?? []
+  } catch {
+    adverts.value = []
+  } finally {
+    isLoadingAdverts.value = false
+  }
+}
+
 onMounted(() => {
   void loadTrendingQuestions()
+  void loadAdverts()
 })
 </script>
 
@@ -118,6 +167,7 @@ onMounted(() => {
       "
     >
       <section
+        v-if="!props.hideTrendingQuestions"
         class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)]"
       >
         <div class="flex items-center gap-2">
@@ -176,10 +226,32 @@ onMounted(() => {
       </section>
 
       <section>
+        <div
+          v-if="isLoadingAdverts && !rightRailAdvert"
+          class="aspect-[4/5] w-full animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
+          aria-label="Loading advertisement"
+        />
         <a
+          v-else-if="rightRailAdvert?.imageUrl"
+          :href="rightRailAdvert.linkUrl || rightRailAdvert.imageUrl"
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+          aria-label="Advertisement"
+          class="block overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] transition hover:opacity-90"
+        >
+          <img
+            :src="rightRailAdvert.imageUrl"
+            :alt="rightRailAdvert.ownerName ? `${rightRailAdvert.ownerName} advertisement` : 'Advertisement'"
+            class="aspect-[4/5] w-full object-cover"
+            loading="lazy"
+          >
+        </a>
+        <a
+          v-else
           href="#"
           aria-label="Advertisement"
           class="block overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] transition hover:opacity-90"
+          @click.prevent
         >
           <div class="advert-placeholder aspect-[4/5] w-full" />
         </a>

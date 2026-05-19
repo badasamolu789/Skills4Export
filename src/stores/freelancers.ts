@@ -11,6 +11,34 @@ import {
 } from '@/services/freelancers'
 import { useAuthStore } from '@/stores/auth'
 
+const PUBLIC_FREELANCER_STATUSES = new Set(['available', 'certified'])
+const PUBLIC_FREELANCE_JOB_STATUSES = new Set(['approved', 'active', 'live'])
+
+const isPublicFreelancer = (freelancer: FreelancerRecord) => {
+  const status = freelancer.status?.toLowerCase()
+  return !status || PUBLIC_FREELANCER_STATUSES.has(status)
+}
+
+const isPublicFreelanceJob = (job: FreelanceJobRecord) => {
+  const status = job.status?.toLowerCase()
+  return !status || PUBLIC_FREELANCE_JOB_STATUSES.has(status)
+}
+
+const mergeFreelanceJobs = (...groups: FreelanceJobRecord[][]) => {
+  const seen = new Set<string>()
+
+  return groups.flat().filter((job) => {
+    const key = job.id || job.slug
+
+    if (!key || seen.has(key)) {
+      return false
+    }
+
+    seen.add(key)
+    return true
+  })
+}
+
 export const useFreelancersStore = defineStore('freelancers', () => {
   const authStore = useAuthStore()
   const freelancers = ref<FreelancerRecord[]>([])
@@ -29,7 +57,7 @@ export const useFreelancersStore = defineStore('freelancers', () => {
 
     try {
       const response = await freelancersService.listFreelancers({ per_page: 100 }, authStore.authToken)
-      freelancers.value = response.data
+      freelancers.value = response.data.filter(isPublicFreelancer)
     } catch (error) {
       freelancersError.value = error instanceof ApiError ? error.message : 'Unable to load freelancers.'
       freelancers.value = []
@@ -49,12 +77,29 @@ export const useFreelancersStore = defineStore('freelancers', () => {
     freelanceJobsError.value = ''
 
     try {
-      const response = await freelancersService.listFreelanceJobs(
-        { per_page: 100, status: 'live' },
-        authStore.authToken,
-        { suppressErrorModal: true },
-      )
-      freelanceJobs.value = response.data.filter((job) => !job.status || job.status === 'live')
+      const [publicJobsResult, ownPostedJobsResult] = await Promise.allSettled([
+        freelancersService.listFreelanceJobs(
+          { per_page: 100 },
+          authStore.authToken,
+          { suppressErrorModal: true },
+        ),
+        authStore.authToken
+          ? freelancersService.listMyFreelanceJobs({ per_page: 100 }, authStore.authToken)
+          : Promise.resolve({ data: [] as FreelanceJobRecord[] }),
+      ])
+
+      const publicJobs =
+        publicJobsResult.status === 'fulfilled'
+          ? publicJobsResult.value.data.filter(isPublicFreelanceJob)
+          : []
+      const ownPostedJobs =
+        ownPostedJobsResult.status === 'fulfilled' ? ownPostedJobsResult.value.data : []
+
+      if (publicJobsResult.status === 'rejected' && !ownPostedJobs.length) {
+        throw publicJobsResult.reason
+      }
+
+      freelanceJobs.value = mergeFreelanceJobs(ownPostedJobs, publicJobs)
     } catch (error) {
       freelanceJobsError.value =
         error instanceof ApiError ? error.message : 'Unable to load freelance jobs.'

@@ -23,6 +23,7 @@ import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import PostCommentThread from '@/components/PostCommentThread.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/services/posts'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
 import { usersService, type MyProfileData } from '@/services/users'
@@ -53,6 +54,7 @@ const postAuthorRoute = computed(() => {
 })
 const postAuthorUserId = computed(() => post.value?.userId || getPublicProfileIdFromRoute(postAuthorRoute.value))
 const isOwnPost = computed(() => Boolean(authStore.userId && postAuthorUserId.value === authStore.userId))
+const showFollowAction = computed(() => Boolean(post.value?.pageId && !isOwnPost.value))
 const isQuestionRoute = computed(() => route.path.startsWith('/questions/'))
 const isFollowing = ref(false)
 const isSaved = ref(false)
@@ -75,6 +77,9 @@ const isLoadingAnswererProfile = ref(false)
 const isShareModalOpen = ref(false)
 const shareCommunity = ref('')
 const shareComment = ref('')
+const shareCommunities = ref<CommunityRecord[]>([])
+const isLoadingShareCommunities = ref(false)
+const hasLoadedShareCommunities = ref(false)
 const activeActionClass =
   'border-[color:var(--accent)] bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)] hover:text-white'
 
@@ -562,8 +567,8 @@ watch(
   post,
   (nextPost) => {
     isFollowing.value = nextPost?.isFollowing ?? false
-    isSaved.value = false
-    isScored.value = false
+    isSaved.value = nextPost?.isSaved ?? false
+    isScored.value = nextPost?.isScored ?? false
     currentScore.value = nextPost && 'score' in nextPost ? nextPost.score : 0
     currentComments.value = nextPost && 'comments' in nextPost ? nextPost.comments : detailComments.value.length
     commentInput.value = ''
@@ -682,6 +687,9 @@ const toggleSave = async () => {
 const copyShareLink = async () => {
   try {
     await navigator.clipboard.writeText(shareLink.value)
+    if (apiPostId.value) {
+      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken).catch(() => null)
+    }
     toast.success('Post link copied')
   } catch {
     toast.error('Unable to copy link')
@@ -690,14 +698,67 @@ const copyShareLink = async () => {
 
 const openShareModal = () => {
   isShareModalOpen.value = true
+  void loadShareCommunities()
 }
 
 const closeShareModal = () => {
   isShareModalOpen.value = false
 }
 
+const loadShareCommunities = async () => {
+  if (hasLoadedShareCommunities.value || isLoadingShareCommunities.value) {
+    return
+  }
+
+  isLoadingShareCommunities.value = true
+
+  try {
+    const response = await communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken)
+    shareCommunities.value = response.data ?? []
+    hasLoadedShareCommunities.value = true
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to load communities.'
+    toast.error('Communities failed', { description: message })
+  } finally {
+    isLoadingShareCommunities.value = false
+  }
+}
+
 const submitShare = async () => {
   if (!post.value) {
+    return
+  }
+
+  if (shareCommunity.value) {
+    if (!apiPostId.value) {
+      toast.error('Share needs a post ID', {
+        description: 'Only API posts can be shared into a community.',
+      })
+      return
+    }
+
+    try {
+      const response = await postsService.sharePostToCommunity(
+        apiPostId.value,
+        {
+          communityId: shareCommunity.value,
+          comment: shareComment.value.trim() || undefined,
+        },
+        authStore.authToken,
+      )
+
+      toast.success('Post shared to community.')
+      shareCommunity.value = ''
+      shareComment.value = ''
+      closeShareModal()
+
+      if (response.data.id && typeof window !== 'undefined') {
+        window.location.assign(`/posts/${response.data.id}`)
+      }
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to share this post.'
+      toast.error('Share failed', { description: message })
+    }
     return
   }
 
@@ -724,6 +785,11 @@ const submitShare = async () => {
     toast.success('Post shared', {
       description: canNativeShare ? 'The native share sheet has been opened.' : 'The share text has been copied.',
     })
+    if (apiPostId.value) {
+      await postsService
+        .recordShareEvent(apiPostId.value, { type: canNativeShare ? 'native_share' : 'manual_share' }, authStore.authToken)
+        .catch(() => null)
+    }
     shareCommunity.value = ''
     shareComment.value = ''
     closeShareModal()
@@ -814,10 +880,29 @@ const toggleCommentReplies = (comment: DetailComment | PostCommentThreadItem) =>
   comment.areRepliesOpen = !comment.areRepliesOpen
 }
 
-const openCommentReportModal = (comment: DetailComment | PostCommentThreadItem) => {
-  toast.success('Report noted', {
-    description: `Thanks for reporting ${comment.author}'s comment.`,
-  })
+const openCommentReportModal = async (comment: DetailComment | PostCommentThreadItem) => {
+  if (typeof comment.id !== 'string') {
+    toast.error('Report needs a saved comment.')
+    return
+  }
+
+  try {
+    await postsService.reportComment(
+      comment.id,
+      {
+        userId: authStore.userId || undefined,
+        reason: 'Inappropriate content',
+        details: `Reported from post detail page for ${comment.author}'s comment.`,
+      },
+      authStore.authToken,
+    )
+    toast.success('Report submitted', {
+      description: `Thanks for reporting ${comment.author}'s comment.`,
+    })
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to submit report.'
+    toast.error('Report failed', { description: message })
+  }
 }
 
 const submitCommentReply = async (comment: DetailComment | PostCommentThreadItem) => {
@@ -1135,6 +1220,7 @@ const submitAnswer = async () => {
 
         <div v-else class="flex flex-wrap gap-2">
           <button
+            v-if="showFollowAction"
             type="button"
             class="inline-flex h-9 items-center gap-1.5 rounded-[0.8rem] border px-3 text-[0.82rem] font-semibold transition"
             :class="isFollowing ? 'border-[color:var(--accent)] bg-[var(--accent)] text-white' : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
@@ -1677,13 +1763,16 @@ const submitAnswer = async () => {
                 class="h-10 w-full rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 text-[0.86rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
               >
                 <option value="">Select a community</option>
-                <option value="Design Community">Design Community</option>
-                <option value="Tech Careers">Tech Careers</option>
-                <option value="Opportunities Hub">Opportunities Hub</option>
-                <option value="General Community">General Community</option>
+                <option
+                  v-for="community in shareCommunities"
+                  :key="community.id"
+                  :value="community.id"
+                >
+                  {{ community.name }}
+                </option>
               </select>
               <p class="text-xs leading-5 text-[var(--text-tertiary)]">
-                This adds community context to the shared link.
+                {{ isLoadingShareCommunities ? 'Loading communities...' : 'Select a community to repost this content there.' }}
               </p>
             </div>
 

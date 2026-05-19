@@ -8,12 +8,26 @@ export type CommunityRecord = {
   category?: {
     id: string
     name: string
+    icon?: string | null
+    iconName?: string | null
+    icon_name?: string | null
+    iconClass?: string | null
+    icon_class?: string | null
   } | null
+  icon?: string | null
+  iconName?: string | null
+  icon_name?: string | null
+  iconClass?: string | null
+  icon_class?: string | null
   name: string
   description: string
   is_active?: number
   default_post_visibility?: 'public' | 'connections' | 'community' | string | null
   posts_count?: number
+  members_count?: number
+  member_count?: number
+  followers_count?: number
+  follower_count?: number
   post_likes_count?: number
   post_reactions_count?: number
   comments_count?: number
@@ -22,8 +36,13 @@ export type CommunityRecord = {
 
 export type CommunityMemberRecord = {
   id: string
-  userId: string
-  communityId: string
+  userId?: string
+  user_id?: string
+  user?: {
+    id?: string
+  } | null
+  communityId?: string
+  community_id?: string
   role: string
 }
 

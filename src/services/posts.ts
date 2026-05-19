@@ -4,7 +4,10 @@ export type PostRecord = {
   id: string
   user_id: string
   community_id: string | null
+  communityId?: string | null
   page_id: string | null
+  parent_post_id?: string | null
+  originalPostId?: string | null
   title: string
   content: string
   created_at: string
@@ -15,6 +18,10 @@ export type PostRecord = {
   reactions_count?: number
   reaction_count?: number
   score?: number
+  is_saved?: boolean
+  is_liked?: boolean
+  is_report?: boolean
+  is_follow?: boolean
 }
 
 export type PostMediaRecord = {
@@ -57,6 +64,16 @@ export type PaginatorPayload<T> = {
   total: number
 }
 
+export type ListPostsParams = {
+  page?: number
+  per_page?: number
+  q?: string
+  sort?: string
+  communityId?: string | null
+  pageId?: string | null
+  type?: string
+}
+
 export type ApiSuccessResponse<T> = {
   success: boolean
   data: T
@@ -73,6 +90,7 @@ export type CreatePostRequest = {
 
 export type UpdatePostRequest = {
   userId?: string
+  title?: string
   content: string
 }
 
@@ -107,6 +125,15 @@ export type ReportPostRequest = {
   details?: string
 }
 
+export type SharePostRequest = {
+  communityId: string
+  comment?: string
+}
+
+export type ShareEventRequest = {
+  type: 'copy_link' | 'native_share' | 'manual_share' | string
+}
+
 export type DeletePostResponse = {
   success: boolean
   message: string
@@ -137,25 +164,58 @@ export type ReportPostResponse = ApiSuccessResponse<{
   created_at: string
 }>
 
+export type SharePostResponse = ApiSuccessResponse<PostRecord & {
+  originalPostId?: string
+  communityId?: string
+  comment?: string
+  createdAt?: string
+}>
+
+export type ShareEventResponse = ApiSuccessResponse<{
+  postId: string
+  userId?: string
+  type: string
+  recorded: boolean
+  createdAt?: string
+}>
+
 const POST_ROUTES = {
   posts: '/posts',
   postById: (id: string) => `/posts/${id}`,
   postMedia: (id: string) => `/posts/${id}/media`,
   postComments: (id: string) => `/posts/${id}/comments`,
+  postShares: (id: string) => `/posts/${id}/shares`,
+  postShareEvents: (id: string) => `/posts/${id}/share-events`,
   postReactions: (id: string) => `/posts/${id}/reactions`,
   postSave: (id: string) => `/posts/${id}/save`,
   postReport: (id: string) => `/posts/${id}/report`,
   commentReactions: (id: string) => `/comments/${id}/reactions`,
+  commentReport: (id: string) => `/comments/${id}/report`,
   postMediaById: (id: string) => `/posts/media/${id}`,
 } as const
+
+const withQuery = (path: string, params: Record<string, unknown> = {}) => {
+  const query = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') {
+      return
+    }
+
+    query.set(key, String(value))
+  })
+
+  const value = query.toString()
+  return value ? `${path}?${value}` : path
+}
 
 export const postsService = {
   createPost(payload: CreatePostRequest, token?: string | null) {
     return api.post<ApiSuccessResponse<PostRecord>>(POST_ROUTES.posts, payload, { token })
   },
 
-  listPosts(token?: string | null) {
-    return api.get<PaginatorPayload<PostRecord>>(POST_ROUTES.posts, { token })
+  listPosts(params: ListPostsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.posts, params), { token })
   },
 
   getPost(id: string, token?: string | null) {
@@ -198,8 +258,20 @@ export const postsService = {
     return api.post<ReportPostResponse>(POST_ROUTES.postReport(id), payload, { token })
   },
 
+  sharePostToCommunity(id: string, payload: SharePostRequest, token?: string | null) {
+    return api.post<SharePostResponse>(POST_ROUTES.postShares(id), payload, { token })
+  },
+
+  recordShareEvent(id: string, payload: ShareEventRequest, token?: string | null) {
+    return api.post<ShareEventResponse>(POST_ROUTES.postShareEvents(id), payload, { token })
+  },
+
   toggleCommentReaction(id: string, payload: ToggleReactionRequest, token?: string | null) {
     return api.post<ToggleReactionResponse>(POST_ROUTES.commentReactions(id), payload, { token })
+  },
+
+  reportComment(id: string, payload: ReportPostRequest, token?: string | null) {
+    return api.post<ReportPostResponse>(POST_ROUTES.commentReport(id), payload, { token })
   },
 
   deletePostMedia(id: string, token?: string | null) {

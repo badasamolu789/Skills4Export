@@ -1,13 +1,20 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { BriefcaseBusiness, GraduationCap, Trophy, X } from 'lucide-vue-next'
+import { computed, onMounted, ref } from 'vue'
+import { BriefcaseBusiness, GraduationCap, Loader2, Save, Trophy, X } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import { ApiError } from '@/lib/api'
+import { alertsService } from '@/services/alerts'
+import { useAuthStore } from '@/stores/auth'
 
+const authStore = useAuthStore()
 const contestAlert = ref(true)
 const sponsorshipAlert = ref(false)
 const scholarshipTypes = ref<string[]>([])
 const jobAlert = ref(true)
 const jobSearchInput = ref('')
 const jobSearchTags = ref<string[]>([])
+const isLoadingPreferences = ref(false)
+const isSavingPreferences = ref(false)
 
 const scholarshipOptions = [
   'Academic Scholarship',
@@ -78,6 +85,74 @@ const finalizeJobSearchInput = () => {
 const removeJobSearchTag = (tag: string) => {
   jobSearchTags.value = jobSearchTags.value.filter((item) => item !== tag)
 }
+
+const loadAlertPreferences = async () => {
+  if (!authStore.authToken) {
+    return
+  }
+
+  isLoadingPreferences.value = true
+
+  try {
+    const response = await alertsService.getAlertPreferences(authStore.authToken)
+    contestAlert.value = response.data.contestAlert
+    sponsorshipAlert.value = response.data.sponsorshipAlert
+    scholarshipTypes.value = response.data.scholarshipType ? [response.data.scholarshipType] : []
+    jobAlert.value = response.data.jobAlert
+    jobSearchTags.value = response.data.jobSearchTags ?? []
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to load alert preferences.'
+    toast.error('Alerts failed', { description: message })
+  } finally {
+    isLoadingPreferences.value = false
+  }
+}
+
+const saveAlertPreferences = async () => {
+  finalizeJobSearchInput()
+
+  if (!authStore.authToken) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before saving alerts.',
+    })
+    return
+  }
+
+  if (isSavingPreferences.value) {
+    return
+  }
+
+  isSavingPreferences.value = true
+
+  try {
+    const response = await alertsService.updateAlertPreferences(
+      {
+        contestAlert: contestAlert.value,
+        sponsorshipAlert: sponsorshipAlert.value,
+        scholarshipType: sponsorshipAlert.value ? scholarshipTypes.value[0] ?? null : null,
+        jobAlert: jobAlert.value,
+        jobSearchTags: jobAlert.value ? jobSearchTags.value : [],
+      },
+      authStore.authToken,
+    )
+
+    contestAlert.value = response.data.contestAlert
+    sponsorshipAlert.value = response.data.sponsorshipAlert
+    scholarshipTypes.value = response.data.scholarshipType ? [response.data.scholarshipType] : []
+    jobAlert.value = response.data.jobAlert
+    jobSearchTags.value = response.data.jobSearchTags ?? []
+    toast.success('Alert preferences saved.')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to save alert preferences.'
+    toast.error('Save failed', { description: message })
+  } finally {
+    isSavingPreferences.value = false
+  }
+}
+
+onMounted(() => {
+  void loadAlertPreferences()
+})
 </script>
 
 <template>
@@ -100,6 +175,11 @@ const removeJobSearchTag = (tag: string) => {
     <section
       class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
     >
+      <div v-if="isLoadingPreferences" class="mb-5 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+        <Loader2 class="h-4 w-4 animate-spin" />
+        Loading alert preferences...
+      </div>
+
       <div class="space-y-5">
         <label
           class="flex items-center justify-between gap-4 rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-4"
@@ -137,10 +217,11 @@ const removeJobSearchTag = (tag: string) => {
                 "
               >
                 <input
-                  v-model="scholarshipTypes"
+                  :checked="scholarshipTypes.includes(option)"
                   type="checkbox"
                   :value="option"
                   class="h-4 w-4 accent-[var(--accent)]"
+                  @change="scholarshipTypes = scholarshipTypes.includes(option) ? [] : [option]"
                 />
                 <span class="text-sm font-medium text-[var(--text-primary)]">{{ option }}</span>
               </label>
@@ -200,6 +281,17 @@ const removeJobSearchTag = (tag: string) => {
             </div>
           </div>
         </div>
+
+        <button
+          type="button"
+          :disabled="isSavingPreferences"
+          class="inline-flex h-11 items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+          @click="saveAlertPreferences"
+        >
+          <Loader2 v-if="isSavingPreferences" class="h-4 w-4 animate-spin" />
+          <Save v-else class="h-4 w-4" />
+          {{ isSavingPreferences ? 'Saving...' : 'Save alerts' }}
+        </button>
       </div>
     </section>
   </section>

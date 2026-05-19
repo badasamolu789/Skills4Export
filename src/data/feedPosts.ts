@@ -8,6 +8,7 @@ export type CommunityPost = {
   communityId?: string | null
   communityName?: string
   pageId?: string | null
+  originalPostId?: string | null
   createdAt?: string
   updatedAt?: string
   media?: {
@@ -33,6 +34,8 @@ export type CommunityPost = {
   score: number
   comments: number
   isFollowing?: boolean
+  isSaved?: boolean
+  isScored?: boolean
 }
 
 export type QuestionPost = {
@@ -41,6 +44,7 @@ export type QuestionPost = {
   userId?: string
   communityId?: string | null
   pageId?: string | null
+  originalPostId?: string | null
   createdAt?: string
   updatedAt?: string
   slug: string
@@ -54,6 +58,8 @@ export type QuestionPost = {
   tag: string
   answers: number
   isFollowing?: boolean
+  isSaved?: boolean
+  isScored?: boolean
 }
 
 export type PersonalPost = {
@@ -63,6 +69,7 @@ export type PersonalPost = {
   communityId?: string | null
   communityName?: string
   pageId?: string | null
+  originalPostId?: string | null
   createdAt?: string
   updatedAt?: string
   media?: {
@@ -88,6 +95,8 @@ export type PersonalPost = {
   score: number
   comments: number
   isFollowing?: boolean
+  isSaved?: boolean
+  isScored?: boolean
 }
 
 export type FeedPost = CommunityPost | QuestionPost | PersonalPost

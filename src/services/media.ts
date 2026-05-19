@@ -56,6 +56,8 @@ export type UploadAvatarFileResponse = {
     }
 }
 
+export type ProfileFileKind = 'avatar' | 'banner' | 'advert_image'
+
 const getStringValue = (source: Record<string, unknown>, keys: string[]) => {
     for (const key of keys) {
         const value = source[key]
@@ -453,7 +455,7 @@ export const mediaService = {
         userId: string,
         file: File,
         options?: {
-            kind?: 'avatar' | 'banner'
+            kind?: ProfileFileKind
             replace?: boolean
             token?: string | null
         },
@@ -461,7 +463,7 @@ export const mediaService = {
         const formData = new FormData()
         formData.append('file', file)
 
-        const kind = options?.kind === 'banner' ? 'banner' : 'avatar'
+        const kind = options?.kind ?? 'avatar'
         formData.append('kind', kind)
 
         const queryParams = new URLSearchParams()

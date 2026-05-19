@@ -10,6 +10,31 @@ import {
 } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
 
+const PUBLIC_JOB_STATUSES = new Set(['approved', 'active', 'live'])
+
+const isPublicJob = (job: JobRecord) => {
+  const status = job.status?.toLowerCase()
+  return !status || PUBLIC_JOB_STATUSES.has(status)
+}
+
+const mergeJobs = (...groups: JobRecord[][]) => {
+  const seen = new Set<string>()
+
+  return groups.flat().filter((job) => {
+    const key = job.id || job.slug
+
+    if (!key || seen.has(key)) {
+      return false
+    }
+
+    seen.add(key)
+    return true
+  })
+}
+
+const isCompleteUuid = (value?: string | null) =>
+  Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
+
 export const useJobsStore = defineStore('jobs', () => {
   const authStore = useAuthStore()
   const jobs = ref<JobRecord[]>([])
@@ -23,17 +48,57 @@ export const useJobsStore = defineStore('jobs', () => {
   const manageJobsError = ref('')
   const jobError = ref('')
 
+  const findCachedJob = (idOrSlug: string) =>
+    [...jobs.value, ...postedJobs.value].find((job) =>
+      job.id === idOrSlug ||
+      job.slug === idOrSlug ||
+      (isCompleteUuid(job.id) && job.id === currentJob.value?.id) ||
+      (job.slug && job.slug === currentJob.value?.slug),
+    )
+
+  const mergeWithCachedJobIdentity = (job: JobRecord, idOrSlug?: string) => {
+    const cachedJob = idOrSlug ? findCachedJob(idOrSlug) : findCachedJob(job.slug || job.id)
+    const canonicalId = [job.id, cachedJob?.id].find((value) => isCompleteUuid(value))
+
+    return {
+      ...cachedJob,
+      ...job,
+      id: canonicalId || job.id,
+      slug: job.slug || cachedJob?.slug,
+    }
+  }
+
+  const resolveApplicationJobId = (job: JobRecord) => {
+    const cachedJob = findCachedJob(job.slug || job.id)
+    return [job.id, cachedJob?.id].find((value) => isCompleteUuid(value)) || ''
+  }
+
   const loadJobs = async () => {
     isLoadingJobs.value = true
     jobsError.value = ''
 
     try {
-      const response = await jobsService.listJobs(
-        { per_page: 100, status: 'live' },
-        authStore.authToken,
-        { suppressErrorModal: true },
-      )
-      jobs.value = response.data.filter((job) => !job.status || job.status === 'live')
+      const [publicJobsResult, ownPostedJobsResult] = await Promise.allSettled([
+        jobsService.listJobs({ per_page: 100 }, authStore.authToken, { suppressErrorModal: true }),
+        authStore.authToken
+          ? jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken)
+          : Promise.resolve({ data: [] as JobRecord[] }),
+      ])
+
+      const publicJobs =
+        publicJobsResult.status === 'fulfilled' ? publicJobsResult.value.data.filter(isPublicJob) : []
+      const ownPostedJobs =
+        ownPostedJobsResult.status === 'fulfilled' ? ownPostedJobsResult.value.data : []
+
+      if (ownPostedJobsResult.status === 'fulfilled') {
+        postedJobs.value = ownPostedJobs
+      }
+
+      if (publicJobsResult.status === 'rejected' && !ownPostedJobs.length) {
+        throw publicJobsResult.reason
+      }
+
+      jobs.value = mergeJobs(ownPostedJobs, publicJobs)
     } catch (error) {
       jobsError.value = error instanceof ApiError ? error.message : 'Unable to load jobs.'
       jobs.value = []
@@ -56,7 +121,7 @@ export const useJobsStore = defineStore('jobs', () => {
 
     try {
       const response = await jobsService.getJob(idOrSlug, authStore.authToken)
-      currentJob.value = response.data
+      currentJob.value = mergeWithCachedJobIdentity(response.data, idOrSlug)
     } catch (error) {
       jobError.value = error instanceof ApiError ? error.message : 'Unable to load this job.'
     } finally {
@@ -69,7 +134,20 @@ export const useJobsStore = defineStore('jobs', () => {
       return null
     }
 
-    const response = await jobsService.applyToJob(currentJob.value.id, payload, authStore.authToken)
+    const applicationJobId = resolveApplicationJobId(currentJob.value)
+
+    if (!applicationJobId) {
+      throw new ApiError(
+        'This job cannot accept applications because the API did not return a valid job id.',
+        400,
+        {
+          message: 'This job cannot accept applications because the API did not return a valid job id.',
+        },
+      )
+    }
+
+    const response = await jobsService.applyToJob(applicationJobId, payload, authStore.authToken)
+
     currentJob.value = {
       ...currentJob.value,
       hasApplied: true,

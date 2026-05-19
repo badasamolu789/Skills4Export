@@ -1,29 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { BriefcaseBusiness, Building2, Code2, Palette, Rocket, Search, Users } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
+import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 
 const authStore = useAuthStore()
 const searchQuery = ref('')
 const communities = ref<CommunityRecord[]>([])
 const isLoadingCommunities = ref(false)
 const communitiesError = ref('')
-
-const iconList = [Palette, Code2, Rocket, BriefcaseBusiness, Building2, Users]
-
-const getCommunityIcon = (community: CommunityRecord, index: number) => {
-  const categoryName = community.category?.name?.toLowerCase() || community.name.toLowerCase()
-
-  if (categoryName.includes('design')) return Palette
-  if (categoryName.includes('tech') || categoryName.includes('code')) return Code2
-  if (categoryName.includes('founder') || categoryName.includes('business')) return Building2
-  if (categoryName.includes('job') || categoryName.includes('freelance')) return BriefcaseBusiness
-  if (categoryName.includes('opportun')) return Rocket
-
-  return iconList[index % iconList.length]
-}
 
 const filteredCommunities = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -74,12 +60,12 @@ onMounted(() => {
             <h1 class="text-[2rem] font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-[2.5rem]">
               Explore Communities
             </h1>
-            <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">
+            <!-- <p class="mt-2 max-w-2xl text-sm leading-7 text-[var(--text-secondary)]">
               Browse public communities and open the detail page to join, view activity, and see member context.
-            </p>
+            </p> -->
           </div>
 
-          <label class="flex h-11 items-center gap-2 rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+          <!-- <label class="flex h-11 items-center gap-2 rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
             <Search class="h-4 w-4 text-[var(--text-tertiary)]" />
             <input
               v-model="searchQuery"
@@ -87,7 +73,7 @@ onMounted(() => {
               placeholder="Search communities"
               class="min-w-0 flex-1 bg-transparent text-[0.86rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             />
-          </label>
+          </label> -->
         </div>
       </div>
 
@@ -113,13 +99,13 @@ onMounted(() => {
 
         <RouterLink
           v-if="!isLoadingCommunities"
-          v-for="(community, index) in filteredCommunities"
+          v-for="community in filteredCommunities"
           :key="community.id"
           :to="`/communities/${community.id}`"
           class="flex items-start gap-5 overflow-hidden rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 shadow-[var(--shadow-elevated)] transition hover:border-[color:var(--accent-soft)]"
         >
           <span class="flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
-            <component :is="getCommunityIcon(community, index)" class="h-7 w-7" />
+            <i :class="getCommunityLineAwesomeClass(community)" class="text-[2rem] leading-none" aria-hidden="true" />
           </span>
 
           <div class="min-w-0 flex-1">
@@ -127,21 +113,13 @@ onMounted(() => {
               <h2 class="text-xl font-semibold text-[var(--text-primary)]">
                 {{ community.name }}
               </h2>
-              <span
-                v-if="community.category?.name"
-                class="rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]"
-              >
-                {{ community.category.name }}
-              </span>
             </div>
-            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
+            <p
+              class="mt-2 overflow-hidden text-sm leading-7 text-[var(--text-secondary)]"
+              style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;"
+            >
               {{ community.description || 'No community description has been added yet.' }}
             </p>
-            <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[var(--text-secondary)]">
-              <span class="rounded-full bg-[var(--surface-secondary)] px-3 py-1.5">{{ community.posts_count || 0 }} posts</span>
-              <span class="rounded-full bg-[var(--surface-secondary)] px-3 py-1.5">{{ community.comments_count || 0 }} comments</span>
-              <span class="rounded-full bg-[var(--surface-secondary)] px-3 py-1.5">{{ community.post_reactions_count || 0 }} reactions</span>
-            </div>
           </div>
         </RouterLink>
 

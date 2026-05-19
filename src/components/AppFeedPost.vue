@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Users,
   Copy,
+  Edit2,
   Flag,
   MessageSquare,
   MoreHorizontal,
@@ -21,10 +22,11 @@ import { getSeededPublicProfile } from '@/data/publicProfiles'
 import { ApiError } from '@/lib/api'
 import PostCommentThread from '@/components/PostCommentThread.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { postsService, type PostCommentRecord } from '@/services/posts'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount } from '@/utils/postMapper'
+import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
 type PostComment = {
   id: number | string
   parentId?: string | null
@@ -46,30 +48,41 @@ type PostComment = {
 
 const props = defineProps<{
   post: FeedPost
+  expanded?: boolean
+  allowEdit?: boolean
 }>()
 
 const authStore = useAuthStore()
 const currentUser = useCurrentUserIdentity()
 const isFollowing = ref(props.post.isFollowing ?? false)
-const isSaved = ref(false)
-const isScored = ref(false)
+const isSaved = ref(props.post.isSaved ?? false)
+const isScored = ref(props.post.isScored ?? false)
 const currentScore = ref('score' in props.post ? props.post.score : 0)
 const isCommentsOpen = ref(false)
 const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
+const isEditModalOpen = ref(false)
+const editPostTitle = ref('')
+const editPostContent = ref('')
 const commentInput = ref('')
 const visibleCommentCount = ref(3)
 const shareCommunity = ref('')
 const shareComment = ref('')
+const shareCommunities = ref<CommunityRecord[]>([])
+const isLoadingShareCommunities = ref(false)
+const hasLoadedShareCommunities = ref(false)
 const selectedReportReason = ref('')
 const reportTargetLabel = ref('this post')
 const isSavingPost = ref(false)
 const isReactingToPost = ref(false)
 const isSubmittingComment = ref(false)
 const isSubmittingReport = ref(false)
+const isUpdatingPost = ref(false)
 const isLoadingComments = ref(false)
 const hasLoadedComments = ref(false)
+const sharedOriginalPost = ref<FeedPost | null>(null)
+const isLoadingSharedOriginal = ref(false)
 const followLabel = computed(() => (isFollowing.value ? 'Following' : 'Follow'))
 const activeActionClass =
   'border-[color:var(--accent)] bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)] hover:text-white'
@@ -153,6 +166,9 @@ const authorUserId = computed(() => {
   return getPublicProfileIdFromRoute(authorRoute.value)
 })
 const isOwnPost = computed(() => Boolean(authStore.userId && authorUserId.value === authStore.userId))
+const showFollowAction = computed(() => Boolean(props.post.pageId && !isOwnPost.value))
+const canEditPost = computed(() => Boolean(props.allowEdit && isOwnPost.value && apiPostId.value && props.post.type !== 'question'))
+const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 
 const authorProfileDetails = computed(() => {
   const publicProfileId = getPublicProfileIdFromRoute(authorRoute.value)
@@ -192,6 +208,11 @@ const feedPostContextDetail = computed(() => {
 
   return props.post.communityId ? props.post.communityName || 'Community' : ''
 })
+
+const syncEditForm = () => {
+  editPostTitle.value = props.post.title
+  editPostContent.value = 'description' in props.post ? props.post.description : props.post.body || ''
+}
 
 const formatCommentTime = (value: string) => {
   const date = new Date(value)
@@ -316,12 +337,45 @@ const loadComments = async () => {
   }
 }
 
+const loadSharedOriginalPost = async () => {
+  if (!props.post.originalPostId || isLoadingSharedOriginal.value) {
+    sharedOriginalPost.value = null
+    return
+  }
+
+  isLoadingSharedOriginal.value = true
+
+  try {
+    const originalResponse = await postsService.getPost(props.post.originalPostId, authStore.authToken)
+    const original = originalResponse.data
+    const [mediaResponse, authorResponse] = await Promise.all([
+      postsService.listPostMedia(original.id, authStore.authToken).catch(() => null),
+      original.user_id
+        ? usersService.getUserProfile(original.user_id, authStore.authToken).catch(() => null)
+        : Promise.resolve(null),
+    ])
+
+    sharedOriginalPost.value = mapApiPostToFeedPost(
+      original,
+      mediaResponse?.data ?? [],
+      authorResponse?.data ?? null,
+    )
+  } catch {
+    sharedOriginalPost.value = null
+  } finally {
+    isLoadingSharedOriginal.value = false
+  }
+}
+
 const syncPostCounters = () => {
   currentScore.value = 'score' in props.post ? props.post.score : 0
   currentComments.value = 'comments' in props.post ? props.post.comments : 0
 }
 
 onMounted(() => {
+  syncEditForm()
+  void loadSharedOriginalPost()
+
   if (props.post.type !== 'question') {
     void loadComments()
   }
@@ -331,6 +385,11 @@ watch(
   () => props.post,
   () => {
     syncPostCounters()
+    isFollowing.value = props.post.isFollowing ?? false
+    isSaved.value = props.post.isSaved ?? false
+    isScored.value = props.post.isScored ?? false
+    syncEditForm()
+    void loadSharedOriginalPost()
     commentList.value = []
     hasLoadedComments.value = false
 
@@ -339,6 +398,64 @@ watch(
     }
   },
 )
+
+const openEditModal = () => {
+  if (!canEditPost.value) {
+    return
+  }
+
+  syncEditForm()
+  isPostMenuOpen.value = false
+  isEditModalOpen.value = true
+}
+
+const closeEditModal = () => {
+  if (isUpdatingPost.value) {
+    return
+  }
+
+  isEditModalOpen.value = false
+}
+
+const submitPostEdit = async () => {
+  if (!apiPostId.value || isUpdatingPost.value) {
+    return
+  }
+
+  const content = editPostContent.value.trim()
+
+  if (!content) {
+    toast.error('Post content is required.')
+    return
+  }
+
+  isUpdatingPost.value = true
+
+  try {
+    const response = await postsService.updatePost(
+      apiPostId.value,
+      {
+        userId: authStore.userId,
+        title: editPostTitle.value.trim() || props.post.title,
+        content,
+      },
+      authStore.authToken,
+    )
+
+    if ('description' in props.post) {
+      props.post.description = response.data.content || content
+      props.post.title = response.data.title || editPostTitle.value.trim() || props.post.title
+    }
+
+    isEditModalOpen.value = false
+    toast.success('Post updated.')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update this post.'
+    toast.error('Update failed', { description: message })
+  } finally {
+    isUpdatingPost.value = false
+  }
+}
 
 const toggleFollow = () => {
   if (isOwnPost.value) {
@@ -521,6 +638,7 @@ const submitComment = async () => {
 
 const openShareModal = () => {
   isShareModalOpen.value = true
+  void loadShareCommunities()
 }
 
 const closeShareModal = () => {
@@ -530,6 +648,9 @@ const closeShareModal = () => {
 const copyShareLink = async () => {
   try {
     await navigator.clipboard.writeText(shareLink.value)
+    if (apiPostId.value) {
+      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken).catch(() => null)
+    }
     toast.success('Link copied', {
       description: 'The post link has been copied to your clipboard.',
     })
@@ -540,7 +661,59 @@ const copyShareLink = async () => {
   }
 }
 
+const loadShareCommunities = async () => {
+  if (hasLoadedShareCommunities.value || isLoadingShareCommunities.value) {
+    return
+  }
+
+  isLoadingShareCommunities.value = true
+
+  try {
+    const response = await communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken)
+    shareCommunities.value = response.data ?? []
+    hasLoadedShareCommunities.value = true
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to load communities.'
+    toast.error('Communities failed', { description: message })
+  } finally {
+    isLoadingShareCommunities.value = false
+  }
+}
+
 const submitShare = async () => {
+  if (shareCommunity.value) {
+    if (!apiPostId.value) {
+      toast.error('Share needs a post ID', {
+        description: 'Only API posts can be shared into a community.',
+      })
+      return
+    }
+
+    try {
+      const response = await postsService.sharePostToCommunity(
+        apiPostId.value,
+        {
+          communityId: shareCommunity.value,
+          comment: shareComment.value.trim() || undefined,
+        },
+        authStore.authToken,
+      )
+
+      toast.success('Post shared to community.')
+      shareCommunity.value = ''
+      shareComment.value = ''
+      closeShareModal()
+
+      if (response.data.id && typeof window !== 'undefined') {
+        window.location.assign(`/posts/${response.data.id}`)
+      }
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to share this post.'
+      toast.error('Share failed', { description: message })
+    }
+    return
+  }
+
   const comment = shareComment.value.trim()
   const communityContext = shareCommunity.value ? `Shared from ${shareCommunity.value}` : ''
   const text = [comment, communityContext, sharePreviewDescription.value]
@@ -564,6 +737,11 @@ const submitShare = async () => {
     toast.success('Post shared', {
       description: canNativeShare ? 'The native share sheet has been opened.' : 'The share text has been copied.',
     })
+    if (apiPostId.value) {
+      await postsService
+        .recordShareEvent(apiPostId.value, { type: canNativeShare ? 'native_share' : 'manual_share' }, authStore.authToken)
+        .catch(() => null)
+    }
     shareCommunity.value = ''
     shareComment.value = ''
     closeShareModal()
@@ -608,9 +786,9 @@ const submitReport = async () => {
     return
   }
 
-  if (!apiPostId.value || reportTargetLabel.value !== 'this post') {
+  if (!apiPostId.value && reportTargetLabel.value === 'this post') {
     toast.error('Report needs an endpoint', {
-      description: 'Send me the comment report endpoint and I will wire this action live.',
+      description: 'Only API content can be reported live.',
     })
     return
   }
@@ -622,15 +800,21 @@ const submitReport = async () => {
   isSubmittingReport.value = true
 
   try {
-    await postsService.reportPost(
-      apiPostId.value,
-      {
-        userId: authStore.userId || undefined,
-        reason: selectedReportReason.value,
-        details: reportReasonDescriptions[selectedReportReason.value] ?? '',
-      },
-      authStore.authToken,
-    )
+    const reportPayload = {
+      userId: authStore.userId || undefined,
+      reason: selectedReportReason.value,
+      details: reportReasonDescriptions[selectedReportReason.value] ?? '',
+    }
+
+    if (reportTargetLabel.value === 'this post') {
+      await postsService.reportPost(apiPostId.value as string, reportPayload, authStore.authToken)
+    } else {
+      const comment = commentList.value.find((item) => `${item.author}'s comment` === reportTargetLabel.value)
+      if (!comment || typeof comment.id !== 'string') {
+        throw new Error('Only saved comments can be reported.')
+      }
+      await postsService.reportComment(comment.id, reportPayload, authStore.authToken)
+    }
 
     toast.success('Report submitted', {
       description: `Thanks for reporting ${reportTargetLabel.value} under ${selectedReportReason.value}.`,
@@ -816,6 +1000,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           View details
         </RouterLink>
         <button
+          v-if="showFollowAction"
           type="button"
           class="inline-flex h-9 items-center rounded-[1rem] border px-3 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
           :class="
@@ -884,6 +1069,15 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     class="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[9rem] rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-2 shadow-[var(--shadow-elevated)]"
                   >
                     <button
+                      v-if="canEditPost"
+                      type="button"
+                      class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                      @click="openEditModal"
+                    >
+                      <Edit2 class="h-4 w-4" />
+                      Edit
+                    </button>
+                    <button
                       type="button"
                       class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
                       @click="handleMobileSave"
@@ -906,6 +1100,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               <div class="mt-2 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <div class="flex min-w-0 flex-1 items-center gap-2">
                   <button
+                    v-if="showFollowAction"
                     type="button"
                     class="inline-flex h-9 shrink-0 items-center rounded-[1rem] border px-3 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
                     :class="
@@ -944,9 +1139,41 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           >
             {{ post.title }}
           </RouterLink>
-          <p class="feed-post-description mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)] sm:text-[0.9rem] sm:leading-7">
+          <p
+            class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)] sm:text-[0.9rem] sm:leading-7"
+            :class="props.expanded ? '' : 'feed-post-description'"
+          >
             {{ post.description }}
           </p>
+
+          <div
+            v-if="isSharedPost"
+            class="mt-4 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3"
+          >
+            <p v-if="isLoadingSharedOriginal" class="text-sm text-[var(--text-secondary)]">Loading shared post...</p>
+            <template v-else-if="sharedOriginalPost && sharedOriginalPost.type !== 'question'">
+              <div class="flex items-center gap-2 text-[0.78rem] text-[var(--text-secondary)]">
+                <span class="font-semibold text-[var(--text-primary)]">{{ sharedOriginalPost.author.name }}</span>
+                <span>{{ sharedOriginalPost.time }}</span>
+              </div>
+              <RouterLink
+                :to="`/posts/${sharedOriginalPost.slug}`"
+                class="mt-2 block text-[0.95rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+              >
+                {{ sharedOriginalPost.title }}
+              </RouterLink>
+              <p class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]">
+                {{ sharedOriginalPost.description }}
+              </p>
+              <img
+                v-if="sharedOriginalPost.imageSrc"
+                :src="sharedOriginalPost.imageSrc"
+                :alt="sharedOriginalPost.imageAlt || sharedOriginalPost.title"
+                class="mt-3 aspect-[4/5] w-full rounded-[0.8rem] bg-[var(--surface-primary)] object-cover sm:aspect-[1.91/1]"
+              />
+            </template>
+            <p v-else class="text-sm text-[var(--text-secondary)]">The original shared post is not available.</p>
+          </div>
 
           <img
             v-if="post.imageSrc"
@@ -968,6 +1195,15 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             >
               <ArrowUp class="h-3 w-3" />
               {{ currentScore }} score
+            </button>
+            <button
+              v-if="canEditPost"
+              type="button"
+              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:px-2.5"
+              @click="openEditModal"
+            >
+              <Edit2 class="h-3 w-3" />
+              Edit
             </button>
             <button
               type="button"
@@ -1325,13 +1561,16 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 class="h-10 w-full rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 text-[0.86rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
               >
                 <option value="">Select a community</option>
-                <option value="Design Community">Design Community</option>
-                <option value="Tech Careers">Tech Careers</option>
-                <option value="Opportunities Hub">Opportunities Hub</option>
-                <option value="General Community">General Community</option>
+                <option
+                  v-for="community in shareCommunities"
+                  :key="community.id"
+                  :value="community.id"
+                >
+                  {{ community.name }}
+                </option>
               </select>
               <p class="text-xs leading-5 text-[var(--text-tertiary)]">
-                This adds community context to the shared link.
+                {{ isLoadingShareCommunities ? 'Loading communities...' : 'Select a community to repost this content there.' }}
               </p>
             </div>
 
@@ -1420,7 +1659,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               class="inline-flex items-center rounded-[0.75rem] border px-3 py-2 text-[0.82rem] font-semibold transition"
               :class="
                 selectedReportReason === reason
-                  ? 'border-[var(--warning)] bg-[#fef3c7] text-[var(--text-primary)]'
+                  ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]'
                   : 'border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
               "
               @click="selectedReportReason = reason"
@@ -1431,7 +1670,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
           <div
             v-if="selectedReportReason"
-            class="mt-5 rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+            class="mt-5 rounded-[0.9rem] border border-[color:var(--accent-soft)] bg-[color:color-mix(in_srgb,var(--accent)_10%,var(--surface-primary))] p-4"
           >
             <div class="flex items-center gap-2">
               <Check class="h-4 w-4 text-[var(--accent-strong)]" />
@@ -1461,6 +1700,70 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           </div>
         </div>
       </div>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div
+      v-if="isEditModalOpen"
+      class="fixed inset-0 z-[130] flex items-end justify-center bg-[#0c0c1b]/50 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
+      @click.self="closeEditModal"
+    >
+      <form
+        class="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)] sm:max-h-[92vh] sm:rounded-[1rem]"
+        @submit.prevent="submitPostEdit"
+      >
+        <div class="mx-auto mt-3 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
+        <div class="flex items-center justify-between border-b border-[color:var(--border-soft)] px-4 py-3 sm:px-5">
+          <h2 class="text-lg font-semibold text-[var(--text-primary)]">Edit post</h2>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            @click="closeEditModal"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
+
+        <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Title</span>
+            <input
+              v-model="editPostTitle"
+              type="text"
+              class="h-11 w-full rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 text-sm text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+            />
+          </label>
+
+          <label class="block space-y-2">
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Post</span>
+            <textarea
+              v-model="editPostContent"
+              rows="7"
+              class="w-full resize-y rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+            />
+          </label>
+        </div>
+
+        <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 sm:px-5">
+          <div class="flex justify-end gap-2">
+            <button
+              type="button"
+              class="inline-flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+              @click="closeEditModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="isUpdatingPost"
+              class="inline-flex h-10 min-w-[7rem] items-center justify-center rounded-[0.8rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+            >
+              {{ isUpdatingPost ? 'Saving...' : 'Save changes' }}
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   </Teleport>
 </template>
