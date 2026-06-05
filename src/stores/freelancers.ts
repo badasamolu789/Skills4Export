@@ -9,6 +9,7 @@ import {
   type FreelanceJobRecord,
   type FreelancerRecord,
 } from '@/services/freelancers'
+import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 
 const PUBLIC_FREELANCER_STATUSES = new Set(['available', 'certified'])
@@ -39,6 +40,46 @@ const mergeFreelanceJobs = (...groups: FreelanceJobRecord[][]) => {
   })
 }
 
+const readProfileAvatar = (profile?: MyProfileData | null) =>
+  profile?.profile?.avatar ||
+  profile?.profile?.avatarUrl ||
+  profile?.profile?.avatar_url ||
+  profile?.oauthAccounts?.find((account) => account.avatarUrl)?.avatarUrl ||
+  null
+
+const readProfileEmail = (profile?: MyProfileData | null) =>
+  profile?.user?.email || null
+
+const enrichFreelancerProfiles = async (items: FreelancerRecord[], token?: string | null) => {
+  const enriched = await Promise.all(
+    items.map(async (freelancer) => {
+      if (!freelancer.userId || (freelancer.avatar && (freelancer.email || freelancer.userEmail))) {
+        return freelancer
+      }
+
+      try {
+        const [profileResult, userResult] = await Promise.allSettled([
+          usersService.getUserProfile(freelancer.userId, token),
+          usersService.getUser(freelancer.userId, token),
+        ])
+        const profile = profileResult.status === 'fulfilled' ? profileResult.value.data : null
+        const user = userResult.status === 'fulfilled' ? userResult.value.data : null
+
+        return {
+          ...freelancer,
+          avatar: freelancer.avatar || readProfileAvatar(profile),
+          email: freelancer.email || freelancer.userEmail || readProfileEmail(profile) || user?.email || null,
+          userEmail: freelancer.userEmail || freelancer.email || readProfileEmail(profile) || user?.email || null,
+        }
+      } catch {
+        return freelancer
+      }
+    }),
+  )
+
+  return enriched
+}
+
 export const useFreelancersStore = defineStore('freelancers', () => {
   const authStore = useAuthStore()
   const freelancers = ref<FreelancerRecord[]>([])
@@ -57,7 +98,10 @@ export const useFreelancersStore = defineStore('freelancers', () => {
 
     try {
       const response = await freelancersService.listFreelancers({ per_page: 100 }, authStore.authToken)
-      freelancers.value = response.data.filter(isPublicFreelancer)
+      freelancers.value = await enrichFreelancerProfiles(
+        response.data.filter(isPublicFreelancer),
+        authStore.authToken,
+      )
     } catch (error) {
       freelancersError.value = error instanceof ApiError ? error.message : 'Unable to load freelancers.'
       freelancers.value = []
@@ -68,7 +112,9 @@ export const useFreelancersStore = defineStore('freelancers', () => {
 
   const createFreelancer = async (payload: CreateFreelancerRequest) => {
     const response = await freelancersService.createFreelancer(payload, authStore.authToken)
-    freelancers.value = [response.data, ...freelancers.value]
+    if (isPublicFreelancer(response.data)) {
+      freelancers.value = [response.data, ...freelancers.value]
+    }
     return response.data
   }
 
@@ -93,7 +139,9 @@ export const useFreelancersStore = defineStore('freelancers', () => {
           ? publicJobsResult.value.data.filter(isPublicFreelanceJob)
           : []
       const ownPostedJobs =
-        ownPostedJobsResult.status === 'fulfilled' ? ownPostedJobsResult.value.data : []
+        ownPostedJobsResult.status === 'fulfilled'
+          ? ownPostedJobsResult.value.data.filter(isPublicFreelanceJob)
+          : []
 
       if (publicJobsResult.status === 'rejected' && !ownPostedJobs.length) {
         throw publicJobsResult.reason
@@ -111,7 +159,9 @@ export const useFreelancersStore = defineStore('freelancers', () => {
 
   const createFreelanceJob = async (payload: CreateFreelanceJobRequest) => {
     const response = await freelancersService.createFreelanceJob(payload, authStore.authToken)
-    freelanceJobs.value = [response.data, ...freelanceJobs.value]
+    if (isPublicFreelanceJob(response.data)) {
+      freelanceJobs.value = [response.data, ...freelanceJobs.value]
+    }
     return response.data
   }
 

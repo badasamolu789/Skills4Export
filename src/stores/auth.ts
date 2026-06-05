@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { UserProfile, UserRecord } from '@/services/users'
+import { isLikelyEmail } from '@/utils/displayName'
 
 const AUTH_TOKEN_KEY = 'skills4export-auth-token'
 const AUTH_USER_ID_KEY = 'skills4export-user-id'
@@ -65,13 +66,23 @@ export const useAuthStore = defineStore('auth', () => {
     password: '',
     rememberMe: true,
     acceptedTerms: false,
+    is16OrAbove: false,
+    signUpDetailsCompleted: false,
     emailVerified: false,
     verificationCode: '',
     verificationSentAt: '',
+    accountType: 'default' as 'default' | 'student',
     username: '',
     phone: '',
+    state: '',
+    country: '',
     location: '',
     headline: '',
+    jobTitle: '',
+    workplace: '',
+    university: '',
+    yearStarted: '',
+    courseOfStudy: '',
     interests: [] as string[],
     avatar: '' as string | null,
     banner: '' as string | null,
@@ -116,13 +127,23 @@ export const useAuthStore = defineStore('auth', () => {
       password: '',
       rememberMe: true,
       acceptedTerms: false,
+      is16OrAbove: false,
+      signUpDetailsCompleted: false,
       emailVerified: false,
       verificationCode: '',
       verificationSentAt: '',
+      accountType: 'default',
       username: '',
       phone: '',
+      state: '',
+      country: '',
       location: '',
       headline: '',
+      jobTitle: '',
+      workplace: '',
+      university: '',
+      yearStarted: '',
+      courseOfStudy: '',
       interests: [],
       avatar: '',
       banner: '',
@@ -170,7 +191,7 @@ export const useAuthStore = defineStore('auth', () => {
       persistUserId(user.id)
     }
 
-    if (typeof user?.name === 'string') {
+    if (typeof user?.name === 'string' && !isLikelyEmail(user.name)) {
       signUpDraft.value.name = user.name
     }
 
@@ -266,13 +287,23 @@ export const useAuthStore = defineStore('auth', () => {
       password: '',
       rememberMe: true,
       acceptedTerms: false,
+      is16OrAbove: false,
+      signUpDetailsCompleted: false,
       emailVerified: false,
       verificationCode: '',
       verificationSentAt: '',
+      accountType: 'default',
       username: '',
       phone: '',
+      state: '',
+      country: '',
       location: '',
       headline: '',
+      jobTitle: '',
+      workplace: '',
+      university: '',
+      yearStarted: '',
+      courseOfStudy: '',
       interests: [],
       avatar: null,
       banner: null,

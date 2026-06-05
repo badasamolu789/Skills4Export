@@ -314,6 +314,7 @@ const DYNAMIC_CACHE_BYPASS_PREFIXES = [
   '/freelance-jobs',
   '/communities',
   '/pages',
+  '/notifications',
   '/user/',
   '/users/',
   '/media/',
@@ -368,6 +369,8 @@ const invalidateRelatedCacheEntries = (path: string) => {
       path.startsWith('/media/') ||
       path.startsWith('/posts') ||
       path.startsWith('/questions')
+      || cachedPath.startsWith('/notifications')
+      || path.startsWith('/notifications')
     ) {
       responseCache.delete(key)
     }
@@ -462,7 +465,7 @@ export const apiRequest = async <T>(
     signal,
     token,
     suppressErrorModal = false,
-    retry = true,
+    retry,
   }: ApiRequestOptions = {},
 ): Promise<T> => {
   const requestKey = getRequestKey(method, path, body, token)
@@ -576,7 +579,12 @@ export const apiRequest = async <T>(
             description: 'The request timed out before the server responded.',
           })
         }
-        throw new ApiError('The request timed out. Please try again.', 408)
+        throw new ApiError(
+          method === 'GET'
+            ? 'The request timed out. Please try again.'
+            : 'The request timed out, but the server may still have completed it. Refresh or check the result before trying again.',
+          408,
+        )
       }
 
       if (!suppressErrorModal) {
@@ -599,7 +607,11 @@ export const apiRequest = async <T>(
   }
 
   // Store pending request for deduplication
-  const requestPromise = retry ? retryWithBackoff(() => makeRequest(), path) : makeRequest()
+  // Automatically retry reads only. Retrying a timed-out write can create duplicate
+  // pages, posts, applications, or other records when the server committed the
+  // first request but its response never reached the browser.
+  const shouldRetryRequest = retry ?? method === 'GET'
+  const requestPromise = shouldRetryRequest ? retryWithBackoff(() => makeRequest(), path) : makeRequest()
   pendingRequests.set(requestKey, requestPromise)
 
   try {

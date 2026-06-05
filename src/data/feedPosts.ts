@@ -31,7 +31,7 @@ export type CommunityPost = {
   description: string
   imageSrc: string
   imageAlt?: string
-  score: number
+  score?: number
   comments: number
   isFollowing?: boolean
   isSaved?: boolean
@@ -49,6 +49,7 @@ export type QuestionPost = {
   updatedAt?: string
   slug: string
   communityName: string
+  communityIconClass?: string
   title: string
   body?: string
   time: string
@@ -57,6 +58,7 @@ export type QuestionPost = {
   authorAvatarSrc?: string | null
   tag: string
   answers: number
+  score?: number
   isFollowing?: boolean
   isSaved?: boolean
   isScored?: boolean
@@ -129,6 +131,7 @@ export const feedPosts: FeedPost[] = [
     authorTo: publicProfileRoute('user-arden-smith'),
     tag: 'Psychologist | CSS3 | Java | Project Mgt.',
     answers: 0,
+    score: 0,
   },
   {
     type: 'personal',
@@ -158,6 +161,7 @@ export const feedPosts: FeedPost[] = [
     authorTo: publicProfileRoute('user-naomi-cole'),
     tag: 'Frontend | UI Systems | Mentorship',
     answers: 0,
+    score: 0,
   },
   {
     type: 'question',
@@ -169,6 +173,7 @@ export const feedPosts: FeedPost[] = [
     authorTo: publicProfileRoute('user-david-mensah'),
     tag: 'Product Design | Remote Work | Strategy',
     answers: 0,
+    score: 0,
   },
 ]
 

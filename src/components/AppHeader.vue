@@ -15,29 +15,28 @@ import {
   LayoutGrid,
   List,
   Menu,
-  MessageSquareMore,
   Search,
   SquarePen,
-  Users,
   Video,
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
-import type { NotificationItem } from '@/data/notifications'
+import type { NotificationItem } from '@/services/notifications'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
 import { postsService } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
-import { isDirectMediaUrl } from '@/utils/mediaUrl'
+import { useNotificationsStore } from '@/stores/notifications'
 
 type HeaderLink = {
   label: string
   to?: string
   action?: 'ask' | 'post'
   target?: string
+  iconClass?: string
 }
 
 type MenuItem = {
@@ -65,7 +64,7 @@ const props = withDefaults(
     logoAlt: 'Platform logo',
     searchPlaceholder: 'Search communities, questions, jobs, and updates',
     isAuthenticated: true,
-    userRole: 'Community member',
+    userRole: 'Member',
   },
 )
 
@@ -76,9 +75,11 @@ const emit = defineEmits<{
 
 const isNotificationsOpen = ref(false)
 const isUserMenuOpen = ref(false)
+const userMenuRoot = ref<HTMLElement | null>(null)
 const activeComposer = ref<null | 'ask' | 'post'>(null)
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationsStore = useNotificationsStore()
 const askTitle = ref('')
 const askQuestion = ref('')
 const postAudienceId = ref('')
@@ -86,7 +87,6 @@ const communities = ref<CommunityRecord[]>([])
 const isLoadingCommunities = ref(false)
 const hasLoadedCommunities = ref(false)
 const postTitle = ref('')
-const postUrl = ref('')
 const postContent = ref('')
 const postFile = ref<File | null>(null)
 const postFileInput = ref<HTMLInputElement | null>(null)
@@ -102,7 +102,7 @@ const postImageSizeReferences = [
   '1200 x 627 (1.91:1)',
 ] as const
 const postContentInput = ref<HTMLTextAreaElement | null>(null)
-const unreadCount = computed(() => props.notifications.filter((item) => item.unread).length)
+const unreadCount = computed(() => notificationsStore.unreadCount || props.notifications.filter((item) => item.unread).length)
 const postFileKind = computed(() => {
   if (!postFile.value) {
     return ''
@@ -134,10 +134,10 @@ const communityOptions = computed(() =>
 
 const iconByLink = {
   Home: House,
-  Ask: MessageSquareMore,
   Post: SquarePen,
-  Community: Users,
 } as const
+
+const getLineAwesomeIconClass = (link: HeaderLink) => link.iconClass || ''
 
 const openComposer = (type: 'ask' | 'post') => {
   activeComposer.value = type
@@ -205,11 +205,70 @@ const getPlainTextFromHtml = (value: string) => {
 const openNotifications = () => {
   isNotificationsOpen.value = true
   isUserMenuOpen.value = false
+  void notificationsStore.requestBrowserNotifications()
+
+  if (authStore.authToken) {
+    void notificationsStore.refresh(authStore.authToken, true)
+  }
+}
+
+const markAllNotificationsRead = async () => {
+  if (!authStore.authToken) {
+    return
+  }
+
+  try {
+    await notificationsStore.markAllAsRead(authStore.authToken)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to update notifications.'
+    toast.error('Notification update failed', { description: message })
+  }
+}
+
+const clearNotifications = async () => {
+  if (!authStore.authToken) {
+    return
+  }
+
+  try {
+    await notificationsStore.clearAll(authStore.authToken)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to clear notifications.'
+    toast.error('Notification clear failed', { description: message })
+  }
+}
+
+const openNotificationItem = async (item: NotificationItem) => {
+  if (authStore.authToken && item.unread) {
+    try {
+      await notificationsStore.markAsRead(item.id, authStore.authToken)
+    } catch {
+      // Opening the target is still more useful than blocking on read state.
+    }
+  }
+
+  if (item.targetUrl) {
+    isNotificationsOpen.value = false
+    await router.push(item.targetUrl)
+  }
 }
 
 const toggleUserMenu = () => {
   isUserMenuOpen.value = !isUserMenuOpen.value
   isNotificationsOpen.value = false
+}
+
+const handleDocumentPointerDown = (event: PointerEvent) => {
+  if (!isUserMenuOpen.value) {
+    return
+  }
+
+  const target = event.target as Node | null
+  if (target && userMenuRoot.value?.contains(target)) {
+    return
+  }
+
+  isUserMenuOpen.value = false
 }
 
 const openMobileMenu = () => {
@@ -343,16 +402,6 @@ const submitQuestion = async () => {
   }
 }
 
-const inferMediaTypeFromUrl = (url: string) => {
-  const normalizedUrl = url.toLowerCase()
-
-  if (/\.(mp4|mov|webm|m4v)(\?|#|$)/.test(normalizedUrl)) {
-    return 'video'
-  }
-
-  return 'image'
-}
-
 type UploadedPostMedia = {
   mediaAssetIds: string[]
   fallbackUrl?: string
@@ -416,7 +465,6 @@ const submitPost = async () => {
   const title = postTitle.value.trim()
   const content = postContent.value.trim()
   const plainContent = getPlainTextFromHtml(content)
-  const mediaUrl = postUrl.value.trim()
 
   if (!title || !plainContent) {
     toast.error('Add a title and content before posting.')
@@ -425,13 +473,6 @@ const submitPost = async () => {
 
   if (!agreedToPostTerms.value) {
     toast.error('Accept the terms before posting.')
-    return
-  }
-
-  if (mediaUrl && !isDirectMediaUrl(mediaUrl)) {
-    toast.error('Use a direct media URL', {
-      description: 'Paste a direct image or video URL that ends in .jpg, .png, .webp, .gif, .mp4, or use the file upload.',
-    })
     return
   }
 
@@ -467,18 +508,6 @@ const submitPost = async () => {
       )
     }
 
-    if (mediaUrl) {
-      await postsService.attachPostMedia(
-        response.data.id,
-        {
-          url: mediaUrl,
-          mediaType: inferMediaTypeFromUrl(mediaUrl),
-          displayOrder: uploadedMedia.fallbackUrl ? 1 : 0,
-        },
-        authStore.authToken,
-      )
-    }
-
     toast.success('Post created', {
       id: loadingToastId,
       description: title,
@@ -501,7 +530,6 @@ const submitPost = async () => {
 
   postAudienceId.value = ''
   postTitle.value = ''
-  postUrl.value = ''
   postContent.value = ''
   clearPostFile()
   agreedToPostTerms.value = false
@@ -524,12 +552,15 @@ watch(postFile, (file, previousFile) => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+
   if (postFilePreviewUrl.value) {
     URL.revokeObjectURL(postFilePreviewUrl.value)
   }
 })
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   void loadCommunities()
 })
 </script>
@@ -584,7 +615,7 @@ onMounted(() => {
 
           <RouterLink
             to="/mobile/account"
-            class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open account menu"
             title="Open account menu"
           >
@@ -614,7 +645,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="mt-2 grid grid-cols-4 gap-1.5 md:hidden">
+      <div class="mt-2 grid grid-cols-5 gap-1.5 md:hidden">
         <template
           v-for="link in links"
           :key="link.label"
@@ -627,8 +658,15 @@ onMounted(() => {
             :title="link.label"
             @click="handleHeaderLinkAction(link)"
           >
+            <i
+              v-if="getLineAwesomeIconClass(link)"
+              :class="getLineAwesomeIconClass(link)"
+              class="text-[1.2rem] leading-none"
+              aria-hidden="true"
+            />
             <component
               :is="iconByLink[link.label as keyof typeof iconByLink] || LayoutGrid"
+              v-else
               class="h-4 w-4 stroke-[2]"
             />
           </button>
@@ -641,8 +679,15 @@ onMounted(() => {
             :aria-label="link.label"
             :title="link.label"
           >
+            <i
+              v-if="getLineAwesomeIconClass(link)"
+              :class="getLineAwesomeIconClass(link)"
+              class="text-[1.2rem] leading-none"
+              aria-hidden="true"
+            />
             <component
               :is="iconByLink[link.label as keyof typeof iconByLink] || LayoutGrid"
+              v-else
               class="h-4 w-4 stroke-[2]"
             />
           </RouterLink>
@@ -671,8 +716,15 @@ onMounted(() => {
               :title="link.label"
               @click="handleHeaderLinkAction(link)"
             >
+              <i
+                v-if="getLineAwesomeIconClass(link)"
+                :class="getLineAwesomeIconClass(link)"
+                class="text-[1.35rem] leading-none"
+                aria-hidden="true"
+              />
               <component
                 :is="iconByLink[link.label as keyof typeof iconByLink] || LayoutGrid"
+                v-else
                 class="h-[1.1rem] w-[1.1rem] stroke-[1.8]"
               />
               <span class="text-sm font-semibold">{{ link.label }}</span>
@@ -686,8 +738,15 @@ onMounted(() => {
               :aria-label="link.label"
               :title="link.label"
             >
+              <i
+                v-if="getLineAwesomeIconClass(link)"
+                :class="getLineAwesomeIconClass(link)"
+                class="text-[1.35rem] leading-none"
+                aria-hidden="true"
+              />
               <component
                 :is="iconByLink[link.label as keyof typeof iconByLink] || LayoutGrid"
+                v-else
                 class="h-[1.1rem] w-[1.1rem] stroke-[1.8]"
               />
               <span class="text-sm font-semibold">{{ link.label }}</span>
@@ -721,10 +780,10 @@ onMounted(() => {
             </span>
           </button>
 
-          <div class="relative">
+          <div ref="userMenuRoot" class="relative">
             <button
               type="button"
-              class="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
+              class="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
               @click="toggleUserMenu"
             >
               <span
@@ -759,7 +818,7 @@ onMounted(() => {
                 <div class="flex min-w-0 items-center gap-2">
                   <span
                     v-if="props.isAuthenticated && !userImageSrc"
-                    class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white"
+                    class="flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] text-xs font-bold text-white"
                   >
                     {{ userInitials }}
                   </span>
@@ -767,11 +826,11 @@ onMounted(() => {
                     v-else-if="props.isAuthenticated && userImageSrc"
                     :src="userImageSrc"
                     :alt="userName"
-                    class="h-10 w-10 rounded-full object-cover"
+                    class="h-10 w-10 rounded-[0.75rem] object-cover"
                   />
                   <span
                     v-else
-                    class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-secondary)]"
+                    class="flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-[var(--surface-primary)] text-[var(--text-secondary)]"
                   >
                     <CircleUserRound class="h-5 w-5" />
                   </span>
@@ -827,12 +886,69 @@ onMounted(() => {
       max-width-class="sm:max-w-2xl"
     >
       <div class="space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm font-semibold text-[var(--text-primary)]">
+            {{ unreadCount }} unread
+          </p>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              :disabled="!unreadCount"
+              class="inline-flex h-9 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
+              @click="markAllNotificationsRead"
+            >
+              Mark all read
+            </button>
+            <button
+              type="button"
+              :disabled="!notifications.length"
+              class="inline-flex h-9 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
+              @click="clearNotifications"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="notificationsStore.isLoading && !notifications.length"
+          class="space-y-3 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          aria-label="Loading notifications"
+        >
+          <div v-for="item in 3" :key="item" class="flex animate-pulse items-center gap-3">
+            <div class="h-9 w-9 rounded-full bg-[var(--surface-muted)]" />
+            <div class="min-w-0 flex-1 space-y-2">
+              <div class="h-3 w-4/5 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-3 w-1/2 rounded-full bg-[var(--surface-muted)]" />
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-else-if="notificationsStore.error && !notifications.length"
+          class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm text-[var(--text-secondary)]"
+        >
+          {{ notificationsStore.error }}
+        </div>
+
+        <div
+          v-else-if="!notifications.length"
+          class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm text-[var(--text-secondary)]"
+        >
+          No notifications yet.
+        </div>
+
         <article
           v-for="item in notifications"
           :key="item.id"
-          class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3"
+          class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3 transition hover:border-[color:var(--accent-soft)]"
         >
-          <div class="flex items-start justify-between gap-4">
+          <button
+            type="button"
+            class="w-full text-left"
+            @click="openNotificationItem(item)"
+          >
+            <div class="flex items-start justify-between gap-4">
             <div class="space-y-1">
               <p class="text-[0.86rem] font-semibold text-[var(--text-primary)]">{{ item.title }}</p>
               <p class="text-[0.82rem] leading-6 text-[var(--text-secondary)]">{{ item.description }}</p>
@@ -841,10 +957,11 @@ onMounted(() => {
               v-if="item.unread"
               class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-[var(--danger)]"
             />
-          </div>
-          <p class="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-            {{ item.time }}
-          </p>
+            </div>
+            <p class="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+              {{ item.time }}
+            </p>
+          </button>
         </article>
       </div>
     </ResponsiveOverlay>
@@ -872,7 +989,11 @@ onMounted(() => {
               {{ community.name }}
             </option>
           </select>
-          <span v-if="isLoadingCommunities" class="mt-1 block text-xs text-[var(--text-tertiary)]">Loading communities...</span>
+          <span
+            v-if="isLoadingCommunities"
+            class="mt-2 block h-3 w-36 animate-pulse rounded-full bg-[var(--surface-muted)]"
+            aria-label="Loading communities"
+          />
         </label>
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Question title<span class="text-[var(--danger)]">*</span></span>
@@ -924,7 +1045,11 @@ onMounted(() => {
               {{ community.name }}
             </option>
           </select>
-          <span v-if="isLoadingCommunities" class="mt-1 block text-xs text-[var(--text-tertiary)]">Loading communities...</span>
+          <span
+            v-if="isLoadingCommunities"
+            class="mt-2 block h-3 w-36 animate-pulse rounded-full bg-[var(--surface-muted)]"
+            aria-label="Loading communities"
+          />
         </label>
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Post Title<span class="text-[var(--danger)]">*</span></span>
@@ -935,18 +1060,7 @@ onMounted(() => {
             class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
           />
         </label>
-        <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Direct media URL</span>
-          <input
-            v-model="postUrl"
-            type="url"
-            placeholder="https://site.com/uploads/image.jpg"
-            class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
-          />
-          <span class="mt-1 block text-xs text-[var(--text-tertiary)]">
-            Use a direct image/video URL, not a webpage URL. File upload is safer.
-          </span>
-        </label>
+        <!-- Direct media URL input removed; posts now use file uploads only. -->
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Content</span>
           <div class="post-content-editor mt-2">
@@ -1016,12 +1130,12 @@ onMounted(() => {
                 v-if="postFileKind === 'image'"
                 :src="postFilePreviewUrl"
                 :alt="postFile.name"
-                class="mx-auto aspect-[4/5] max-h-[30rem] w-full max-w-[24rem] rounded-[0.6rem] bg-[var(--surface-primary)] object-contain sm:aspect-[1.91/1] sm:max-w-full"
+                class="mx-auto aspect-[4/3] max-h-72 w-full rounded-[0.6rem] bg-[var(--surface-primary)] object-contain"
               />
               <video
                 v-else
                 :src="postFilePreviewUrl"
-                class="max-h-80 w-full rounded-[0.6rem]"
+                class="mx-auto aspect-[4/3] max-h-72 w-full rounded-[0.6rem] bg-black object-contain"
                 controls
                 playsinline
               />

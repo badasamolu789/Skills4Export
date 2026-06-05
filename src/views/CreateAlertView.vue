@@ -175,9 +175,13 @@ onMounted(() => {
     <section
       class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
     >
-      <div v-if="isLoadingPreferences" class="mb-5 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-        <Loader2 class="h-4 w-4 animate-spin" />
-        Loading alert preferences...
+      <div
+        v-if="isLoadingPreferences"
+        class="mb-5 space-y-3 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+        aria-label="Loading alert preferences"
+      >
+        <div class="h-4 w-1/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+        <div class="h-4 w-2/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
       </div>
 
       <div class="space-y-5">

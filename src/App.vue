@@ -15,18 +15,21 @@ import { authService } from '@/services/auth'
 import { usersService } from '@/services/users'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 import { useTheme } from '@/composables/useTheme'
-import { notifications } from '@/data/notifications'
+import { isLikelyEmail } from '@/utils/displayName'
 
-const headerLinks: Array<{ label: string; to?: string; action?: 'ask' | 'post'; target?: string }> = [
+const headerLinks: Array<{ label: string; to?: string; action?: 'ask' | 'post'; target?: string; iconClass?: string }> = [
   { label: 'Home', to: '/feed' },
-  { label: 'Ask', action: 'ask' },
+  { label: 'Ask', action: 'ask', iconClass: 'las la-question-circle' },
   { label: 'Post', action: 'post' },
-  { label: 'Community', to: '/communities' },
+  { label: 'Answer', to: '/answer/question', iconClass: 'las la-book' },
+  { label: 'Communities', to: '/communities', iconClass: 'las la-users' },
 ]
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
+const notificationsStore = useNotificationsStore()
 const route = useRoute()
 const router = useRouter()
 const isMobileSidebarOpen = ref(false)
@@ -42,6 +45,7 @@ const profileName = currentUser.displayName
 const profileRole = currentUser.role
 const profileInitials = currentUser.initials
 const profileImage = currentUser.avatarSrc
+const notifications = computed(() => notificationsStore.visibleNotifications)
 
 const userMenu = computed(() => [
   { label: 'Profile', to: '/profile' },
@@ -170,6 +174,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('offline', handleOffline)
   window.removeEventListener('online', handleOnline)
+  notificationsStore.stopBackgroundSync()
 })
 
 const hydrateCurrentUserProfile = async () => {
@@ -187,12 +192,19 @@ const hydrateCurrentUserProfile = async () => {
       authStore.setUserProfile(profileData.profile)
     }
 
-    if (profileData?.user?.name) {
+    if (profileData?.user?.name && !isLikelyEmail(profileData.user.name)) {
       authStore.signUpDraft.name = profileData.user.name
     }
 
     if (profileData?.user?.email) {
       authStore.signUpDraft.email = profileData.user.email
+    }
+
+    const currentExperience = profileData?.experiences?.find((experience) => Boolean(experience.isCurrent)) || profileData?.experiences?.[0]
+    const currentTitle = currentExperience?.title?.trim()
+
+    if (currentTitle) {
+      authStore.signUpDraft.jobTitle = currentTitle
     }
   } catch {
     return
@@ -203,9 +215,12 @@ const hydrateCurrentUserProfile = async () => {
 
 watch(
   () => authStore.authToken,
-  () => {
-    if (authStore.isAuthenticated) {
+  (token) => {
+    if (authStore.isAuthenticated && token) {
       void hydrateCurrentUserProfile()
+      notificationsStore.startBackgroundSync(token)
+    } else {
+      notificationsStore.reset()
     }
   },
   { immediate: true },
@@ -288,7 +303,7 @@ const handleMenuAction = async (action: 'logout') => {
         <div
           :class="
             showWorkspaceShell
-              ? 'min-w-0 lg:app-scroll lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
+              ? 'min-w-0 max-w-full overflow-x-hidden lg:app-scroll lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
               : 'min-w-0 w-full'
           "
         >

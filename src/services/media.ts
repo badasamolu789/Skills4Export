@@ -6,9 +6,12 @@ import { api } from '@/lib/api'
 
 export type MediaRegisterRequest = {
     publicId: string
+    title?: string
+    externalUrl?: string
     kind?: string
     replace?: boolean
     pageId?: string | null
+    userId?: string | null
 }
 
 export type MediaRegisterResponse = {

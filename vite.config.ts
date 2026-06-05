@@ -21,7 +21,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue(), tailwindcss()],
     build: {
-      chunkSizeWarningLimit: 900,
+      // CKEditor Classic is a monolithic prebuilt editor. It is emitted as a
+      // lazy shared chunk, so keep the warning threshold just above its known
+      // minified size while still flagging unexpected large app chunks.
+      chunkSizeWarningLimit: 1400,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -43,6 +46,14 @@ export default defineConfig(({ mode }) => {
 
             if (id.includes('lucide-vue-next')) {
               return 'icons'
+            }
+
+            if (id.includes('@ckeditor/ckeditor5-build-classic')) {
+              return 'ckeditor-classic'
+            }
+
+            if (id.includes('@ckeditor/ckeditor5-vue') || id.includes('@ckeditor/ckeditor5-integrations-common')) {
+              return 'ckeditor-vue'
             }
 
             if (id.includes('/vue/') || id.includes('@vue/')) {

@@ -11,6 +11,9 @@ export type PageRecord = {
   created_by_user_id?: string | null
   categoryId?: string | null
   category_id?: string | null
+  type?: 'business' | 'student' | null
+  pageType?: 'business' | 'student' | null
+  page_type?: 'business' | 'student' | null
   name: string
   slug: string
   description: string
@@ -26,17 +29,36 @@ export type PageRecord = {
   followers_count?: number | null
   posts_count?: number | null
   category_pages_count?: number | null
+  is_follow?: boolean
+  isFollow?: boolean
   createdAt: string
   updatedAt: string
 }
 
 export type CreatePageRequest = {
+  type?: 'business' | 'student'
+  pageType?: 'business' | 'student'
+  page_type?: 'business' | 'student'
   categoryId?: string
   name: string
   slug: string
   description?: string
+  avatar?: string | null
+  coverImage?: string | null
+  slogan?: string
+  contactEmail?: string
+  website?: string
+  staffSize?: string
+  businessCategory?: string
+  email?: string
+  phone?: string
+  courseOfStudy?: string
+  graduationDate?: string
+  skills?: string[] | string
   metadata?: Record<string, unknown> | null
 }
+
+export type UpdatePageRequest = Partial<CreatePageRequest>
 
 export type UploadPageAvatarFileResponse = {
   success: boolean
@@ -52,6 +74,95 @@ export type DeletePageResponse = ApiSuccessResponse<{
 export type PageListParams = {
   page?: number
   per_page?: number
+  q?: string
+  type?: 'business' | 'student'
+  ownerId?: string
+  owner_id?: string
+  userId?: string
+  user_id?: string
+}
+
+const PAGE_METADATA_KEYS = [
+  'slogan',
+  'contactEmail',
+  'website',
+  'staffSize',
+  'businessCategory',
+  'email',
+  'phone',
+  'courseOfStudy',
+  'graduationDate',
+  'skills',
+] as const
+
+const PAGE_FORMATTED_FIELDS = new Set(['contactEmail', 'email', 'graduationDate'])
+
+const normalizePagePayload = (
+  payload: CreatePageRequest | UpdatePageRequest,
+  options: { preserveEmpty?: boolean } = {},
+) => {
+  const preserveEmpty = options.preserveEmpty ?? false
+  const normalized: UpdatePageRequest = {}
+  const normalizedRecord = normalized as Record<string, unknown>
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === 'metadata') {
+      continue
+    }
+
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (!trimmed && PAGE_FORMATTED_FIELDS.has(key)) {
+        continue
+      }
+      if (trimmed || preserveEmpty) {
+        normalizedRecord[key] = trimmed
+      }
+      continue
+    }
+
+    if (Array.isArray(value)) {
+      const items = value.map((item) => String(item).trim()).filter(Boolean)
+      if (items.length || preserveEmpty) {
+        normalizedRecord[key] = items
+      }
+      continue
+    }
+
+    if (value !== undefined && (value !== null || preserveEmpty)) {
+      normalizedRecord[key] = value
+    }
+  }
+
+  const metadata = readMetadata(payload.metadata)
+  const normalizedMetadata: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(metadata)) {
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (!trimmed && PAGE_FORMATTED_FIELDS.has(key)) {
+        continue
+      }
+      if (trimmed || preserveEmpty) normalizedMetadata[key] = trimmed
+      continue
+    }
+
+    if (Array.isArray(value)) {
+      const items = value.map((item) => String(item).trim()).filter(Boolean)
+      if (items.length || preserveEmpty) normalizedMetadata[key] = items
+      continue
+    }
+
+    if (value !== undefined && (value !== null || preserveEmpty)) {
+      normalizedMetadata[key] = value
+    }
+  }
+
+  if (Object.keys(normalizedMetadata).length || (preserveEmpty && payload.metadata !== undefined)) {
+    normalized.metadata = normalizedMetadata
+  }
+
+  return normalized
 }
 
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
@@ -71,8 +182,11 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
 
 const PAGE_ROUTES = {
   pages: '/pages',
+  myPages: '/me/pages',
   pageById: (id: string) => `/pages/${id}`,
+  pageFollow: (id: string) => `/pages/${id}/follow`,
   pageAvatarFile: (id: string) => `/pages/${id}/avatar-file`,
+  pageUploads: (id: string) => `/page/${id}/uploads`,
 } as const
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -114,7 +228,25 @@ const readNumber = (...values: unknown[]) => {
 
 const readMetadata = (...values: unknown[]) => {
   const value = values.find((item) => item && typeof item === 'object' && !Array.isArray(item))
-  return value ? value as Record<string, unknown> : {}
+
+  if (value) {
+    return value as Record<string, unknown>
+  }
+
+  const jsonValue = values.find((item) => typeof item === 'string' && item.trim().startsWith('{'))
+
+  if (typeof jsonValue === 'string') {
+    try {
+      const parsed = JSON.parse(jsonValue)
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {}
+    } catch {
+      return {}
+    }
+  }
+
+  return {}
 }
 
 const unwrapPageRecord = (value: unknown) => {
@@ -126,6 +258,15 @@ const normalizePage = (page: unknown): PageRecord => {
   const record = unwrapPageRecord(page)
   const owner = asRecord(record.owner || record.user || record.createdBy)
   const category = asRecord(record.category)
+  const metadata: Record<string, unknown> = {
+    ...readMetadata(record.metadata),
+  }
+
+  for (const key of PAGE_METADATA_KEYS) {
+    if (metadata[key] === undefined && record[key] !== undefined && record[key] !== null) {
+      metadata[key] = record[key]
+    }
+  }
 
   return {
     ...(record as PageRecord),
@@ -142,6 +283,9 @@ const normalizePage = (page: unknown): PageRecord => {
       owner.user_id,
     ),
     categoryId: readNullableString(record.categoryId, record.category_id, category.id),
+    type: readNullableString(record.type, record.pageType, record.page_type) as PageRecord['type'],
+    pageType: readNullableString(record.pageType, record.type, record.page_type) as PageRecord['pageType'],
+    page_type: readNullableString(record.page_type, record.type, record.pageType) as PageRecord['page_type'],
     name: readString(record.name, record.title) || 'Untitled page',
     slug: readString(record.slug),
     description: readString(record.description, record.bio, record.about),
@@ -153,10 +297,11 @@ const normalizePage = (page: unknown): PageRecord => {
     approvalNotes: readNullableString(record.approvalNotes, record.approval_notes),
     approvedAt: readNullableString(record.approvedAt, record.approved_at),
     approvedBy: readNullableString(record.approvedBy, record.approved_by),
-    metadata: readMetadata(record.metadata),
+    metadata,
     followers_count: readNumber(record.followers_count, record.followersCount),
     posts_count: readNumber(record.posts_count, record.postsCount),
     category_pages_count: readNumber(record.category_pages_count, record.categoryPagesCount),
+    is_follow: Boolean(record.is_follow ?? record.isFollow),
     createdAt: readString(record.createdAt, record.created_at) || new Date().toISOString(),
     updatedAt: readString(record.updatedAt, record.updated_at) || readString(record.createdAt, record.created_at) || new Date().toISOString(),
   }
@@ -178,13 +323,50 @@ export const pagesService = {
     return normalizePaginator(response)
   },
 
+  async listMyPages(params: PageListParams = {}, token?: string | null) {
+    const response = await api.get<PaginatorPayload<PageRecord>>(withQuery(PAGE_ROUTES.myPages, params), { token })
+    return normalizePaginator(response)
+  },
+
+  async findPageBySlug(slug: string, token?: string | null, options?: { ownedOnly?: boolean }) {
+    const response = options?.ownedOnly
+      ? await pagesService.listMyPages({ per_page: 100 }, token)
+      : await pagesService.listPages({ per_page: 100, q: slug }, token)
+
+    const match = response.data.find((page) => page.slug === slug) ?? null
+
+    if (match || options?.ownedOnly) {
+      return match
+    }
+
+    const fallbackResponse = await pagesService.listPages({ per_page: 100 }, token)
+    return fallbackResponse.data.find((page) => page.slug === slug) ?? null
+  },
+
   async createPage(payload: CreatePageRequest, token?: string | null) {
-    const response = await api.post<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pages, payload, { token })
+    const normalizedPayload = normalizePagePayload(payload) as CreatePageRequest
+    const response = await api.post<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pages, normalizedPayload, {
+      token,
+      // The backend should persist responses by this key so a repeated create
+      // after an uncertain timeout returns the original page instead of a duplicate.
+      headers: {
+        'Idempotency-Key': `page-create:${normalizedPayload.type || normalizedPayload.pageType || normalizedPayload.page_type || 'page'}:${normalizedPayload.slug}`,
+      },
+    })
     return normalizeSuccess(response)
   },
 
   async getPage(id: string, token?: string | null) {
     const response = await api.get<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pageById(id), { token })
+    return normalizeSuccess(response)
+  },
+
+  async updatePage(id: string, payload: UpdatePageRequest, token?: string | null) {
+    const response = await api.put<ApiSuccessResponse<PageRecord>>(
+      PAGE_ROUTES.pageById(id),
+      normalizePagePayload(payload, { preserveEmpty: true }),
+      { token },
+    )
     return normalizeSuccess(response)
   },
 
@@ -198,7 +380,22 @@ export const pagesService = {
     })
   },
 
+  listPageUploads(id: string, token?: string | null) {
+    return api.get<PaginatorPayload<Record<string, unknown>>>(withQuery(PAGE_ROUTES.pageUploads(id), {
+      per_page: 100,
+      sort: '-createdAt',
+    }), { token, suppressErrorModal: true })
+  },
+
   deletePage(id: string, token?: string | null) {
     return api.delete<DeletePageResponse>(PAGE_ROUTES.pageById(id), { token })
+  },
+
+  followPage(id: string, token?: string | null) {
+    return api.post<ApiSuccessResponse<Record<string, unknown>>>(PAGE_ROUTES.pageFollow(id), {}, { token })
+  },
+
+  unfollowPage(id: string, token?: string | null) {
+    return api.delete<ApiSuccessResponse<Record<string, unknown>>>(PAGE_ROUTES.pageFollow(id), { token })
   },
 }

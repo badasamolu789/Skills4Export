@@ -32,6 +32,7 @@ const QuestionAnswerView = () => import('@/views/QuestionAnswerView.vue')
 const ReferralsView = () => import('@/views/ReferralsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 const SignUpView = () => import('@/views/SignUpView.vue')
+const SignUpDetailsView = () => import('@/views/SignUpDetailsView.vue')
 const TermsConditionsView = () => import('@/views/TermsConditionsView.vue')
 const VerifyEmailView = () => import('@/views/VerifyEmailView.vue')
 
@@ -139,12 +140,25 @@ const router = createRouter({
       },
     },
     {
+      path: '/pages/:slug/public',
+      name: 'public-page-detail',
+      component: PageDetailView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
+      },
+    },
+    {
       path: '/pages/:slug',
       name: 'page-detail',
       component: PageDetailView,
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
       },
     },
     {
@@ -317,6 +331,15 @@ const router = createRouter({
       path: '/auth/signup',
       name: 'signup',
       component: SignUpView,
+      meta: {
+        layout: 'auth',
+        guestOnly: true,
+      },
+    },
+    {
+      path: '/auth/signup/details',
+      name: 'signup-details',
+      component: SignUpDetailsView,
       meta: {
         layout: 'auth',
         guestOnly: true,

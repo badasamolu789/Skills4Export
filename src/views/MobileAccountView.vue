@@ -79,7 +79,7 @@ const handleItemClick = async (item: MenuItem) => {
         </p>
 
         <div class="mt-4 flex items-center gap-4">
-          <div class="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)]">
+          <div class="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)]">
             <span
               v-if="authStore.isAuthenticated && !profileImage"
               class="flex h-full w-full items-center justify-center bg-[var(--accent)] text-sm font-bold text-white"

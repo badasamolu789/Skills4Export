@@ -1,17 +1,20 @@
 import { slugify } from '@/utils/slugify'
-import { getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { QuestionPost } from '@/data/feedPosts'
+import type { CommunityRecord } from '@/services/communities'
 import type { QuestionRecord } from '@/services/questions'
 import type { MyProfileData } from '@/services/users'
+import { getOptionalCount } from '@/utils/postMapper'
+import { getDisplayName } from '@/utils/displayName'
+import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
 
 export const getQuestionUserId = (question: QuestionRecord) =>
-  getStringValue(question.userId, question.user_id, question.user?.id)
+  getStringValue(question.userId, question.user_id, question.user?.id, question.asker?.id)
 
 export const getQuestionCommunityId = (question: QuestionRecord) =>
-  getStringValue(question.communityId, question.community_id)
+  getStringValue(question.communityId, question.community_id, question.community?.id)
 
 export const getQuestionCreatedAt = (question: QuestionRecord) =>
   getStringValue(question.createdAt, question.created_at, question.updatedAt, question.updated_at)
@@ -39,42 +42,93 @@ const formatQuestionTime = (value?: string) => {
 }
 
 const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) => {
-  const profileName = getProfileDisplayName(author)
-  const userName = getStringValue(question.user?.name, question.user?.username)
-  const emailName = author?.user?.email?.split('@')[0]?.trim()
-  const embeddedEmailName = question.user?.email?.split('@')[0]?.trim()
+  const profileRecord = author?.profile as Record<string, unknown> | null | undefined
+  const profileName = getDisplayName(
+    author?.user?.name?.trim() ||
+      '',
+    author?.profile?.displayName?.trim(),
+    typeof profileRecord?.display_name === 'string' ? profileRecord.display_name.trim() : '',
+    typeof profileRecord?.name === 'string' ? profileRecord.name.trim() : '',
+    author?.profile?.username?.trim(),
+    author?.user?.username?.trim(),
+  )
+  const userName = getDisplayName(
+    question.user?.name,
+    question.user?.username,
+    question.asker?.name,
+    question.asker?.username,
+  )
   const userId = getQuestionUserId(question)
 
-  return profileName || userName || emailName || embeddedEmailName || (userId ? 'Community member' : 'Member')
+  return profileName || userName || (userId ? 'Community member' : 'Member')
 }
 
 const getAuthorTag = (author?: MyProfileData | null) => {
-  const title = author?.experiences?.find((item) => item.title?.trim())?.title?.trim()
-  const skills = author?.skills
-    ?.map((skill) => (skill.name || skill.skill || '').trim())
-    .filter(Boolean)
-    .slice(0, 3) ?? []
-  const parts = [title, ...skills].filter(Boolean)
+  const profileRecord = author?.profile as Record<string, unknown> | null | undefined
+  const rawSkills = author?.skills ?? (Array.isArray(profileRecord?.skills) ? profileRecord.skills : [])
+  const skills = rawSkills
+    ?.map((skill) => {
+      if (typeof skill === 'string') {
+        return skill.trim()
+      }
 
-  return parts.length ? parts.join(' | ') : 'Skills4Export member'
+      const skillRecord = skill as Record<string, unknown>
+      const value =
+        skillRecord.name ||
+        skillRecord.skill ||
+        skillRecord.skillName ||
+        skillRecord.skill_name ||
+        skillRecord.title ||
+        skillRecord.label
+
+      return typeof value === 'string' ? value.trim() : ''
+    })
+    .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
+    .slice(0, 3) ?? []
+
+  return skills.join(' | ')
 }
 
 export const mapApiQuestionToFeedPost = (
   question: QuestionRecord,
   author?: MyProfileData | null,
+  communityName?: string,
+  community?: CommunityRecord | null,
 ): QuestionPost => {
   const authorName = getAuthorName(question, author)
   const userId = getQuestionUserId(question)
   const communityId = getQuestionCommunityId(question)
+  const embeddedCommunity = question.community
+    ? {
+      id: question.community.id || communityId,
+      name: question.community.name || communityName || 'Community',
+      description: question.community.description || '',
+      icon: question.community.icon,
+      iconName: question.community.iconName,
+      icon_name: question.community.icon_name,
+      iconClass: question.community.iconClass,
+      icon_class: question.community.icon_class,
+    } as CommunityRecord
+    : null
+  const iconCommunity = community || embeddedCommunity
   const createdAt = getQuestionCreatedAt(question)
   const updatedAt = getQuestionUpdatedAt(question)
+  const answerCount = Math.max(
+    getOptionalCount(
+      question.answers_count,
+      question.answer_count,
+      question.answersCount,
+    ),
+    Array.isArray(question.answers) ? question.answers.length : 0,
+  )
 
   return {
     type: 'question',
     apiId: question.id,
     userId,
     communityId,
-    communityName: communityId ? 'Community question' : 'Everyone',
+    communityName: communityId ? communityName || question.community?.name || 'Community' : 'Everyone',
+    communityIconClass: iconCommunity ? getCommunityLineAwesomeClass(iconCommunity) : 'las la-users',
     createdAt,
     updatedAt,
     slug: question.id || slugify(question.title),
@@ -85,6 +139,16 @@ export const mapApiQuestionToFeedPost = (
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
     authorAvatarSrc: author?.profile?.avatar ?? null,
     tag: getAuthorTag(author),
-    answers: question.answers?.length ?? 0,
+    answers: answerCount,
+    score: getOptionalCount(
+      question.score,
+      question.reactions_count,
+      question.reaction_count,
+      question.reactionsCount,
+      question.likes_count,
+      question.likesCount,
+    ),
+    isSaved: Boolean(question.is_saved),
+    isScored: Boolean(question.is_liked),
   }
 }

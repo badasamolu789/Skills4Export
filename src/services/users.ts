@@ -51,6 +51,7 @@ export type UserPortfolio = {
   title?: string
   description?: string
   link?: string
+  pictures?: string[]
 }
 
 export type UserCertification = {
@@ -88,6 +89,14 @@ export type UserFollower = {
   followerId?: string
   followingId?: string
   createdAt?: string
+  follower?: UserRecord | null
+  following?: UserRecord | null
+  user?: UserRecord | null
+  profile?: UserProfile | null
+  followerProfile?: UserProfile | null
+  followingProfile?: UserProfile | null
+  isFollowing?: boolean
+  [key: string]: unknown
 }
 
 export type UserOauthAccount = {
@@ -217,10 +226,58 @@ const normalizeUserSkillResponse = <T extends { data?: UserSkill | null }>(respo
   data: response.data ? normalizeUserSkill(response.data) as T['data'] : response.data,
 })
 
-const normalizeUserSkillsListResponse = <T extends { data?: UserSkill[] }>(response: T): T => ({
-  ...response,
-  data: response.data?.map(normalizeUserSkill) ?? response.data,
-})
+const getSkillListFromValue = (value: unknown): UserSkill[] => {
+  if (Array.isArray(value)) {
+    return value as UserSkill[]
+  }
+
+  if (!isRecord(value)) {
+    return []
+  }
+
+  for (const key of ['skills', 'userSkills', 'user_skills', 'data', 'items', 'records', 'results']) {
+    if (Array.isArray(value[key])) {
+      return value[key] as UserSkill[]
+    }
+  }
+
+  for (const key of ['profile', 'user']) {
+    const nestedSkills = getSkillListFromValue(value[key])
+
+    if (nestedSkills.length) {
+      return nestedSkills
+    }
+  }
+
+  return []
+}
+
+export const collectUserSkills = (...sources: unknown[]): UserSkill[] => {
+  for (const source of sources) {
+    const skills = getSkillListFromValue(source)
+      .map(normalizeUserSkill)
+      .filter((skill) => skill.name || skill.skill)
+
+    if (skills.length) {
+      return skills
+    }
+  }
+
+  return []
+}
+
+const normalizeUserSkillsListResponse = <T extends { data?: UserSkill[] }>(response: T): T => {
+  const skills = collectUserSkills(response.data)
+
+  if (skills.length || Array.isArray(response.data)) {
+    return {
+      ...response,
+      data: skills as T['data'],
+    }
+  }
+
+  return response
+}
 
 const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileResponse => ({
   ...response,
@@ -228,7 +285,7 @@ const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileRespo
     ? {
       ...response.data,
       profile: normalizeUserProfile(response.data.profile),
-      skills: response.data.skills?.map(normalizeUserSkill) ?? response.data.skills,
+      skills: collectUserSkills(response.data.skills, response.data),
     }
     : response.data,
 })
@@ -329,6 +386,7 @@ export type AddUserPortfolioRequest = {
   title: string
   description?: string
   link?: string
+  pictures?: string[]
 }
 
 export type UserPortfolioResponse = {
@@ -460,6 +518,8 @@ const USER_ROUTES = {
   users: '/users',
   myProfile: '/user/profile/me',
   myStats: '/user/stats/me',
+  privacy: '/user/privacy',
+  settings: '/user/settings',
   userById: (id: string) => `/users/${id}`,
   userProfile: (id: string) => `/users/${id}/profile`,
   userAvatar: (id: string) => `/users/${id}/profile/avatar`,
@@ -493,6 +553,12 @@ export const usersService = {
   getMyStats(token?: string | null, options?: UserRequestOptions) {
     return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token, ...options })
   },
+  updatePrivacy(payload: Record<string, unknown>, token?: string | null) {
+    return api.put<{ success?: boolean; message?: string; data?: unknown[] }>(USER_ROUTES.privacy, payload, { token })
+  },
+  updateSettings(payload: Record<string, unknown>, token?: string | null) {
+    return api.put<{ success?: boolean; message?: string; data?: Record<string, unknown> }>(USER_ROUTES.settings, payload, { token })
+  },
   getUser(id: string, token?: string | null) {
     return api.get<UserResponse>(USER_ROUTES.userById(id), { token })
   },
@@ -515,7 +581,7 @@ export const usersService = {
   getUserProfile(id: string, token?: string | null) {
     return api
       .get<UserProfileResponse>(USER_ROUTES.userProfile(id), { token })
-      .then(normalizeUserProfileResponse)
+      .then(normalizeMyProfileResponse)
   },
   createUserProfile(
     id: string,

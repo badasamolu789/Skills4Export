@@ -1,16 +1,47 @@
 import { computed } from 'vue'
 import type { MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { getDisplayName } from '@/utils/displayName'
 
 const getFirstFilled = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
 
+const getRecordString = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object') {
+    return ''
+  }
+
+  const record = source as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const jobTitleKeys = [
+  'jobTitle',
+  'job_title',
+  'currentJobTitle',
+  'current_job_title',
+  'profession',
+  'occupation',
+  'title',
+  'headline',
+]
+
 export const getProfileDisplayName = (profile?: MyProfileData | null) =>
-  getFirstFilled(
+  getDisplayName(
     profile?.user?.name,
+    profile?.profile?.displayName,
+    (profile?.profile as Record<string, unknown> | null | undefined)?.display_name as string | undefined,
+    (profile as Record<string, unknown> | null | undefined)?.displayName as string | undefined,
+    (profile as Record<string, unknown> | null | undefined)?.display_name as string | undefined,
     profile?.profile?.username,
     profile?.user?.username,
-    profile?.user?.email?.split('@')[0],
   )
 
 export const getProfileSkills = (profile?: MyProfileData | null) =>
@@ -31,18 +62,26 @@ export const useCurrentUserIdentity = () => {
   const authStore = useAuthStore()
 
   const displayName = computed(() =>
-    getFirstFilled(
+    getDisplayName(
       authStore.signUpDraft.name,
+      authStore.currentUser?.name,
+      authStore.userProfile?.displayName,
       authStore.userProfile?.username,
       authStore.signUpDraft.username,
-      authStore.signUpDraft.email.split('@')[0],
-      'Member',
-    ),
+    ) || 'Member',
   )
 
   const avatarSrc = computed(() => authStore.userProfile?.avatar || authStore.signUpDraft.avatar || '')
   const initials = computed(() => getInitials(displayName.value))
-  const role = computed(() => getFirstFilled(authStore.signUpDraft.headline, 'Community member'))
+  const role = computed(() =>
+    getFirstFilled(
+      authStore.signUpDraft.jobTitle,
+      getRecordString(authStore.userProfile, jobTitleKeys),
+      getRecordString(authStore.currentUser, jobTitleKeys),
+      authStore.signUpDraft.headline,
+      'Member',
+    ),
+  )
   const profilePath = computed(() => (authStore.userId ? `/profile/view/${authStore.userId}` : '/profile'))
   const skills = computed(() => authStore.signUpDraft.interests.slice(0, 3))
 

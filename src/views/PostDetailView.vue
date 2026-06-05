@@ -18,18 +18,21 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { useCurrentUserIdentity, getInitials, getProfileDisplayName, getProfileSkills } from '@/composables/useCurrentUserIdentity'
-import { getFeedPostBySlug, type FeedPost } from '@/data/feedPosts'
+import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import RichTextContent from '@/components/RichTextContent.vue'
 import PostCommentThread from '@/components/PostCommentThread.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { pagesService } from '@/services/pages'
 import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/services/posts'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
-import { usersService, type MyProfileData } from '@/services/users'
+import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
+import { getDisplayName } from '@/utils/displayName'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -38,8 +41,7 @@ const currentUser = useCurrentUserIdentity()
 const apiPost = ref<FeedPost | null>(null)
 const isLoadingPost = ref(false)
 const postError = ref('')
-const seedPost = computed(() => getFeedPostBySlug(String(route.params.slug)))
-const post = computed(() => apiPost.value || seedPost.value)
+const post = computed(() => apiPost.value)
 const apiPostId = computed(() => post.value?.apiId)
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
   const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
@@ -54,7 +56,7 @@ const postAuthorRoute = computed(() => {
 })
 const postAuthorUserId = computed(() => post.value?.userId || getPublicProfileIdFromRoute(postAuthorRoute.value))
 const isOwnPost = computed(() => Boolean(authStore.userId && postAuthorUserId.value === authStore.userId))
-const showFollowAction = computed(() => Boolean(post.value?.pageId && !isOwnPost.value))
+const showFollowAction = computed(() => Boolean(!isOwnPost.value && (post.value?.pageId || postAuthorUserId.value)))
 const isQuestionRoute = computed(() => route.path.startsWith('/questions/'))
 const isFollowing = ref(false)
 const isSaved = ref(false)
@@ -115,30 +117,7 @@ type QuestionAnswerItem = {
   isScored: boolean
 }
 
-const answerItems = ref<QuestionAnswerItem[]>([
-  {
-    id: 'seed-answer-1',
-    authorName: 'Arden Smith',
-    authorTo: '/profile/view/user-arden-smith',
-    authorMeta: ['Psychologist', 'CSS3', 'Java'],
-    time: '6 hours ago',
-    content:
-      'Beryllium is the fourth element of the periodic table. It has the atomic number 4 and the chemical symbol Be.',
-    score: 0,
-    isScored: false,
-  },
-  {
-    id: 'seed-answer-2',
-    authorName: 'Naomi Cole',
-    authorTo: '/profile/view/user-naomi-cole',
-    authorMeta: ['Frontend', 'UI Systems', 'Mentorship'],
-    time: '4 hours ago',
-    content:
-      'The answer is beryllium. The first four elements are hydrogen, helium, lithium, and beryllium.',
-    score: 0,
-    isScored: false,
-  },
-])
+const answerItems = ref<QuestionAnswerItem[]>([])
 
 const mapAnswerBody = (answer: QuestionAnswerRecord) =>
   answer.content || answer.body || answer.answer || answer.text || answer.message || ''
@@ -273,20 +252,38 @@ const buildDetailCommentTree = async (comments: PostCommentRecord[]) => {
 const loadApiQuestion = async (id: string) => {
   const response = await questionsService.getQuestion(id, authStore.authToken, true)
   const userId = getQuestionUserId(response.data)
+  const communityId = response.data.communityId || response.data.community_id || ''
 
-  const [authorResponse, answersResponse] = await Promise.all([
+  const [authorResponse, userResponse, skillsResponse, answersResponse, communityResponse] = await Promise.all([
     userId
       ? usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
       : Promise.resolve(null),
+    userId
+      ? usersService.getUser(userId, authStore.authToken).catch(() => null)
+      : Promise.resolve(null),
+    userId
+      ? usersService.listUserSkills(userId, authStore.authToken).catch(() => null)
+      : Promise.resolve(null),
     questionsService.listAnswers(response.data.id, authStore.authToken).catch(() => null),
+    communityId ? communitiesService.getCommunity(communityId, authStore.authToken).catch(() => null) : Promise.resolve(null),
   ])
 
   const embeddedAnswers = Array.isArray(response.data.answers) ? response.data.answers : []
   const listedAnswers = answersResponse?.data ?? []
   const answers = listedAnswers.length ? listedAnswers : embeddedAnswers
   const authorData =
-    authorResponse?.data ??
-    (userId && userId === authStore.userId
+    authorResponse?.data
+      ? {
+        ...authorResponse.data,
+        user: {
+          ...(authorResponse.data.user ?? {}),
+          ...(userResponse?.data ?? {}),
+        },
+        skills: collectUserSkills(skillsResponse?.data, authorResponse.data.skills, authorResponse.data, userResponse?.data),
+      }
+      : userResponse?.data
+        ? { user: userResponse.data, skills: collectUserSkills(skillsResponse?.data, userResponse.data) }
+        : (userId && userId === authStore.userId
       ? currentUser.profileData.value
       : null)
 
@@ -296,6 +293,8 @@ const loadApiQuestion = async (id: string) => {
       answers,
     },
     authorData,
+    communityResponse?.data?.name,
+    communityResponse?.data,
   )
   answerItems.value = answers.map(mapAnswerItem)
 }
@@ -367,7 +366,7 @@ const skillPills = computed(() => {
   }
 
   if (post.value.type === 'question') {
-    return post.value.tag.split('|').map((item) => item.trim()).filter(Boolean)
+    return post.value.tag.split('|').map((item) => item.trim()).filter(Boolean).slice(0, 3)
   }
 
   if (post.value.type === 'personal') {
@@ -395,11 +394,14 @@ const sortedAnswerItems = computed(() => {
 
 const answererName = computed(
   () =>
-    currentUser.displayName.value ||
-    answererProfile.value?.profile?.username ||
-    answererProfile.value?.user?.username ||
-    answererProfile.value?.user?.email?.split('@')[0] ||
-    'Member',
+    getDisplayName(
+      currentUser.displayName.value,
+      answererProfile.value?.profile?.displayName,
+      (answererProfile.value?.profile as Record<string, unknown> | null | undefined)?.display_name as string | undefined,
+      answererProfile.value?.user?.name,
+      answererProfile.value?.profile?.username,
+      answererProfile.value?.user?.username,
+    ) || 'Member',
 )
 
 const answererAvatar = computed(
@@ -516,10 +518,6 @@ watch(
     apiPost.value = null
     postError.value = ''
 
-    if (getFeedPostBySlug(String(slug))) {
-      return
-    }
-
     isLoadingPost.value = true
 
     try {
@@ -539,11 +537,34 @@ watch(
         media = []
       }
 
-      const authorResponse = postUserId
-        ? await usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
-        : null
+      const [authorResponse, userResponse, skillsResponse, communityResponse] = await Promise.all([
+        postUserId
+          ? usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
+          : Promise.resolve(null),
+        postUserId
+          ? usersService.getUser(postUserId, authStore.authToken).catch(() => null)
+          : Promise.resolve(null),
+        postUserId
+          ? usersService.listUserSkills(postUserId, authStore.authToken).catch(() => null)
+          : Promise.resolve(null),
+        response.data.community_id || response.data.communityId
+          ? communitiesService.getCommunity(response.data.community_id || response.data.communityId || '', authStore.authToken).catch(() => null)
+          : Promise.resolve(null),
+      ])
+      const authorData = authorResponse?.data
+        ? {
+          ...authorResponse.data,
+          user: {
+            ...(authorResponse.data.user ?? {}),
+            ...(userResponse?.data ?? {}),
+          },
+          skills: collectUserSkills(skillsResponse?.data, authorResponse.data.skills, authorResponse.data, userResponse?.data),
+        }
+        : userResponse?.data
+          ? { user: userResponse.data, skills: collectUserSkills(skillsResponse?.data, userResponse.data) }
+          : null
 
-      apiPost.value = mapApiPostToFeedPost(response.data, media, authorResponse?.data ?? null)
+      apiPost.value = mapApiPostToFeedPost(response.data, media, authorData, communityResponse?.data?.name)
       await loadPostComments(response.data.id)
     } catch (error) {
       try {
@@ -569,7 +590,7 @@ watch(
     isFollowing.value = nextPost?.isFollowing ?? false
     isSaved.value = nextPost?.isSaved ?? false
     isScored.value = nextPost?.isScored ?? false
-    currentScore.value = nextPost && 'score' in nextPost ? nextPost.score : 0
+    currentScore.value = nextPost && 'score' in nextPost ? nextPost.score || 0 : 0
     currentComments.value = nextPost && 'comments' in nextPost ? nextPost.comments : detailComments.value.length
     commentInput.value = ''
     answerInput.value = ''
@@ -591,7 +612,7 @@ onBeforeUnmount(() => {
   answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
 })
 
-const toggleFollow = () => {
+const toggleFollow = async () => {
   if (isOwnPost.value) {
     toast.info('This is your post', {
       description: 'You cannot follow your own account.',
@@ -599,7 +620,36 @@ const toggleFollow = () => {
     return
   }
 
-  isFollowing.value = !isFollowing.value
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before following.',
+    })
+    return
+  }
+
+  const nextValue = !isFollowing.value
+
+  try {
+    if (post.value?.pageId) {
+      if (nextValue) {
+        await pagesService.followPage(post.value.pageId, authStore.authToken)
+      } else {
+        await pagesService.unfollowPage(post.value.pageId, authStore.authToken)
+      }
+    } else if (postAuthorUserId.value) {
+      if (nextValue) {
+        await usersService.followUser(postAuthorUserId.value, { followerId: authStore.userId }, authStore.authToken)
+      } else {
+        await usersService.unfollowUser(postAuthorUserId.value, authStore.authToken)
+      }
+    }
+
+    isFollowing.value = nextValue
+    toast.success(nextValue ? 'Following' : 'Unfollowed')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
+    toast.error('Follow failed', { description: message })
+  }
 }
 
 const toggleScore = async () => {
@@ -1087,7 +1137,7 @@ const submitAnswer = async () => {
     <article class="overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <div class="space-y-5 border-b border-[color:var(--border-soft)] p-4 sm:p-5">
         <div class="flex animate-pulse flex-col gap-4 sm:flex-row sm:items-start">
-          <div class="h-14 w-14 shrink-0 rounded-full bg-[var(--surface-muted)]" />
+          <div class="h-14 w-14 shrink-0 rounded-[0.75rem] bg-[var(--surface-muted)]" />
           <div class="min-w-0 flex-1 space-y-3">
             <div class="flex flex-wrap gap-2">
               <div class="h-3 w-28 rounded-full bg-[var(--surface-muted)]" />
@@ -1168,7 +1218,7 @@ const submitAnswer = async () => {
           <RouterLink
             v-if="author"
             :to="author.to"
-            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white sm:h-12 sm:w-12"
+            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-sm font-bold text-white sm:h-12 sm:w-12"
           >
             <img
               v-if="author.avatarSrc"
@@ -1191,12 +1241,8 @@ const submitAnswer = async () => {
               <span>{{ post.time }}</span>
               <template v-if="skillPills.length">
                 <span class="text-[var(--text-tertiary)]">-</span>
-                <span
-                  v-for="pill in skillPills"
-                  :key="pill"
-                  class="inline-flex max-w-[9rem] truncate rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-[0.62rem] font-medium leading-4 text-[var(--text-secondary)]"
-                >
-                  {{ pill }}
+                <span class="min-w-0 truncate font-semibold text-[var(--text-tertiary)]">
+                  {{ skillPills.join(' | ') }}
                 </span>
               </template>
             </div>
@@ -1301,7 +1347,7 @@ const submitAnswer = async () => {
                 <div class="flex min-w-0 items-start gap-3">
                 <RouterLink
                   :to="answer.authorTo"
-                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
                     <img
                       v-if="answer.avatarSrc"
@@ -1320,11 +1366,10 @@ const submitAnswer = async () => {
                         {{ answer.authorName }}
                       </RouterLink>
                       <span
-                        v-for="item in answer.authorMeta"
-                        :key="item"
-                        class="text-xs font-semibold text-[var(--text-tertiary)]"
+                        v-if="answer.authorMeta.length"
+                        class="min-w-0 truncate text-sm font-semibold text-[var(--text-tertiary)]"
                       >
-                        {{ item }}
+                        {{ answer.authorMeta.slice(0, 3).join(' | ') }}
                       </span>
                     </div>
                     <button
@@ -1388,7 +1433,10 @@ const submitAnswer = async () => {
         </template>
 
         <template v-else>
-          <p class="text-[0.94rem] leading-8 text-[var(--text-secondary)]">{{ post.description }}</p>
+          <RichTextContent
+            :content="post.description"
+            class="text-[0.94rem] leading-8 text-[var(--text-secondary)]"
+          />
           <img
             :src="post.imageSrc"
             :alt="post.imageAlt || post.title"
@@ -1449,7 +1497,7 @@ const submitAnswer = async () => {
               <div class="flex items-start gap-2.5">
                 <RouterLink
                   :to="comment.authorTo"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-primary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-primary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
                   <img
                     v-if="comment.avatarSrc"
@@ -1598,7 +1646,7 @@ const submitAnswer = async () => {
         <div class="flex min-w-0 items-center gap-3">
           <RouterLink
             :to="answererProfilePath"
-            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
+            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
             <img
               v-if="answererAvatar"
@@ -1771,9 +1819,14 @@ const submitAnswer = async () => {
                   {{ community.name }}
                 </option>
               </select>
-              <p class="text-xs leading-5 text-[var(--text-tertiary)]">
-                {{ isLoadingShareCommunities ? 'Loading communities...' : 'Select a community to repost this content there.' }}
+              <p v-if="!isLoadingShareCommunities" class="text-xs leading-5 text-[var(--text-tertiary)]">
+                Select a community to repost this content there.
               </p>
+              <div
+                v-else
+                class="h-3 w-44 animate-pulse rounded-full bg-[var(--surface-muted)]"
+                aria-label="Loading communities"
+              />
             </div>
 
             <div class="space-y-2">

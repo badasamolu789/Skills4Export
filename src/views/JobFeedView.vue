@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { BriefcaseBusiness, MapPin, Search, Wallet } from 'lucide-vue-next'
+import { BriefcaseBusiness, Search } from 'lucide-vue-next'
+import JobCard from '@/components/JobCard.vue'
 import PostJobModal from '@/components/PostJobModal.vue'
 import type { JobRecord } from '@/services/jobs'
 import { useJobsStore } from '@/stores/jobs'
@@ -12,49 +13,9 @@ const visibleJobCount = ref(6)
 const loadMoreTarget = ref<HTMLElement | null>(null)
 let loadMoreObserver: IntersectionObserver | null = null
 
-const formatMoney = (value?: number | null, currency = 'NGN') => {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return ''
-  }
-
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-const getSalaryLabel = (job: JobRecord) => {
-  if (job.salaryLabel) {
-    return job.salaryLabel
-  }
-
-  const min = formatMoney(job.salaryMin, job.salaryCurrency || 'NGN')
-  const max = formatMoney(job.salaryMax, job.salaryCurrency || 'NGN')
-
-  if (min && max) {
-    return `${min} - ${max}`
-  }
-
-  return min || max || 'Salary not listed'
-}
-
-const getJobPath = (job: JobRecord) => `/jobs/${job.id || job.slug}`
-
-const getJobExperience = (job: JobRecord) => {
-  const experience = job.experience?.trim()
-
-  if (!experience) {
-    return 'Experience not listed'
-  }
-
-  const compactExperience = experience.replace(/\s*-\s*/g, '-')
-
-  if (/yrs?\)?$/i.test(compactExperience) || /years?$/i.test(compactExperience)) {
-    return compactExperience.replace(/\s*years?$/i, '(yrs)')
-  }
-
-  return `${compactExperience}(yrs)`
+const isPublicJob = (job: JobRecord) => {
+  const status = job.status?.toLowerCase()
+  return !status || ['approved', 'active', 'live'].includes(status)
 }
 
 const filteredJobs = computed(() => {
@@ -70,7 +31,9 @@ const filteredJobs = computed(() => {
       job.companyName,
       job.location,
       job.type,
-      getSalaryLabel(job),
+      job.salaryLabel,
+      job.salaryMin,
+      job.salaryMax,
       job.experience,
       job.description,
       ...(job.skills || []),
@@ -96,6 +59,10 @@ watch(searchQuery, () => {
 })
 
 const addCreatedJob = (job: JobRecord) => {
+  if (!isPublicJob(job)) {
+    return
+  }
+
   if (!jobsStore.jobs.some((item) => item.id === job.id)) {
     jobsStore.jobs = [job, ...jobsStore.jobs]
   }
@@ -173,61 +140,12 @@ onBeforeUnmount(() => {
         </div>
       </article>
 
-      <article
+      <JobCard
         v-if="!jobsStore.isLoadingJobs"
         v-for="job in visibleJobs"
         :key="job.id"
-        class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
-      >
-        <div class="min-w-0">
-          <RouterLink
-            :to="getJobPath(job)"
-            class="block text-[1.08rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
-          >
-              {{ job.title }}
-          </RouterLink>
-
-          <p class="mt-2 inline-flex items-center gap-2 text-[0.86rem] font-semibold text-[var(--text-secondary)]">
-            <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
-            {{ job.companyName }}
-          </p>
-
-          <p class="mt-2 line-clamp-2 max-w-3xl text-[0.84rem] leading-5 text-[var(--text-secondary)]">
-            {{ job.description }}
-          </p>
-
-          <div class="mt-3 flex flex-wrap gap-2">
-              <span
-              class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]"
-              >
-                <MapPin class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
-            <span class="truncate">{{ job.location || 'Location not listed' }}</span>
-              </span>
-              <span
-              class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[12rem]"
-              >
-              <BriefcaseBusiness class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
-              <span class="truncate">{{ getJobExperience(job) }}</span>
-              </span>
-              <span
-              class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]"
-              >
-                <Wallet class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
-                <span class="truncate">{{ getSalaryLabel(job) }}</span>
-              </span>
-            </div>
-
-          <div class="mt-3 flex flex-wrap gap-2">
-            <span
-              v-for="skill in job.skills || []"
-              :key="skill"
-              class="rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-1 text-[0.76rem] font-semibold text-[var(--text-secondary)]"
-            >
-              {{ skill }}
-            </span>
-          </div>
-        </div>
-      </article>
+        :job="job"
+      />
 
       <article
         v-if="!jobsStore.isLoadingJobs && filteredJobs.length === 0"

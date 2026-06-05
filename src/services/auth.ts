@@ -17,6 +17,26 @@ export type VerifyOtpRequest = {
   otpCode: string
 }
 
+export type RegistrationOnboardingRequest = {
+  acceptedTerms: boolean
+  is16OrAbove: boolean
+  state: string
+  country: string
+  accountType: 'default' | 'student'
+  jobTitle?: string
+  workplace?: string
+  university?: string
+  yearStarted?: string
+  courseOfStudy?: string
+}
+
+export type CompleteRegistrationRequest = {
+  email: string
+  name: string
+  ref_code?: string
+  onboarding?: RegistrationOnboardingRequest
+}
+
 export type CompleteProfileRequest = {
   username: string
   phone?: string
@@ -47,6 +67,11 @@ export type AuthSuccessResponse = {
     tokenType?: string
     expiresIn?: number
     user?: Record<string, unknown>
+    profile?: Record<string, unknown> | null
+    education?: Record<string, unknown>[]
+    experiences?: Record<string, unknown>[]
+    settings?: Record<string, unknown> | null
+    onboardingCompleted?: boolean
     session?: {
       token?: string
       accessToken?: string
@@ -213,7 +238,7 @@ export const authService = {
       password: payload.password,
     })
   },
-  completeRegistration(payload: { email: string; name: string; ref_code?: string }) {
+  completeRegistration(payload: CompleteRegistrationRequest) {
     return api.post<AuthSuccessResponse>(AUTH_ROUTES.completeRegistration, payload)
   },
   forgotPassword(email: string) {

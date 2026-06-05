@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import {
   BriefcaseBusiness,
   Bell,
-  Compass,
   BookOpen,
   Check,
   FlaskConical,
@@ -14,12 +13,9 @@ import {
   House,
   Laptop,
   LayoutGrid,
-  MessageSquareMore,
   Paintbrush,
   PenLine,
-  PlusSquare,
   Puzzle,
-  Users,
   X,
 } from 'lucide-vue-next'
 import { usePagesStore } from '@/stores/pages'
@@ -27,9 +23,17 @@ import { useAuthStore } from '@/stores/auth'
 
 type SidebarMenuGroup = {
   label: string
-  icon: unknown
+  icon?: unknown
+  iconClass?: string
   to: string
   target?: string
+}
+
+type SidebarLink = {
+  label: string
+  icon?: unknown
+  iconClass?: string
+  to: string
 }
 
 const props = withDefaults(
@@ -59,30 +63,24 @@ const trendingLinks = [
 const menuGroups: SidebarMenuGroup[] = [
   {
     label: 'Jobs',
-    icon: BriefcaseBusiness,
+    iconClass: 'las la-industry',
     to: '/jobs/feed',
     target: '_blank',
   },
   {
-    label: 'Answer',
-    icon: MessageSquareMore,
-    to: '/answer/question',
-    target: '_blank',
-  },
-  {
     label: 'Communities',
-    icon: Compass,
+    iconClass: 'las la-users',
     to: '/communities',
   },
   {
     label: 'Freelancers',
-    icon: Users,
+    iconClass: 'las la-dove',
     to: '/freelancers',
     target: '_blank',
   },
   {
     label: 'Create Page',
-    icon: PlusSquare,
+    iconClass: 'lab la-readme',
     to: '/pages/create',
   },
 ]
@@ -106,12 +104,12 @@ const shouldShowDefaultSidebar = computed(
   () => !isJobsRoute.value && !isAnswerRoute.value && !isFreelancersRoute.value,
 )
 const homeSidebarLink = { label: 'Home', icon: House, to: '/feed' }
-const jobSidebarLinks = [
-  { label: 'Jobs', icon: BriefcaseBusiness, to: '/jobs/feed' },
-  { label: 'Manage Jobs', icon: BriefcaseBusiness, to: '/jobs' },
+const jobSidebarLinks: SidebarLink[] = [
+  { label: 'Jobs', iconClass: 'las la-industry', to: '/jobs/feed' },
+  { label: 'Manage Jobs', iconClass: 'las la-industry', to: '/jobs' },
   { label: 'Create Alert', icon: Bell, to: '/jobs/alerts' },
 ]
-const freelancerSidebarLinks = [
+const freelancerSidebarLinks: SidebarLink[] = [
   { label: 'Home', icon: House, to: '/freelancers' },
   { label: 'Writing', icon: FlaskConical, to: '/freelancers?category=writing' },
   { label: 'Book editing', icon: PenLine, to: '/freelancers?category=book-editing' },
@@ -125,8 +123,8 @@ const freelancerSidebarLinks = [
   { label: 'Wordpress developers', icon: Puzzle, to: '/freelancers?category=wordpress-developers' },
   { label: 'Data entry operators', icon: Check, to: '/freelancers?category=data-entry-operators' },
 ]
-const questionSidebarLinks = [
-  { label: 'Questions', icon: MessageSquareMore, to: '/answer/question' },
+const questionSidebarLinks: SidebarLink[] = [
+  { label: 'Questions', iconClass: 'las la-question-circle', to: '/answer/question' },
 ]
 const yourPages = computed(() =>
   pagesStore.pages.map((page) => ({
@@ -138,6 +136,7 @@ const yourPages = computed(() =>
       .slice(0, 2)
       .toUpperCase(),
     to: `/pages/${page.id}`,
+    avatar: page.avatar,
   })),
 )
 const hasYourPages = computed(() => yourPages.value.length > 0)
@@ -288,8 +287,15 @@ watch(
                 class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
                 @click="handleNavigation"
               >
+                <i
+                  v-if="'iconClass' in item && item.iconClass"
+                  :class="[item.iconClass, getTopLevelIconClasses(isRouteActive(item.to))]"
+                  class="text-[1.05rem] leading-none"
+                  aria-hidden="true"
+                />
                 <component
                   :is="item.icon"
+                  v-else
                   :class="getTopLevelIconClasses(isRouteActive(item.to))"
                   class="h-4 w-4"
                 />
@@ -320,8 +326,15 @@ watch(
                 class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
                 @click="handleNavigation"
               >
+                <i
+                  v-if="'iconClass' in item && item.iconClass"
+                  :class="[item.iconClass, getTopLevelIconClasses(isRouteActive(item.to))]"
+                  class="text-[1.05rem] leading-none"
+                  aria-hidden="true"
+                />
                 <component
                   :is="item.icon"
+                  v-else
                   :class="getTopLevelIconClasses(isRouteActive(item.to))"
                   class="h-4 w-4"
                 />
@@ -387,8 +400,15 @@ watch(
                 class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
                 @click="handleNavigation"
               >
+                <i
+                  v-if="group.iconClass"
+                  :class="[group.iconClass, getTopLevelIconClasses(isGroupActive(group))]"
+                  class="text-[1.05rem] leading-none"
+                  aria-hidden="true"
+                />
                 <component
                   :is="group.icon"
+                  v-else
                   :class="getTopLevelIconClasses(isGroupActive(group))"
                   class="h-4 w-4"
                 />
@@ -414,9 +434,15 @@ watch(
                 @click="handleNavigation"
               >
                 <span
-                  class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-white"
+                  class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-xs font-semibold text-white"
                 >
-                  {{ page.initials }}
+                  <img
+                    v-if="page.avatar"
+                    :src="page.avatar"
+                    :alt="page.name"
+                    class="h-full w-full rounded-[0.75rem] object-cover"
+                  />
+                  <span v-else>{{ page.initials }}</span>
                 </span>
                 <span class="text-[0.88rem] font-medium text-[var(--text-primary)]">{{ page.name }}</span>
               </RouterLink>

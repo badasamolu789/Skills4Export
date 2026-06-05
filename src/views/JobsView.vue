@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { BriefcaseBusiness, Clock3, Search, Send, UserCheck } from 'lucide-vue-next'
+import { BriefcaseBusiness, Search, Send } from 'lucide-vue-next'
+import JobCard from '@/components/JobCard.vue'
 import { useJobsStore } from '@/stores/jobs'
 
 const jobsStore = useJobsStore()
@@ -161,38 +162,14 @@ onMounted(() => {
           <div class="mt-2 h-3 w-2/3 rounded-full bg-[var(--surface-primary)]" />
         </article>
 
-        <article
+        <JobCard
           v-if="!jobsStore.isLoadingManageJobs"
           v-for="job in filteredPostedJobs"
           :key="job.id"
-          class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <span
-              class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]"
-            >
-              <BriefcaseBusiness class="h-3.5 w-3.5" />
-              {{ job.companyName }}
-            </span>
-            <span
-              class="inline-flex items-center rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]"
-            >
-              {{ job.status || 'draft' }}
-            </span>
-          </div>
-          <h3 class="mt-3 text-lg font-semibold text-[var(--text-primary)]">{{ job.title }}</h3>
-          <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{{ job.description }}</p>
-          <div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-            <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
-              <UserCheck class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ job.applicantCount || 0 }} applicants
-            </span>
-            <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
-              <Clock3 class="h-4 w-4 text-[var(--accent-strong)]" />
-              Posted {{ formatDate(job.createdAt || job.updatedAt) }}
-            </span>
-          </div>
-        </article>
+          :job="job"
+          :status-label="job.status || 'draft'"
+          :footer-label="`${job.applicantCount || 0} applicants · Posted ${formatDate(job.createdAt || job.updatedAt)}`"
+        />
 
         <article
           v-if="!jobsStore.isLoadingManageJobs && filteredPostedJobs.length === 0"
@@ -222,37 +199,14 @@ onMounted(() => {
           </div>
         </article>
 
-        <article
-          v-if="!jobsStore.isLoadingManageJobs"
-          v-for="application in filteredAppliedJobs"
-          :key="application.id"
-          class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
-        >
-          <div class="flex flex-wrap items-center gap-2">
-            <span
-              class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-strong)]"
-            >
-              <Send class="h-3.5 w-3.5" />
-              {{ application.job?.companyName || 'Company not listed' }}
-            </span>
-            <span
-              class="inline-flex items-center rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-medium text-[var(--text-secondary)]"
-            >
-              {{ application.status || 'submitted' }}
-            </span>
-          </div>
-          <h3 class="mt-3 text-lg font-semibold text-[var(--text-primary)]">{{ application.job?.title || 'Job application' }}</h3>
-          <div class="mt-4 flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
-            <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
-              <Clock3 class="h-4 w-4 text-[var(--accent-strong)]" />
-              Applied {{ formatDate(application.appliedAt || application.createdAt) }}
-            </span>
-            <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-primary)] px-3 py-1.5">
-              <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
-              {{ application.job?.location || 'Location not listed' }}
-            </span>
-          </div>
-        </article>
+        <template v-for="application in filteredAppliedJobs" :key="application.id">
+          <JobCard
+            v-if="!jobsStore.isLoadingManageJobs && application.job"
+            :job="application.job"
+            :status-label="application.status || 'submitted'"
+            :footer-label="`Applied ${formatDate(application.appliedAt || application.createdAt)}`"
+          />
+        </template>
 
         <article
           v-if="!jobsStore.isLoadingManageJobs && filteredAppliedJobs.length === 0"

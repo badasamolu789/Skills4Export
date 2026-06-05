@@ -1,13 +1,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Briefcase, Camera, Globe, Mail, MapPin, Phone, ShieldCheck, Sparkles, UserRound, Plus, Trash2, Award, BookOpen, GraduationCap } from 'lucide-vue-next'
+import { Briefcase, Camera, Globe, Mail, MapPin, Phone, ShieldCheck, Sparkles, UserRound, Plus, Trash2, Award, BookOpen, GraduationCap, UploadCloud } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import SkillPillInput from '@/components/SkillPillInput.vue'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
-import { usersService } from '@/services/users'
+import { collectUserSkills, usersService } from '@/services/users'
 import type { UserPortfolio, UserSkill, UserCertification, UserEducation, UserExperience } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { getDisplayName } from '@/utils/displayName'
+
+type ProfileUploadItem = {
+  id: string
+  title: string
+  externalUrl?: string
+  url: string
+  mediaType: 'image' | 'video'
+  isLocal?: boolean
+}
 
 const authStore = useAuthStore()
 const isLoadingProfile = ref(false)
@@ -37,9 +48,19 @@ const avatarFileInput = ref<HTMLInputElement | null>(null)
 const bannerFileInput = ref<HTMLInputElement | null>(null)
 const avatarObjectUrl = ref('')
 const bannerObjectUrl = ref('')
-const activeProfileModal = ref<'education' | 'experience' | 'skills' | 'project' | 'certificate' | null>(null)
+const activeProfileModal = ref<'education' | 'experience' | 'skills' | 'project' | 'certificate' | 'uploads' | null>(null)
 const currentWorkplace = ref('')
 const currentJobTitle = ref('')
+const isUploadingProfileMedia = ref(false)
+const profileUploadFileInput = ref<HTMLInputElement | null>(null)
+const profileUploadFile = ref<File | null>(null)
+const profileUploadPreviewUrl = ref('')
+const profileUploadFileName = ref('')
+const profileUploads = ref<ProfileUploadItem[]>([])
+const profileUploadForm = ref({
+  title: '',
+  externalUrl: '',
+})
 
 // Skills
 const skills = ref<Array<{ id: string; name: string; level?: string }>>([])
@@ -49,12 +70,16 @@ const newSkill = ref({
 })
 
 // Portfolios
-const portfolios = ref<Array<{ id: string; title: string; description?: string; link?: string }>>([])
+const portfolios = ref<Array<{ id: string; title: string; description?: string; link?: string; pictures?: string[] }>>([])
 const newPortfolio = ref({
   title: '',
   description: '',
   link: '',
 })
+const projectMediaFileInput = ref<HTMLInputElement | null>(null)
+const projectMediaFile = ref<File | null>(null)
+const projectMediaPreviewUrl = ref('')
+const projectMediaFileName = ref('')
 
 // Certifications
 const certifications = ref<Array<{ id: string; name: string; issuer?: string; issueDate?: string }>>([])
@@ -87,7 +112,7 @@ const newExperience = ref({
 })
 
 const form = ref({
-  name: authStore.currentUser?.name || authStore.signUpDraft.name || '',
+  name: getDisplayName(authStore.currentUser?.name, authStore.signUpDraft.name),
   username: authStore.userProfile?.username || authStore.currentUser?.username || authStore.signUpDraft.username || '',
   email: authStore.currentUser?.email || authStore.signUpDraft.email || '',
   phone: authStore.signUpDraft.phone || '',
@@ -101,7 +126,7 @@ const form = ref({
 })
 
 const profileInitials = computed(() =>
-  (form.value.name || form.value.username || form.value.email)
+  (getDisplayName(form.value.name, form.value.username) || 'Profile')
     .split(' ')
     .map((part) => part[0])
     .join('')
@@ -110,7 +135,12 @@ const profileInitials = computed(() =>
 )
 
 const displayName = computed(() => {
-  return form.value.name || authStore.currentUser?.name || form.value.username || form.value.email || 'Profile'
+  return getDisplayName(
+    form.value.name,
+    authStore.currentUser?.name,
+    form.value.username,
+    authStore.currentUser?.username,
+  ) || 'Profile'
 })
 
 const avatarPreviewUrl = computed(() => avatarObjectUrl.value || form.value.avatar || authStore.userProfile?.avatar || '')
@@ -296,9 +326,10 @@ const loadProfile = async () => {
       authStore.signUpDraft.email = response.data.user.email
     }
 
-    if (response.data?.user?.name && typeof response.data.user.name === 'string') {
-      form.value.name = response.data.user.name
-      authStore.signUpDraft.name = response.data.user.name
+    const responseDisplayName = getDisplayName(response.data?.user?.name)
+    if (responseDisplayName) {
+      form.value.name = responseDisplayName
+      authStore.signUpDraft.name = responseDisplayName
     }
 
     if (response.data?.user?.username && typeof response.data.user.username === 'string') {
@@ -346,8 +377,8 @@ const loadProfile = async () => {
         ])
 
       const sourceSkills = skillsResult.status === 'fulfilled'
-        ? skillsResult.value.data
-        : response.data?.skills ?? []
+        ? collectUserSkills(skillsResult.value.data, response.data?.skills, response.data)
+        : collectUserSkills(response.data?.skills, response.data)
       const sourcePortfolios = portfoliosResult.status === 'fulfilled'
         ? portfoliosResult.value.data
         : response.data?.portfolios ?? []
@@ -372,6 +403,7 @@ const loadProfile = async () => {
         title: portfolio.title || portfolio.link || 'Untitled project',
         description: portfolio.description,
         link: portfolio.link,
+        pictures: portfolio.pictures ?? [],
       }))
 
       certifications.value = sourceCertifications.map((certification: UserCertification) => ({
@@ -404,6 +436,7 @@ const loadProfile = async () => {
       const primaryExperience = experiences.value.find((experience) => experience.isCurrent) || experiences.value[0]
       currentWorkplace.value = primaryExperience?.company || ''
       currentJobTitle.value = primaryExperience?.title || ''
+      authStore.signUpDraft.jobTitle = primaryExperience?.title || authStore.signUpDraft.jobTitle
     }
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
@@ -509,6 +542,195 @@ const handleBannerFileChange = (event: Event) => {
   bannerFile.value = target.files?.[0] ?? null
 }
 
+const makeUploadClientId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+const clearProfileUploadSelection = (options?: { keepPreview?: boolean }) => {
+  if (!options?.keepPreview && profileUploadPreviewUrl.value) {
+    URL.revokeObjectURL(profileUploadPreviewUrl.value)
+  }
+
+  profileUploadFile.value = null
+  profileUploadFileName.value = ''
+  profileUploadPreviewUrl.value = ''
+
+  if (profileUploadFileInput.value) {
+    profileUploadFileInput.value.value = ''
+  }
+}
+
+const clearProjectMediaSelection = () => {
+  if (projectMediaPreviewUrl.value) {
+    URL.revokeObjectURL(projectMediaPreviewUrl.value)
+  }
+
+  projectMediaFile.value = null
+  projectMediaPreviewUrl.value = ''
+  projectMediaFileName.value = ''
+
+  if (projectMediaFileInput.value) {
+    projectMediaFileInput.value.value = ''
+  }
+}
+
+const selectProjectMediaFile = (file?: File | null) => {
+  if (!file) {
+    return
+  }
+
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    toast.error('Choose an image or video file for the project.')
+    return
+  }
+
+  clearProjectMediaSelection()
+  projectMediaFile.value = file
+  projectMediaFileName.value = file.name
+  projectMediaPreviewUrl.value = URL.createObjectURL(file)
+}
+
+const handleProjectMediaFileChange = (event: Event) => {
+  selectProjectMediaFile((event.target as HTMLInputElement).files?.[0])
+}
+
+const uploadProjectMedia = async () => {
+  if (!projectMediaFile.value) {
+    return ''
+  }
+
+  if (!authStore.authToken || !authStore.userId) {
+    throw new Error('Please sign in before uploading project media.')
+  }
+
+  const file = projectMediaFile.value
+  const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
+  const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
+
+  if (!uploadResponse.public_id) {
+    throw new Error('Media upload completed without a public ID.')
+  }
+
+  const registerResponse = await mediaService.registerMedia(
+    {
+      publicId: uploadResponse.public_id,
+      title: newPortfolio.value.title.trim(),
+      kind: file.type.startsWith('video/') ? 'video' : 'image',
+      userId: authStore.userId,
+    },
+    authStore.authToken,
+  )
+  const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+    token: authStore.authToken,
+  })
+
+  return processed.url || uploadResponse.secure_url || ''
+}
+
+const selectProfileUploadFile = (file?: File | null) => {
+  if (!file) {
+    return
+  }
+
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    toast.error('Please choose an image or video file.')
+    return
+  }
+
+  clearProfileUploadSelection()
+  clearProjectMediaSelection()
+  profileUploadFile.value = file
+  profileUploadFileName.value = file.name
+  profileUploadPreviewUrl.value = URL.createObjectURL(file)
+}
+
+const handleProfileUploadFileChange = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  selectProfileUploadFile(input.files?.[0])
+}
+
+const handleProfileUploadDrop = (event: DragEvent) => {
+  selectProfileUploadFile(event.dataTransfer?.files?.[0])
+}
+
+const submitProfileUpload = async () => {
+  if (isUploadingProfileMedia.value) {
+    return
+  }
+
+  const title = profileUploadForm.value.title.trim()
+  const externalUrl = profileUploadForm.value.externalUrl.trim()
+
+  if (!title) {
+    toast.error('Upload title is required.')
+    return
+  }
+
+  if (!profileUploadFile.value) {
+    toast.error('Choose an image or video to upload.')
+    return
+  }
+
+  if (!authStore.authToken) {
+    toast.error('Please sign in before uploading media.')
+    return
+  }
+
+  const selectedFile = profileUploadFile.value
+  const mediaType = selectedFile.type.startsWith('video/') ? 'video' : 'image'
+  const toastId = toast.loading('Uploading media...')
+  isUploadingProfileMedia.value = true
+
+  try {
+    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
+    const uploadResponse = await mediaService.uploadCloudinaryFile(selectedFile, signatureResponse.data)
+
+    if (!uploadResponse.public_id) {
+      throw new Error('Media upload completed without a public ID.')
+    }
+
+    const registerResponse = await mediaService.registerMedia(
+      {
+        publicId: uploadResponse.public_id,
+        title,
+        ...(externalUrl ? { externalUrl } : {}),
+        kind: mediaType,
+        userId: authStore.userId,
+      },
+      authStore.authToken,
+    )
+
+    const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+      token: authStore.authToken,
+    })
+    const remoteUrl = processed.url || uploadResponse.secure_url || profileUploadPreviewUrl.value
+    const shouldKeepPreview = remoteUrl === profileUploadPreviewUrl.value
+
+    profileUploads.value.unshift({
+      id: processed.assetId || makeUploadClientId(),
+      title,
+      ...(externalUrl ? { externalUrl } : {}),
+      url: remoteUrl,
+      mediaType,
+      isLocal: shouldKeepPreview,
+    })
+
+    toast.success('Upload added', { id: toastId })
+    activeProfileModal.value = null
+    profileUploadForm.value = { title: '', externalUrl: '' }
+    clearProfileUploadSelection({ keepPreview: shouldKeepPreview })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to upload this media.'
+    toast.error('Upload failed', { id: toastId, description: message })
+  } finally {
+    isUploadingProfileMedia.value = false
+  }
+}
+
 watch(avatarFile, (file) => {
   if (avatarObjectUrl.value) {
     URL.revokeObjectURL(avatarObjectUrl.value)
@@ -539,6 +761,14 @@ onBeforeUnmount(() => {
   if (bannerObjectUrl.value) {
     URL.revokeObjectURL(bannerObjectUrl.value)
   }
+
+  clearProfileUploadSelection()
+
+  profileUploads.value.forEach((item) => {
+    if (item.isLocal) {
+      URL.revokeObjectURL(item.url)
+    }
+  })
 })
 
 const loadSkills = async () => {
@@ -550,7 +780,7 @@ const loadSkills = async () => {
 
   try {
     const response = await usersService.listUserSkills(authStore.userId, authStore.authToken)
-    skills.value = response.data.map((skill) => ({
+    skills.value = collectUserSkills(response.data).map((skill) => ({
       id: skill.id || '',
       name: getSkillDisplayName(skill),
       level: skill.level,
@@ -656,6 +886,7 @@ const loadPortfolios = async () => {
       title: portfolio.title || '',
       description: portfolio.description,
       link: portfolio.link,
+      pictures: portfolio.pictures ?? [],
     }))
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
@@ -681,7 +912,12 @@ onMounted(() => {
 })
 
 const addSkill = async () => {
-  if (!newSkill.value.skill.trim() || !authStore.userId) {
+  const nextSkills = newSkill.value.skill
+    .split(',')
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+
+  if (!nextSkills.length || !authStore.userId) {
     toast.error('Please enter a skill name.')
     return
   }
@@ -689,26 +925,33 @@ const addSkill = async () => {
   isAddingSkill.value = true
 
   try {
-    const response = await usersService.addUserSkill(
-      authStore.userId,
-      {
-        skill: newSkill.value.skill.trim(),
-        level: newSkill.value.level,
-      },
-      authStore.authToken,
+    const createdSkills = await Promise.all(
+      nextSkills.map((skill) =>
+        usersService.addUserSkill(
+          authStore.userId,
+          {
+            skill,
+            level: newSkill.value.level,
+          },
+          authStore.authToken,
+        ),
+      ),
     )
 
-    const createdSkill = response.data
-    const createdSkillName = getSkillDisplayName(createdSkill) || newSkill.value.skill.trim()
     skills.value = [
-      {
-        id: createdSkill.id || `skill-${Date.now()}`,
-        name: createdSkillName,
-        level: createdSkill.level || newSkill.value.level,
-      },
+      ...createdSkills.map((response, index) => {
+        const createdSkill = response.data
+        const createdSkillName = getSkillDisplayName(createdSkill) || nextSkills[index]
+
+        return {
+          id: createdSkill.id || `skill-${Date.now()}-${index}`,
+          name: createdSkillName,
+          level: createdSkill.level || newSkill.value.level,
+        }
+      }),
       ...skills.value,
     ]
-    toast.success('Skill added successfully!')
+    toast.success(nextSkills.length > 1 ? 'Skills added successfully!' : 'Skill added successfully!')
     newSkill.value = { skill: '', level: 'intermediate' }
     await loadSkills()
     await loadProfile()
@@ -760,12 +1003,14 @@ const addPortfolio = async () => {
   try {
     const description = optionalField(newPortfolio.value.description)
     const link = optionalField(newPortfolio.value.link)
+    const mediaUrl = await uploadProjectMedia()
     const response = await usersService.addUserPortfolio(
       authStore.userId,
       {
         title: newPortfolio.value.title.trim(),
         ...(description ? { description } : {}),
         ...(link ? { link } : {}),
+        ...(mediaUrl ? { pictures: [mediaUrl] } : {}),
       },
       authStore.authToken,
     )
@@ -777,12 +1022,14 @@ const addPortfolio = async () => {
           title: response.data.title || newPortfolio.value.title,
           description: response.data.description,
           link: response.data.link,
+          pictures: response.data.pictures ?? (mediaUrl ? [mediaUrl] : []),
         },
         ...portfolios.value,
       ]
     }
     toast.success('Portfolio item added successfully!')
     newPortfolio.value = { title: '', description: '', link: '' }
+    clearProjectMediaSelection()
     await loadPortfolios()
     await loadProfile()
   } catch (error) {
@@ -1111,6 +1358,21 @@ const upsertProfile = async (payload: {
   }
 }
 
+const getSavedProfileData = (value: unknown) => {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+
+  const record = value as Record<string, unknown>
+  const nestedProfile = record.profile
+
+  if (nestedProfile && typeof nestedProfile === 'object' && !Array.isArray(nestedProfile)) {
+    return nestedProfile as Record<string, unknown>
+  }
+
+  return record
+}
+
 const saveDisplayName = async () => {
   if (!authStore.userId) {
     throw new Error('No authenticated user ID is available for this profile update.')
@@ -1149,6 +1411,7 @@ const saveCurrentExperience = async () => {
 
   const company = currentWorkplace.value.trim()
   const title = currentJobTitle.value.trim()
+  authStore.signUpDraft.jobTitle = title || authStore.signUpDraft.jobTitle
 
   if (!company && !title) {
     return
@@ -1240,8 +1503,9 @@ const saveContactSection = async () => {
     authStore.signUpDraft.email = form.value.email
     authStore.signUpDraft.phone = form.value.phone
     const savedProfile = {
-      ...(profileResponse.data ?? {}),
+      ...getSavedProfileData(profileResponse.data),
       location: form.value.location.trim(),
+      bio: form.value.bio,
     }
     authStore.signUpDraft.location = form.value.location.trim()
     authStore.setUserProfileOverride(savedProfile)
@@ -1289,8 +1553,14 @@ const saveProfessionalSection = async () => {
     authStore.signUpDraft.name = form.value.name
     authStore.signUpDraft.username = form.value.username
     const savedProfile = {
-      ...(profileResponse.data ?? {}),
+      ...getSavedProfileData(profileResponse.data),
       location: form.value.location.trim(),
+      bio: form.value.bio,
+      displayName: form.value.name.trim(),
+      username: getProfileUsernameValue(),
+      website: form.value.website,
+      linkedin: form.value.linkedin,
+      github: form.value.github,
     }
     authStore.signUpDraft.location = form.value.location.trim()
     authStore.signUpDraft.headline = form.value.bio
@@ -1319,6 +1589,7 @@ const profileModalTitle = computed(() => {
     skills: 'Add Skills',
     project: 'Add Project',
     certificate: 'Add Professional Certificate',
+    uploads: 'Uploads',
   }
 
   return activeProfileModal.value ? titles[activeProfileModal.value] : 'Profile update'
@@ -1410,7 +1681,7 @@ const addExperienceFromModal = async () => {
         <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.36))]" />
 
         <label
-          class="absolute right-4 top-4 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-white/70 bg-white/90 text-[var(--text-primary)] shadow-[var(--shadow-soft)] transition hover:bg-white hover:text-[var(--accent-strong)]"
+          class="absolute right-4 top-4 inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-[0.75rem] border border-white/70 bg-white/90 text-[var(--text-primary)] shadow-[var(--shadow-soft)] transition hover:bg-white hover:text-[var(--accent-strong)]"
           aria-label="Upload banner image"
           title="Upload banner image"
         >
@@ -1443,7 +1714,7 @@ const addExperienceFromModal = async () => {
 
       <div class="relative px-5 py-5 sm:px-7 sm:py-7">
         <div class="mb-4">
-          <div class="relative h-32 w-32 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
+          <div class="relative h-32 w-32 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
             <img
               v-if="avatarPreviewUrl"
               :src="avatarPreviewUrl"
@@ -1508,6 +1779,7 @@ const addExperienceFromModal = async () => {
           { label: 'ADD SKILLS', modal: 'skills' },
           { label: 'ADD PROJECT', modal: 'project' },
           { label: 'ADD PROFESSIONAL CERTIFICATE', modal: 'certificate' },
+          { label: 'UPLOADS', modal: 'uploads' },
         ]"
         :key="item.label"
         type="button"
@@ -1576,7 +1848,7 @@ const addExperienceFromModal = async () => {
           <div class="absolute inset-0 bg-[#12121f]" />
 
           <div class="absolute left-5 bottom-5 flex items-center gap-4">
-            <div class="relative h-20 w-20 overflow-hidden rounded-full border border-white bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
+            <div class="relative h-20 w-20 overflow-hidden rounded-[0.75rem] border border-white bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
               <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Avatar preview" class="h-full w-full object-cover" />
               <span v-else class="flex h-full w-full items-center justify-center text-xl font-semibold text-white">
                 {{ profileInitials }}
@@ -1766,12 +2038,7 @@ const addExperienceFromModal = async () => {
           <div class="space-y-3">
             <div class="space-y-2">
               <label class="text-sm font-semibold text-[var(--text-primary)]">Skill name</label>
-              <input
-                v-model="newSkill.skill"
-                type="text"
-                placeholder="e.g., JavaScript, Python, Design..."
-                class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-              />
+              <SkillPillInput v-model="newSkill.skill" placeholder="e.g., JavaScript, Python, Design..." />
             </div>
 
             <div class="space-y-2">
@@ -1841,6 +2108,36 @@ const addExperienceFromModal = async () => {
                   placeholder="https://example.com/project"
                   class="h-12 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
                 />
+              </div>
+
+              <div class="space-y-2">
+                <span class="text-sm font-semibold text-[var(--text-primary)]">Project media (optional)</span>
+                <button
+                  type="button"
+                  class="flex min-h-36 w-full items-center justify-center overflow-hidden rounded-2xl border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3 transition hover:border-[var(--accent)]"
+                  @click="projectMediaFileInput?.click()"
+                  @dragover.prevent
+                  @drop.prevent="selectProjectMediaFile($event.dataTransfer?.files?.[0])"
+                >
+                  <img
+                    v-if="projectMediaPreviewUrl && projectMediaFile?.type.startsWith('image/')"
+                    :src="projectMediaPreviewUrl"
+                    alt="Project media preview"
+                    class="max-h-52 w-full rounded-xl object-cover"
+                  />
+                  <video
+                    v-else-if="projectMediaPreviewUrl"
+                    :src="projectMediaPreviewUrl"
+                    class="max-h-52 w-full rounded-xl object-cover"
+                    controls
+                  />
+                  <span v-else class="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+                    <UploadCloud class="h-5 w-5 text-[var(--accent-strong)]" />
+                    Choose an image or video
+                  </span>
+                </button>
+                <input ref="projectMediaFileInput" type="file" accept="image/*,video/*" class="sr-only" @change="handleProjectMediaFileChange" />
+                <p v-if="projectMediaFileName" class="text-xs text-[var(--text-tertiary)]">{{ projectMediaFileName }}</p>
               </div>
 
               <button
@@ -2181,7 +2478,7 @@ const addExperienceFromModal = async () => {
     <div v-else-if="activeProfileModal === 'skills'" class="space-y-4">
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">Skill name</span>
-        <input v-model="newSkill.skill" type="text" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        <SkillPillInput v-model="newSkill.skill" placeholder="e.g., JavaScript, Python, Design..." />
       </label>
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">Level</span>
@@ -2209,6 +2506,30 @@ const addExperienceFromModal = async () => {
         <span class="text-sm font-semibold text-[var(--text-primary)]">Link</span>
         <input v-model="newPortfolio.link" type="url" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
       </label>
+      <div>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Project media (optional)</span>
+        <button
+          type="button"
+          class="mt-2 flex min-h-36 w-full items-center justify-center overflow-hidden rounded-[0.75rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-3 transition hover:border-[color:var(--accent-soft)]"
+          @click="projectMediaFileInput?.click()"
+          @dragover.prevent
+          @drop.prevent="selectProjectMediaFile($event.dataTransfer?.files?.[0])"
+        >
+          <img
+            v-if="projectMediaPreviewUrl && projectMediaFile?.type.startsWith('image/')"
+            :src="projectMediaPreviewUrl"
+            alt="Project media preview"
+            class="max-h-52 w-full rounded-[0.65rem] object-cover"
+          />
+          <video v-else-if="projectMediaPreviewUrl" :src="projectMediaPreviewUrl" class="max-h-52 w-full rounded-[0.65rem] object-cover" controls />
+          <span v-else class="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)]">
+            <UploadCloud class="h-5 w-5 text-[var(--accent-strong)]" />
+            Choose an image or video
+          </span>
+        </button>
+        <input ref="projectMediaFileInput" type="file" accept="image/*,video/*" class="sr-only" @change="handleProjectMediaFileChange" />
+        <p v-if="projectMediaFileName" class="mt-2 text-xs text-[var(--text-tertiary)]">{{ projectMediaFileName }}</p>
+      </div>
       <button type="button" :disabled="isAddingPortfolio || !newPortfolio.title.trim()" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white disabled:opacity-60" @click="addPortfolioFromModal">
         {{ isAddingPortfolio ? 'Adding...' : 'Add Project' }}
       </button>
@@ -2233,6 +2554,78 @@ const addExperienceFromModal = async () => {
         {{ isAddingCertification ? 'Adding...' : 'Add Certificate' }}
       </button>
     </div>
+
+    <form v-else-if="activeProfileModal === 'uploads'" class="space-y-5" @submit.prevent="submitProfileUpload">
+      <p class="text-sm leading-7 text-[var(--text-secondary)]">
+        If you post image/video and url, the url will open when the upload title is clicked. If no image or video uploaded, the url preview will appear.
+      </p>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Upload title</span>
+        <input
+          v-model="profileUploadForm.title"
+          type="text"
+          placeholder="photosynthesis in plants"
+          class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">publication/project url</span>
+        <input
+          v-model="profileUploadForm.externalUrl"
+          type="url"
+          placeholder="www.myproject.here"
+          class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+        />
+      </label>
+
+      <div>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Video/Image</span>
+        <button
+          type="button"
+          class="mt-2 flex min-h-40 w-full items-center justify-center overflow-hidden rounded-[0.65rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 text-center transition hover:border-[color:var(--accent-soft)] hover:bg-[var(--surface-secondary)]"
+          @click="profileUploadFileInput?.click()"
+          @dragover.prevent
+          @drop.prevent="handleProfileUploadDrop"
+        >
+          <img
+            v-if="profileUploadPreviewUrl && profileUploadFile?.type.startsWith('image/')"
+            :src="profileUploadPreviewUrl"
+            alt="Selected upload preview"
+            class="max-h-56 w-full rounded-[0.55rem] object-cover"
+          />
+          <video
+            v-else-if="profileUploadPreviewUrl"
+            :src="profileUploadPreviewUrl"
+            class="max-h-56 w-full rounded-[0.55rem] object-cover"
+            controls
+          />
+          <span v-else class="inline-flex items-center gap-3 text-sm font-medium text-[var(--text-secondary)]">
+            <UploadCloud class="h-5 w-5 text-[var(--accent-strong)]" />
+            Drop files here or click to upload.
+          </span>
+        </button>
+        <input
+          ref="profileUploadFileInput"
+          type="file"
+          accept="image/*,video/*"
+          class="sr-only"
+          @change="handleProfileUploadFileChange"
+        />
+        <p v-if="profileUploadFileName" class="mt-2 text-xs font-medium text-[var(--text-tertiary)]">
+          {{ profileUploadFileName }}
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        :disabled="isUploadingProfileMedia"
+        class="inline-flex h-12 w-full items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+      >
+        {{ isUploadingProfileMedia ? 'Uploading...' : 'Upload' }}
+      </button>
+    </form>
 
   </ResponsiveOverlay>
 </template>

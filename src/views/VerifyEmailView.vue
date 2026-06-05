@@ -37,6 +37,8 @@ const hasAccountBasics = computed(
 
 if (!hasAccountBasics.value) {
   router.replace('/auth/signup')
+} else if (!authStore.signUpDraft.signUpDetailsCompleted) {
+  router.replace('/auth/signup/details')
 }
 
 const maskedEmail = computed(() => {
@@ -83,6 +85,23 @@ const verifyOtp = async () => {
     const response = await authService.completeRegistration({
       email: authStore.signUpDraft.email,
       name: authStore.signUpDraft.name,
+      onboarding: {
+        acceptedTerms: authStore.signUpDraft.acceptedTerms,
+        is16OrAbove: authStore.signUpDraft.is16OrAbove,
+        state: authStore.signUpDraft.state,
+        country: authStore.signUpDraft.country,
+        accountType: authStore.signUpDraft.accountType,
+        ...(authStore.signUpDraft.accountType === 'student'
+          ? {
+              university: authStore.signUpDraft.university,
+              yearStarted: authStore.signUpDraft.yearStarted,
+              courseOfStudy: authStore.signUpDraft.courseOfStudy,
+            }
+          : {
+              jobTitle: authStore.signUpDraft.jobTitle,
+              workplace: authStore.signUpDraft.workplace,
+            }),
+      },
     })
 
     authStore.signUpDraft.emailVerified = true
@@ -90,6 +109,12 @@ const verifyOtp = async () => {
     const session = extractAuthSession(response)
     if (session) {
       authStore.setAuthenticatedSession(session.token, session.userId)
+    }
+    if (response.data?.user) {
+      authStore.setCurrentUser(response.data.user)
+    }
+    if (response.data?.profile) {
+      authStore.setUserProfile(response.data.profile)
     }
 
     toast.success('Email verified', {
@@ -221,7 +246,7 @@ const resendOtp = async () => {
 <template>
   <AuthShell
     :centered="true"
-    badge="Step 2 of 2"
+    badge="Step 3 of 3"
     title="Verify your email before we finish creating your account."
     description="We sent a one-time passcode to your inbox so we can confirm the address belongs to you."
   >

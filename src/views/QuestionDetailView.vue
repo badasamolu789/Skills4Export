@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowUp, BookOpen, Bookmark, Check, CloudUpload, MessageSquare, Share2, Users } from 'lucide-vue-next'
+import { ArrowUp, BookOpen, Bookmark, Check, CloudUpload, Flag, MessageSquare, Share2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import { useCurrentUserIdentity, getInitials, getProfileDisplayName, getProfileSkills } from '@/composables/useCurrentUserIdentity'
+import { useCurrentUserIdentity, getInitials, getProfileSkills } from '@/composables/useCurrentUserIdentity'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
-import { getFeedPostBySlug, type QuestionPost } from '@/data/feedPosts'
+import type { QuestionPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
-import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
+import { mediaService } from '@/services/media'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { pagesService } from '@/services/pages'
+import type { PostMediaRecord } from '@/services/posts'
+import { questionsService, type AnswerCommentRecord, type QuestionAnswerRecord } from '@/services/questions'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { getOptionalCount } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
+import { getDisplayName } from '@/utils/displayName'
+import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -19,6 +26,8 @@ const currentUser = useCurrentUserIdentity()
 
 type AnswerItem = {
   id: string
+  authorUserId: string
+  pageId: string | null
   authorName: string
   authorTo: string
   avatarSrc: string | null
@@ -28,28 +37,62 @@ type AnswerItem = {
   content: string
   score: number
   isScored: boolean
+  isSaved: boolean
+  isFollowing: boolean
+  comments: number
+  isCommentsOpen: boolean
+  commentInput: string
+  commentItems: AnswerCommentItem[]
+  media: AnswerMediaLike[]
+}
+
+type AnswerCommentItem = {
+  id: string
+  authorName: string
+  time: string
+  content: string
+}
+
+type AnswerMediaLike = Partial<PostMediaRecord> & {
+  id: string
+  url: string
+  mediaType?: string
+  thumbnailUrl?: string
+  displayOrder?: number
+  secure_url?: string
+  secureUrl?: string
+  media_url?: string
+  mediaUrl?: string
+  thumbnail?: string
+  [key: string]: unknown
 }
 
 const apiQuestion = ref<QuestionPost | null>(null)
 const isLoadingQuestion = ref(false)
 const questionError = ref('')
 const answerItems = ref<AnswerItem[]>([])
+const questionCommunity = ref<CommunityRecord | null>(null)
 const answerSort = ref('newest')
 const answerInput = ref('')
 const isAnswerModalOpen = ref(false)
 const isSubmittingAnswer = ref(false)
+const activeAnswerActionId = ref('')
 const answerAttachments = ref<File[]>([])
 const answerAttachmentPreviews = ref<Array<{ key: string; name: string; url: string; kind: 'image' | 'video' }>>([])
 const answererProfile = ref<MyProfileData | null>(null)
 const isLoadingAnswererProfile = ref(false)
+let realtimeTimer: ReturnType<typeof window.setInterval> | null = null
 
-const seedQuestion = computed(() => {
-  const post = getFeedPostBySlug(String(route.params.slug))
-  return post?.type === 'question' ? post : null
-})
-
-const question = computed(() => apiQuestion.value || seedQuestion.value)
+const question = computed(() => apiQuestion.value)
 const questionId = computed(() => question.value?.apiId)
+const questionCommunityName = computed(() =>
+  questionCommunity.value?.name || question.value?.communityName || 'Everyone',
+)
+const questionCommunityIcon = computed(() =>
+  questionCommunity.value
+    ? getCommunityLineAwesomeClass(questionCommunity.value)
+    : 'las la-users',
+)
 
 const formatTime = (value?: string) => {
   if (!value) {
@@ -116,9 +159,10 @@ const sortedAnswers = computed(() => {
 const answererName = computed(
   () =>
     currentUser.displayName.value ||
+    answererProfile.value?.user?.name ||
+    answererProfile.value?.profile?.displayName ||
     answererProfile.value?.profile?.username ||
     answererProfile.value?.user?.username ||
-    answererProfile.value?.user?.email?.split('@')[0] ||
     'Member',
 )
 
@@ -156,6 +200,127 @@ const answererInitials = computed(() =>
 const mapAnswerContent = (answer: QuestionAnswerRecord) =>
   answer.content || answer.body || answer.answer || answer.text || answer.message || ''
 
+const getProfileNameWithoutEmail = (profile?: MyProfileData | null) =>
+  getDisplayName(
+    profile?.user?.name,
+    profile?.profile?.displayName,
+    (profile?.profile as Record<string, unknown> | null | undefined)?.display_name as string | undefined,
+    profile?.profile?.username,
+    profile?.user?.username,
+  )
+
+const getStringFromRecord = (source: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const normalizeAnswerMediaItems = (value: unknown): AnswerMediaLike[] => {
+  if (!value) {
+    return []
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap(normalizeAnswerMediaItems)
+  }
+
+  if (typeof value !== 'object') {
+    return []
+  }
+
+  const record = value as Record<string, unknown>
+  const nestedMedia = [
+    record.media,
+    record.mediaAssets,
+    record.media_assets,
+    record.mediaAsset,
+    record.media_asset,
+    record.attachments,
+    record.attachment,
+    record.asset,
+    record.file,
+  ].flatMap(normalizeAnswerMediaItems)
+  const url = getStringFromRecord(record, [
+    'url',
+    'secure_url',
+    'secureUrl',
+    'media_url',
+    'mediaUrl',
+    'file_url',
+    'fileUrl',
+    'original_url',
+    'originalUrl',
+  ])
+
+  if (!url) {
+    return nestedMedia
+  }
+
+  const mediaType = getStringFromRecord(record, [
+    'media_type',
+    'mediaType',
+    'type',
+    'kind',
+    'resource_type',
+    'resourceType',
+    'mime_type',
+    'mimeType',
+  ])
+  const thumbnailUrl = getStringFromRecord(record, [
+    'thumbnail_url',
+    'thumbnailUrl',
+    'thumbnail',
+    'poster',
+    'preview_url',
+    'previewUrl',
+  ])
+  const id = getStringFromRecord(record, ['id', 'uuid', '_id']) || url
+
+  return [
+    ...nestedMedia,
+    {
+      ...record,
+      id,
+      url,
+      media_type: mediaType,
+      mediaType,
+      thumbnail_url: thumbnailUrl,
+      thumbnailUrl,
+      display_order: Number(record.display_order ?? record.displayOrder ?? 0),
+    },
+  ]
+}
+
+const getAnswerEmbeddedMedia = (answer: QuestionAnswerRecord) =>
+  normalizeAnswerMediaItems(answer)
+
+const getAnswerMediaType = (item: AnswerMediaLike) =>
+  String(item.media_type || item.mediaType || item.type || item.kind || '').toLowerCase()
+
+const getAnswerMediaUrl = (item: AnswerMediaLike) =>
+  item.url || item.secure_url || item.secureUrl || item.media_url || item.mediaUrl || ''
+
+const getAnswerMediaThumbnail = (item: AnswerMediaLike) =>
+  item.thumbnail_url || item.thumbnailUrl || item.thumbnail || getAnswerMediaUrl(item)
+
+const getAnswerPageId = (answer: QuestionAnswerRecord) => answer.pageId || answer.page_id || null
+
+const mapAnswerComment = (comment: AnswerCommentRecord): AnswerCommentItem => ({
+  id: comment.id,
+  authorName:
+    (comment.user_id || comment.userId) === authStore.userId
+      ? currentUser.displayName.value
+      : 'Community member',
+  time: formatTime(comment.createdAt || comment.created_at),
+  content: comment.content,
+})
+
 const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> => {
   const userId = answer.userId || answer.user_id || ''
   const author =
@@ -166,7 +331,7 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
             .getUserProfile(userId, authStore.authToken)
             .then((response) => {
               const profile = response.data
-              const name = getProfileDisplayName(profile) || 'Community member'
+              const name = getProfileNameWithoutEmail(profile) || 'Community member'
 
               return {
                 name,
@@ -188,8 +353,12 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
             skills: [] as string[],
           }
 
+  const media = getAnswerEmbeddedMedia(answer)
+
   return {
     id: answer.id,
+    authorUserId: userId,
+    pageId: getAnswerPageId(answer),
     authorName: author.name,
     authorTo: author.to,
     avatarSrc: author.avatarSrc,
@@ -206,7 +375,61 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
       answer.likesCount,
     ),
     isScored: false,
+    isSaved: Boolean(answer.is_saved),
+    isFollowing: Boolean(answer.is_follow),
+    comments: getOptionalCount(answer.comments_count, answer.comment_count, answer.commentsCount),
+    isCommentsOpen: false,
+    commentInput: '',
+    commentItems: [],
+    media,
   }
+}
+
+const uploadAnswerAttachments = async () => {
+  const mediaAssetIds: string[] = []
+  const fallbackMedia: Array<{ url: string; mediaType: string }> = []
+  const uploadedUrls: Array<{ url: string; mediaType: string }> = []
+
+  for (const file of answerAttachments.value) {
+    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
+    const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
+
+    if (!uploadResponse.public_id) {
+      throw new Error('Media upload completed without a public ID.')
+    }
+
+    const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+    const registerResponse = await mediaService.registerMedia(
+      {
+        publicId: uploadResponse.public_id,
+        kind: mediaType,
+      },
+      authStore.authToken,
+    )
+
+    const result = await mediaService
+      .waitForProcessedMediaResult(registerResponse.data.jobId, {
+        token: authStore.authToken,
+      })
+      .catch(() => null)
+
+    if (result?.assetId) {
+      mediaAssetIds.push(result.assetId)
+      if (result.url || uploadResponse.secure_url) {
+        uploadedUrls.push({
+          url: result.url || uploadResponse.secure_url || '',
+          mediaType,
+        })
+      }
+    } else if (result?.url || uploadResponse.secure_url) {
+      fallbackMedia.push({
+        url: result?.url || uploadResponse.secure_url || '',
+        mediaType,
+      })
+    }
+  }
+
+  return { mediaAssetIds, fallbackMedia, uploadedUrls }
 }
 
 const loadAnswererProfile = async () => {
@@ -226,32 +449,80 @@ const loadAnswererProfile = async () => {
   }
 }
 
-const loadQuestion = async (id: string) => {
-  isLoadingQuestion.value = true
+const loadQuestion = async (id: string, options: { background?: boolean } = {}) => {
+  if (!options.background) {
+    isLoadingQuestion.value = true
+  }
   questionError.value = ''
 
   try {
     const response = await questionsService.getQuestion(id, authStore.authToken, true)
     const userId = getQuestionUserId(response.data)
-    const [authorResponse, answersResponse] = await Promise.all([
-      userId ? usersService.getUserProfile(userId, authStore.authToken).catch(() => null) : Promise.resolve(null),
+    const communityId = response.data.communityId || response.data.community_id || ''
+    const [authorData, answersResponse, communityResponse] = await Promise.all([
+      userId
+        ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
+        : Promise.resolve(null),
       questionsService.listAnswers(response.data.id, authStore.authToken).catch(() => null),
+      communityId ? communitiesService.getCommunity(communityId, authStore.authToken).catch(() => null) : Promise.resolve(null),
     ])
-    const authorData =
-      authorResponse?.data ??
-      (userId && userId === authStore.userId ? currentUser.profileData.value : null)
     const embeddedAnswers = Array.isArray(response.data.answers) ? response.data.answers : []
     const listedAnswers = answersResponse?.data ?? []
     const answers = listedAnswers.length ? listedAnswers : embeddedAnswers
+    const embeddedCommunity = response.data.community
+      ? {
+        id: response.data.community.id || communityId,
+        name: response.data.community.name || 'Community',
+        description: response.data.community.description || '',
+        icon: response.data.community.icon,
+        iconName: response.data.community.iconName,
+        icon_name: response.data.community.icon_name,
+        iconClass: response.data.community.iconClass,
+        icon_class: response.data.community.icon_class,
+      } as CommunityRecord
+      : null
 
-    apiQuestion.value = mapApiQuestionToFeedPost({ ...response.data, answers }, authorData)
-    answerItems.value = await Promise.all(answers.map(mapAnswerItem))
+    const previousAnswersById = new Map(answerItems.value.map((answer) => [answer.id, answer]))
+    const nextAnswerItems = await Promise.all(answers.map(mapAnswerItem))
+    questionCommunity.value = communityResponse?.data ?? embeddedCommunity
+
+    apiQuestion.value = mapApiQuestionToFeedPost(
+      {
+        ...response.data,
+        answers_count: answersResponse?.total ?? response.data.answers_count,
+        answers,
+      },
+      authorData,
+      questionCommunity.value?.name,
+      questionCommunity.value,
+    )
+    answerItems.value = nextAnswerItems.map((answer) => {
+      const previous = previousAnswersById.get(answer.id)
+
+      if (!previous) {
+        return answer
+      }
+
+      return {
+        ...answer,
+        media: answer.media.length ? answer.media : previous.media,
+        isCommentsOpen: previous.isCommentsOpen,
+        commentInput: previous.commentInput,
+        commentItems: answer.commentItems.length ? answer.commentItems : previous.commentItems,
+        comments: Math.max(answer.comments, previous.comments),
+        isSaved: answer.isSaved || previous.isSaved,
+        isScored: answer.isScored || previous.isScored,
+        isFollowing: answer.isFollowing || previous.isFollowing,
+      }
+    })
   } catch (error) {
-    if (!seedQuestion.value) {
+    if (!options.background) {
       questionError.value = error instanceof ApiError ? error.message : 'Unable to load question.'
     }
   } finally {
-    isLoadingQuestion.value = false
+    if (!options.background) {
+      isLoadingQuestion.value = false
+    }
   }
 }
 
@@ -296,17 +567,31 @@ const submitAnswer = async () => {
     isSubmittingAnswer.value = true
 
     try {
+      const uploadedMedia = await uploadAnswerAttachments()
       const response = await questionsService.createAnswer(
         questionId.value,
         {
           content: value,
           parentAnswerId: null,
+          mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
         },
         authStore.authToken,
       )
 
+      const responseMedia = getAnswerEmbeddedMedia(response.data)
+      const uploadedPreviewMedia = [...uploadedMedia.uploadedUrls, ...uploadedMedia.fallbackMedia].map((item, index) => ({
+        id: `uploaded-${response.data.id}-${index}`,
+        post_id: response.data.id,
+        media_type: item.mediaType,
+        url: item.url,
+        thumbnail_url: item.mediaType === 'image' ? item.url : '',
+        display_order: index,
+      }))
+
       answerItems.value.unshift({
         ...(await mapAnswerItem(response.data)),
+        authorUserId: authStore.userId || '',
+        pageId: null,
         authorName: answererName.value,
         authorTo: answererProfilePath.value,
         avatarSrc: answererAvatar.value || null,
@@ -314,6 +599,13 @@ const submitAnswer = async () => {
         authorMeta: answererSkills.value,
         time: 'Just now',
         content: mapAnswerContent(response.data) || value,
+        isSaved: false,
+        isFollowing: false,
+        comments: 0,
+        isCommentsOpen: false,
+        commentInput: '',
+        commentItems: [],
+        media: responseMedia.length ? responseMedia : uploadedPreviewMedia,
       })
       closeAnswerModal()
       toast.success('Answer posted')
@@ -327,33 +619,280 @@ const submitAnswer = async () => {
     return
   }
 
-  answerItems.value.unshift({
-    id: `local-answer-${Date.now()}`,
-    authorName: answererName.value,
-    authorTo: answererProfilePath.value,
-    avatarSrc: answererAvatar.value || null,
-    avatarText: answererInitials.value,
-    authorMeta: answererSkills.value,
-    time: 'Just now',
-    content: value,
-    score: 0,
-    isScored: false,
+  toast.error('Question is not ready', {
+    description: 'Please wait for the live question data to finish loading before answering.',
   })
-  closeAnswerModal()
-  toast.success('Answer posted')
 }
 
-const toggleAnswerScore = (answer: AnswerItem) => {
-  answer.isScored = !answer.isScored
-  answer.score += answer.isScored ? 1 : -1
+const toggleAnswerScore = async (answer: AnswerItem) => {
+  if (answer.authorUserId && answer.authorUserId === authStore.userId) {
+    toast.info('This is your answer', {
+      description: 'You cannot score your own answer.',
+    })
+    return
+  }
+
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before scoring answers.',
+    })
+    return
+  }
+
+  if (activeAnswerActionId.value) {
+    return
+  }
+
+  activeAnswerActionId.value = answer.id
+
+  try {
+    const response = await questionsService.toggleAnswerReaction(
+      answer.id,
+      {
+        userId: authStore.userId,
+        type: 'like',
+      },
+      authStore.authToken,
+    )
+    answer.isScored = !answer.isScored
+    answer.score = response.data.count
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
+    toast.error('Reaction failed', { description: message })
+  } finally {
+    activeAnswerActionId.value = ''
+  }
+}
+
+const toggleAnswerFollow = (answer: AnswerItem) => {
+  void (async () => {
+    if (answer.authorUserId && answer.authorUserId === authStore.userId) {
+      toast.info('This is your answer', {
+        description: 'You cannot follow yourself.',
+      })
+      return
+    }
+
+    if (!authStore.authToken || !authStore.userId) {
+      toast.error('Sign in required', {
+        description: 'Please sign in again before following.',
+      })
+      return
+    }
+
+    if (!answer.pageId && !answer.authorUserId) {
+      toast.error('Follow unavailable', {
+        description: 'This answer does not include a user or page to follow.',
+      })
+      return
+    }
+
+    const nextValue = !answer.isFollowing
+
+    try {
+      if (answer.pageId) {
+        if (nextValue) {
+          await pagesService.followPage(answer.pageId, authStore.authToken)
+        } else {
+          await pagesService.unfollowPage(answer.pageId, authStore.authToken)
+        }
+      } else if (answer.authorUserId) {
+        if (nextValue) {
+          await usersService.followUser(answer.authorUserId, { followerId: authStore.userId }, authStore.authToken)
+        } else {
+          await usersService.unfollowUser(answer.authorUserId, authStore.authToken)
+        }
+      }
+
+      answer.isFollowing = nextValue
+      toast.success(nextValue ? 'Following' : 'Unfollowed')
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
+      toast.error('Follow failed', { description: message })
+    }
+  })()
+}
+
+const toggleAnswerComments = async (answer: AnswerItem) => {
+  answer.isCommentsOpen = !answer.isCommentsOpen
+
+  if (!answer.isCommentsOpen || answer.commentItems.length || !answer.id) {
+    return
+  }
+
+  try {
+    const response = await questionsService.listAnswerComments(answer.id, authStore.authToken)
+    answer.commentItems = (response.data ?? []).map(mapAnswerComment)
+    answer.comments = response.total
+  } catch {
+    answer.commentItems = []
+  }
+}
+
+const submitAnswerComment = async (answer: AnswerItem) => {
+  const value = answer.commentInput.trim()
+
+  if (!value) {
+    return
+  }
+
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before commenting.',
+    })
+    return
+  }
+
+  if (activeAnswerActionId.value) {
+    return
+  }
+
+  activeAnswerActionId.value = answer.id
+
+  try {
+    const response = await questionsService.createAnswerComment(
+      answer.id,
+      {
+        userId: authStore.userId,
+        content: value,
+      },
+      authStore.authToken,
+    )
+    answer.commentItems.unshift({
+      id: response.data.id,
+      authorName: currentUser.displayName.value,
+      time: 'Just now',
+      content: response.data.content || value,
+    })
+    answer.comments += 1
+    answer.commentInput = ''
+    answer.isCommentsOpen = true
+    toast.success('Comment added')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
+    toast.error('Comment failed', { description: message })
+  } finally {
+    activeAnswerActionId.value = ''
+  }
+}
+
+const shareAnswer = async (answer: AnswerItem) => {
+  const url =
+    typeof window === 'undefined'
+      ? `/questions/${question.value?.slug || questionId.value || ''}#answer-${answer.id}`
+      : `${window.location.origin}/questions/${question.value?.slug || questionId.value || ''}#answer-${answer.id}`
+  const text = [question.value?.title, answer.content].filter(Boolean).join('\n\n')
+  const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator && typeof navigator.share === 'function'
+
+  try {
+    if (canNativeShare) {
+      await navigator.share({
+        title: question.value?.title || 'Question answer',
+        text,
+        url,
+      })
+    } else {
+      await navigator.clipboard.writeText([text, url].filter(Boolean).join('\n\n'))
+    }
+
+    await questionsService.recordAnswerShare(
+      answer.id,
+      { type: canNativeShare ? 'native_share' : 'copy_link' },
+      authStore.authToken,
+    ).catch(() => null)
+    toast.success(canNativeShare ? 'Share opened' : 'Answer link copied')
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return
+    }
+
+    toast.error('Unable to share answer.')
+  }
+}
+
+const toggleAnswerSave = async (answer: AnswerItem) => {
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before saving answers.',
+    })
+    return
+  }
+
+  if (activeAnswerActionId.value) {
+    return
+  }
+
+  activeAnswerActionId.value = answer.id
+
+  try {
+    const response = await questionsService.toggleAnswerSave(
+      answer.id,
+      { userId: authStore.userId },
+      authStore.authToken,
+    )
+    answer.isSaved = response.data.saved
+    toast.success(answer.isSaved ? 'Answer saved' : 'Answer removed from saved')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
+    toast.error('Save failed', { description: message })
+  } finally {
+    activeAnswerActionId.value = ''
+  }
+}
+
+const reportAnswer = async (answer: AnswerItem) => {
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before reporting answers.',
+    })
+    return
+  }
+
+  try {
+    await questionsService.reportAnswer(
+      answer.id,
+      {
+        userId: authStore.userId,
+        reason: 'Inappropriate content',
+        details: `Reported answer by ${answer.authorName}.`,
+      },
+      authStore.authToken,
+    )
+    toast.success('Report submitted')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to submit report.'
+    toast.error('Report failed', { description: message })
+  }
 }
 
 watch(
   () => route.params.slug,
   (slug) => {
     apiQuestion.value = null
+    questionCommunity.value = null
     answerItems.value = []
     void loadQuestion(String(slug))
+  },
+  { immediate: true },
+)
+
+watch(
+  questionId,
+  (id) => {
+    if (realtimeTimer) {
+      window.clearInterval(realtimeTimer)
+      realtimeTimer = null
+    }
+
+    if (!id) {
+      return
+    }
+
+    realtimeTimer = window.setInterval(() => {
+      if (!isLoadingQuestion.value && questionId.value) {
+        void loadQuestion(questionId.value, { background: true })
+      }
+    }, 15000)
   },
   { immediate: true },
 )
@@ -370,6 +909,9 @@ watch(answerAttachments, (files) => {
 
 onBeforeUnmount(() => {
   answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
+  if (realtimeTimer) {
+    window.clearInterval(realtimeTimer)
+  }
 })
 </script>
 
@@ -391,11 +933,22 @@ onBeforeUnmount(() => {
           <span class="font-medium text-[var(--accent-strong)]">Details</span>
         </div>
 
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+          <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
+            <i :class="questionCommunityIcon" class="text-lg leading-none" aria-hidden="true" />
+          </span>
+          <span class="font-semibold text-[var(--text-primary)]">{{ questionCommunityName }}</span>
+        </div>
+
+        <h1 class="text-[1.45rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.9rem]">
+          {{ question.title }}
+        </h1>
+
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--text-secondary)]">
           <RouterLink
             v-if="questionAuthor"
             :to="questionAuthor.to"
-            class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white"
+            class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-[0.68rem] font-bold text-white"
           >
             <img
               v-if="questionAuthor.avatarSrc"
@@ -405,41 +958,34 @@ onBeforeUnmount(() => {
             />
             <span v-else>{{ questionAuthor.avatarText }}</span>
           </RouterLink>
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[var(--text-secondary)]">
-              <RouterLink
-                v-if="questionAuthor"
-                :to="questionAuthor.to"
-                class="text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
-              >
-                {{ questionAuthor.name }}
-              </RouterLink>
-              <span>{{ question.time }}</span>
-              <span class="inline-flex items-center gap-1 rounded-full bg-[var(--surface-secondary)] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                <Users class="h-3.5 w-3.5" />
-                {{ question.communityId ? 'Question in community' : 'Question' }}
-              </span>
-            </div>
-
-            <h1 class="mt-2 text-[1.45rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.9rem]">
-              {{ question.title }}
-            </h1>
-
-            <div class="mt-3 flex flex-wrap gap-1.5">
-              <span
-                v-for="skill in questionSkills"
-                :key="skill"
-                class="inline-flex rounded-full bg-[var(--surface-secondary)] px-2 py-1 text-[0.62rem] font-medium leading-4 text-[var(--text-secondary)]"
-              >
-                {{ skill }}
-              </span>
-            </div>
-          </div>
+          <RouterLink
+            v-if="questionAuthor"
+            :to="questionAuthor.to"
+            class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+          >
+            {{ questionAuthor.name }}
+          </RouterLink>
+          <span class="text-[var(--text-tertiary)]">-</span>
+          <span>{{ question.time }}</span>
+          <template v-if="questionSkills.length">
+            <span class="text-[var(--text-tertiary)]">-</span>
+            <span class="min-w-0 truncate font-semibold text-[var(--text-tertiary)]">
+              {{ questionSkills.join(' | ') }}
+            </span>
+          </template>
         </div>
+
+        <p
+          v-if="question.body"
+          class="whitespace-pre-line text-[0.94rem] leading-8 text-[var(--text-secondary)]"
+        >
+          {{ question.body }}
+        </p>
+        <p v-else class="text-sm text-[var(--text-secondary)]">No additional details were added to this question.</p>
 
         <button
           type="button"
-          class="inline-flex h-10 items-center gap-2 rounded-xl border border-[color:var(--accent)] px-4 text-sm font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--accent-soft)]"
+          class="inline-flex h-10 w-fit items-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
           @click="openAnswerModal"
         >
           <BookOpen class="h-4 w-4" />
@@ -448,19 +994,12 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="space-y-6 p-4 sm:p-5">
-        <div class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-          <p v-if="question.body" class="whitespace-pre-line text-[0.94rem] leading-8 text-[var(--text-primary)]">
-            {{ question.body }}
-          </p>
-          <p v-else class="text-sm text-[var(--text-secondary)]">No additional details were added to this question.</p>
-        </div>
-
-        <div class="flex flex-col gap-3 border-b border-[color:var(--border-soft)] pb-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+        <div class="flex flex-col gap-3 border-b border-[color:var(--border-soft)] pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-baseline gap-3">
             <p class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
               All Answers
             </p>
-            <p class="mt-2 text-2xl font-semibold text-[var(--text-primary)]">{{ answerItems.length }}</p>
+            <p class="text-2xl font-semibold text-[var(--text-primary)]">{{ answerItems.length }}</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <select
@@ -470,14 +1009,6 @@ onBeforeUnmount(() => {
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
             </select>
-            <button
-              type="button"
-              class="inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
-              @click="openAnswerModal"
-            >
-              <BookOpen class="h-4 w-4" />
-              Answer
-            </button>
           </div>
         </div>
 
@@ -485,13 +1016,14 @@ onBeforeUnmount(() => {
           <article
             v-for="answer in sortedAnswers"
             :key="answer.id"
+            :id="`answer-${answer.id}`"
             class="border-b border-[color:var(--border-soft)] pb-5 last:border-b-0 last:pb-0"
           >
             <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div class="flex min-w-0 items-start gap-3">
                 <RouterLink
                   :to="answer.authorTo"
-                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
                   <img
                     v-if="answer.avatarSrc"
@@ -510,19 +1042,20 @@ onBeforeUnmount(() => {
                       {{ answer.authorName }}
                     </RouterLink>
                     <span
-                      v-for="item in answer.authorMeta"
-                      :key="item"
-                      class="text-xs font-semibold text-[var(--text-tertiary)]"
+                      v-if="answer.authorMeta.length"
+                      class="min-w-0 truncate text-sm font-semibold text-[var(--text-tertiary)]"
                     >
-                      {{ item }}
+                      {{ answer.authorMeta.slice(0, 3).join(' | ') }}
                     </span>
                   </div>
                   <button
+                    v-if="answer.authorUserId !== authStore.userId && (answer.pageId || answer.authorUserId)"
                     type="button"
                     class="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                    @click="toggleAnswerFollow(answer)"
                   >
                     <Check class="h-3.5 w-3.5" />
-                    Follow
+                    {{ answer.isFollowing ? 'Following' : 'Follow' }}
                   </button>
                 </div>
               </div>
@@ -536,6 +1069,31 @@ onBeforeUnmount(() => {
               {{ answer.content }}
             </p>
 
+            <div
+              v-if="answer.media.length"
+              class="mt-4 grid gap-3 sm:grid-cols-2"
+            >
+              <div
+                v-for="item in answer.media"
+                :key="item.id || item.url"
+                class="overflow-hidden rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
+              >
+                <img
+                  v-if="!getAnswerMediaType(item).includes('video')"
+                  :src="getAnswerMediaThumbnail(item)"
+                  :alt="answer.content || 'Answer media'"
+                  class="mx-auto aspect-[4/3] max-h-72 w-full object-contain"
+                />
+                <video
+                  v-else
+                  :src="getAnswerMediaUrl(item)"
+                  class="mx-auto aspect-[4/3] max-h-72 w-full bg-black object-contain"
+                  controls
+                  playsinline
+                />
+              </div>
+            </div>
+
             <div class="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -545,24 +1103,88 @@ onBeforeUnmount(() => {
                     ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
                     : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
                 "
+                :disabled="activeAnswerActionId === answer.id || answer.authorUserId === authStore.userId"
                 @click="toggleAnswerScore(answer)"
               >
                 <ArrowUp class="h-3.5 w-3.5" />
                 {{ answer.score }} score
               </button>
-              <button type="button" class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)]">
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="shareAnswer(answer)"
+              >
                 <Share2 class="h-3.5 w-3.5" />
                 Share
               </button>
-              <button type="button" class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)]">
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="toggleAnswerComments(answer)"
+              >
                 <MessageSquare class="h-3.5 w-3.5" />
-                0
+                {{ answer.comments }}
               </button>
-              <button type="button" class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)]">
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition"
+                :class="
+                  answer.isSaved
+                    ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+                    : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+                "
+                :disabled="activeAnswerActionId === answer.id"
+                @click="toggleAnswerSave(answer)"
+              >
                 <Bookmark class="h-3.5 w-3.5" />
-                Save
+                {{ answer.isSaved ? 'Saved' : 'Save' }}
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                @click="reportAnswer(answer)"
+              >
+                <Flag class="h-3.5 w-3.5" />
+                Report
               </button>
             </div>
+
+            <section
+              v-if="answer.isCommentsOpen"
+              class="mt-4 rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
+            >
+              <div class="flex flex-col gap-2 border-b border-[color:var(--border-soft)] p-3 sm:flex-row">
+                <input
+                  v-model="answer.commentInput"
+                  type="text"
+                  placeholder="Comment..."
+                  class="h-9 min-w-0 flex-1 rounded-[0.7rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-[0.8rem] text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+                  @keydown.enter.prevent="submitAnswerComment(answer)"
+                />
+                <button
+                  type="button"
+                  :disabled="activeAnswerActionId === answer.id || !answer.commentInput.trim()"
+                  class="inline-flex h-9 items-center justify-center rounded-[0.7rem] bg-[var(--accent)] px-3 text-[0.8rem] font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+                  @click="submitAnswerComment(answer)"
+                >
+                  Add Comment
+                </button>
+              </div>
+              <div v-if="answer.commentItems.length" class="divide-y divide-[color:var(--border-soft)]">
+                <article
+                  v-for="comment in answer.commentItems"
+                  :key="comment.id"
+                  class="p-3"
+                >
+                  <div class="flex flex-wrap items-center gap-2 text-[0.78rem] text-[var(--text-secondary)]">
+                    <span class="font-semibold text-[var(--text-primary)]">{{ comment.authorName }}</span>
+                    <span>{{ comment.time }}</span>
+                  </div>
+                  <p class="mt-1.5 text-[0.82rem] leading-6 text-[var(--text-primary)]">{{ comment.content }}</p>
+                </article>
+              </div>
+              <p v-else class="p-3 text-center text-[0.82rem] text-[var(--text-secondary)]">No comments yet.</p>
+            </section>
           </article>
         </div>
       </div>
@@ -589,7 +1211,7 @@ onBeforeUnmount(() => {
         <div class="flex min-w-0 items-center gap-3">
           <RouterLink
             :to="answererProfilePath"
-            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
+            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
             <img
               v-if="answererAvatar"
@@ -653,12 +1275,12 @@ onBeforeUnmount(() => {
                 v-if="file.kind === 'image'"
                 :src="file.url"
                 :alt="file.name"
-                class="aspect-[4/3] w-full object-cover"
+                class="mx-auto aspect-[4/3] max-h-72 w-full object-contain"
               />
               <video
                 v-else
                 :src="file.url"
-                class="aspect-[4/3] w-full bg-black object-cover"
+                class="mx-auto aspect-[4/3] max-h-72 w-full bg-black object-contain"
                 controls
                 playsinline
               />

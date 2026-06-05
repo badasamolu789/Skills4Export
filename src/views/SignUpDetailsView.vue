@@ -1,25 +1,28 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BriefcaseBusiness, MapPin, Sparkles } from 'lucide-vue-next'
+import { BookOpen, BriefcaseBusiness } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
-import { ApiError } from '@/lib/api'
-import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const isSubmitting = ref(false)
 
-const interestOptions = ['Community', 'Jobs', 'Referrals', 'Contests', 'Learning', 'Alerts']
+const currentYear = new Date().getFullYear()
+const yearStartedOptions = Array.from({ length: 50 }, (_, index) => String(currentYear - index))
 
 const form = ref({
-  username: authStore.signUpDraft.username,
-  phone: authStore.signUpDraft.phone,
-  location: authStore.signUpDraft.location,
-  headline: authStore.signUpDraft.headline,
-  interests: [...authStore.signUpDraft.interests],
+  is16OrAbove: authStore.signUpDraft.is16OrAbove,
+  accountType: authStore.signUpDraft.accountType,
+  state: authStore.signUpDraft.state,
+  country: authStore.signUpDraft.country,
+  jobTitle: authStore.signUpDraft.jobTitle,
+  workplace: authStore.signUpDraft.workplace,
+  university: authStore.signUpDraft.university,
+  yearStarted: authStore.signUpDraft.yearStarted,
+  courseOfStudy: authStore.signUpDraft.courseOfStudy,
 })
 
 const canAccessDetails = computed(
@@ -28,189 +31,219 @@ const canAccessDetails = computed(
       authStore.signUpDraft.name &&
         authStore.signUpDraft.email &&
         authStore.signUpDraft.password &&
-        authStore.signUpDraft.emailVerified,
+        authStore.signUpDraft.acceptedTerms &&
+        authStore.signUpDraft.verificationSentAt,
     ),
 )
 
 if (!canAccessDetails.value) {
-  router.replace('/auth/signup/verify')
+  router.replace('/auth/signup')
 }
 
-const canSubmit = computed(
-  () =>
-    Boolean(form.value.username && form.value.location && form.value.headline) &&
-    form.value.interests.length > 0,
-)
+const isStudentAccount = computed(() => form.value.accountType === 'student')
 
-const toggleInterest = (interest: string) => {
-  if (form.value.interests.includes(interest)) {
-    form.value.interests = form.value.interests.filter((item) => item !== interest)
-    return
+const canSubmit = computed(() => {
+  if (!form.value.is16OrAbove) {
+    return false
   }
 
-  form.value.interests.push(interest)
-}
+  if (!form.value.state.trim() || !form.value.country.trim()) {
+    return false
+  }
 
-const resolveUserId = async () => authStore.userId
+  if (isStudentAccount.value) {
+    return Boolean(
+      form.value.university.trim() &&
+        form.value.yearStarted &&
+        form.value.courseOfStudy.trim(),
+    )
+  }
 
-const submitDetails = async () => {
+  return Boolean(
+    form.value.jobTitle.trim() &&
+      form.value.workplace.trim(),
+  )
+})
+
+const submitDetails = () => {
   if (isSubmitting.value) {
     return
   }
 
-  isSubmitting.value = true
-  const loadingToastId = toast.loading('Saving your profile...', {
-    description: 'Please wait while we finish setting up your account.',
-  })
-
-  authStore.signUpDraft.username = form.value.username
-  authStore.signUpDraft.phone = form.value.phone
-  authStore.signUpDraft.location = form.value.location
-  authStore.signUpDraft.headline = form.value.headline
-  authStore.signUpDraft.interests = form.value.interests
-
-  try {
-    const id = await resolveUserId()
-
-    if (id) {
-      const payload = {
-        username: form.value.username,
-        bio: form.value.headline,
-        location: form.value.location,
-        avatar: null,
-        banner: null,
-        website: '',
-        linkedin: '',
-        github: '',
-      }
-
-      let profileResponse
-
-      try {
-        profileResponse = await usersService.createUserProfile(id, payload, authStore.authToken)
-      } catch (error) {
-        if (!(error instanceof ApiError && error.status === 409)) {
-          throw error
-        }
-
-        profileResponse = await usersService.updateUserProfile(id, payload, authStore.authToken)
-      }
-
-      authStore.setUserProfile(profileResponse.data ?? null)
-    }
-
-    authStore.isAuthenticated = true
-
-    toast.success('Account setup complete', {
-      id: loadingToastId,
-      description: 'Your profile details have been saved successfully.',
-    })
-
-    router.replace('/feed')
-  } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'We could not save your profile details.'
-
-    toast.error('Unable to complete sign up', {
-      id: loadingToastId,
-      description: message,
-    })
-  } finally {
-    isSubmitting.value = false
+  if (!canSubmit.value) {
+    toast.error('Complete the required details before continuing.')
+    return
   }
+
+  isSubmitting.value = true
+
+  authStore.signUpDraft.is16OrAbove = form.value.is16OrAbove
+  authStore.signUpDraft.accountType = form.value.accountType
+  authStore.signUpDraft.state = form.value.state.trim()
+  authStore.signUpDraft.country = form.value.country.trim()
+  authStore.signUpDraft.jobTitle = form.value.jobTitle.trim()
+  authStore.signUpDraft.workplace = form.value.workplace.trim()
+  authStore.signUpDraft.university = form.value.university.trim()
+  authStore.signUpDraft.yearStarted = form.value.yearStarted
+  authStore.signUpDraft.courseOfStudy = form.value.courseOfStudy.trim()
+  authStore.signUpDraft.location = [form.value.state.trim(), form.value.country.trim()].filter(Boolean).join(', ')
+  authStore.signUpDraft.headline = isStudentAccount.value
+    ? form.value.courseOfStudy.trim()
+    : form.value.jobTitle.trim()
+  authStore.signUpDraft.signUpDetailsCompleted = true
+
+  router.push('/auth/signup/verify')
 }
 </script>
 
 <template>
   <AuthShell
-    badge="Step 3 of 3"
-    title="Finish your profile with the details that actually matter."
-    description="This step captures the richer information we’ll need later for onboarding, visibility, recommendations, and account tools."
+    badge="Step 2 of 3"
+    title="Tell us where you fit on the platform."
+    description="These details help shape profile setup, discovery, jobs, and recommendations after verification."
+    centered
   >
-    <template #aside>
-      <div class="rounded-[1.5rem] bg-[var(--surface-secondary)] p-5">
-        <p class="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-          <Sparkles class="h-4 w-4 text-[var(--accent-strong)]" />
-          Why these details
-        </p>
-        <ul class="mt-4 space-y-3 text-sm leading-7 text-[var(--text-secondary)]">
-          <li>Your public handle helps people recognize you in the community.</li>
-          <li>Location and headline support jobs, referrals, and relevance.</li>
-          <li>Interest areas help shape alerts, recommendations, and engagement.</li>
-        </ul>
-      </div>
-    </template>
-
     <form class="space-y-5" @submit.prevent="submitDetails">
-      <div class="grid gap-5 sm:grid-cols-2">
-        <div class="space-y-2">
-          <label class="text-sm font-semibold text-[var(--text-primary)]">Username</label>
-          <input
-            v-model="form.username"
-            type="text"
-            required
-            placeholder="@yourhandle"
-            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-          />
-        </div>
-        <div class="space-y-2">
-          <label class="text-sm font-semibold text-[var(--text-primary)]">Phone number</label>
-          <input
-            v-model="form.phone"
-            type="tel"
-            placeholder="+234..."
-            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-          />
+      <div class="px-1">
+        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+          Step 2 of 3
+        </p>
+        <h1 class="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">
+          Tell us where you fit on the platform.
+        </h1>
+        <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+          Add your location, then choose the account type that fits you.
+        </p>
+      </div>
+
+      <label class="flex items-start gap-3 rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm font-semibold text-[var(--text-primary)]">
+        <input
+          v-model="form.is16OrAbove"
+          type="checkbox"
+          required
+          class="mt-1 h-4 w-4 accent-[var(--accent)]"
+        />
+        <span>I am 16 or above.</span>
+      </label>
+
+      <div class="space-y-3">
+        <p class="text-sm font-semibold text-[var(--text-primary)]">Location</p>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-[var(--text-primary)]">State</label>
+            <input
+              v-model="form.state"
+              type="text"
+              required
+              placeholder="e.g. Lagos"
+              class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-sm font-semibold text-[var(--text-primary)]">Country</label>
+            <input
+              v-model="form.country"
+              type="text"
+              required
+              placeholder="e.g. Nigeria"
+              class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            />
+          </div>
         </div>
       </div>
 
-      <div class="space-y-2">
-        <label class="text-sm font-semibold text-[var(--text-primary)]">Location</label>
-        <div class="relative">
-          <MapPin class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-          <input
-            v-model="form.location"
-            type="text"
-            required
-            placeholder="City, Country"
-            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]"
-          />
-        </div>
-      </div>
-
-      <div class="space-y-2">
-        <label class="text-sm font-semibold text-[var(--text-primary)]">Professional headline</label>
-        <div class="relative">
-          <BriefcaseBusiness class="pointer-events-none absolute left-4 top-5 h-4 w-4 text-[var(--text-tertiary)]" />
-          <textarea
-            v-model="form.headline"
-            required
-            rows="4"
-            placeholder="Tell people what you do, what you care about, or what you’re looking for."
-            class="w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 pt-4 text-sm outline-none transition focus:border-[var(--accent)]"
-          />
-        </div>
-      </div>
-
-      <div class="space-y-2">
-        <label class="text-sm font-semibold text-[var(--text-primary)]">Interest areas</label>
-        <div class="flex flex-wrap gap-3">
+      <div class="border-b border-[color:var(--border-soft)]">
+        <p class="mb-2 text-sm font-semibold text-[var(--text-primary)]">Account type</p>
+        <div class="flex items-center gap-8">
           <button
-            v-for="interest in interestOptions"
-            :key="interest"
             type="button"
-            class="rounded-full border px-4 py-2 text-sm font-semibold transition"
-            :class="
-              form.interests.includes(interest)
-                ? 'border-[var(--accent)] bg-[var(--accent)] text-white'
-                : 'border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-[var(--text-secondary)]'
-            "
-            @click="toggleInterest(interest)"
+            class="relative inline-flex h-11 items-center justify-center gap-2 text-sm font-semibold transition"
+            :class="form.accountType === 'default' ? 'text-[var(--accent-strong)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
+            @click="form.accountType = 'default'"
           >
-            {{ interest }}
+            <BriefcaseBusiness class="h-4 w-4" />
+            Default
+            <span
+              v-if="form.accountType === 'default'"
+              class="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--accent)]"
+            />
           </button>
+          <button
+            type="button"
+            class="relative inline-flex h-11 items-center justify-center gap-2 text-sm font-semibold transition"
+            :class="form.accountType === 'student' ? 'text-[var(--accent-strong)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
+            @click="form.accountType = 'student'"
+          >
+            <BookOpen class="h-4 w-4" />
+            Student
+            <span
+              v-if="form.accountType === 'student'"
+              class="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--accent)]"
+            />
+          </button>
+        </div>
+      </div>
+
+      <div v-if="!isStudentAccount" class="grid gap-4 sm:grid-cols-2">
+        <div class="space-y-2 sm:col-span-2">
+          <label class="text-sm font-semibold text-[var(--text-primary)]">Current job title</label>
+          <input
+            v-model="form.jobTitle"
+            type="text"
+            required
+            placeholder="e.g. Product Designer"
+            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </div>
+
+        <div class="space-y-2 sm:col-span-2">
+          <label class="text-sm font-semibold text-[var(--text-primary)]">Current place of work</label>
+          <input
+            v-model="form.workplace"
+            type="text"
+            required
+            placeholder="e.g. Skills4Export"
+            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </div>
+      </div>
+
+      <div v-else class="grid gap-4 sm:grid-cols-2">
+        <div class="space-y-2 sm:col-span-2">
+          <label class="text-sm font-semibold text-[var(--text-primary)]">College or University</label>
+          <input
+            v-model="form.university"
+            type="text"
+            required
+            placeholder="e.g. University of Lagos"
+            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-semibold text-[var(--text-primary)]">Year started</label>
+          <select
+            v-model="form.yearStarted"
+            required
+            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          >
+            <option value="">Select year</option>
+            <option v-for="year in yearStartedOptions" :key="year" :value="year">
+              {{ year }}
+            </option>
+          </select>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-sm font-semibold text-[var(--text-primary)]">Course of study</label>
+          <input
+            v-model="form.courseOfStudy"
+            type="text"
+            required
+            placeholder="e.g. Computer Science"
+            class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
         </div>
       </div>
 
@@ -219,7 +252,7 @@ const submitDetails = async () => {
         :disabled="!canSubmit || isSubmitting"
         class="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
       >
-        {{ isSubmitting ? 'Completing sign up...' : 'Complete sign up' }}
+        {{ isSubmitting ? 'Saving details...' : 'Continue to verification' }}
       </button>
     </form>
   </AuthShell>

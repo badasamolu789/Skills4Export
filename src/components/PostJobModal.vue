@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { BriefcaseBusiness, Mail, MapPin, Wallet, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
+import RichTextEditor from '@/components/RichTextEditor.vue'
 import type { JobRecord } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
 import { useJobsStore } from '@/stores/jobs'
@@ -20,8 +21,6 @@ const authStore = useAuthStore()
 const jobsStore = useJobsStore()
 const skillInput = ref('')
 const skillTags = ref<string[]>([])
-const qualificationInput = ref('')
-const qualificationItems = ref<string[]>([])
 const isSubmitting = ref(false)
 let closeTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -56,10 +55,6 @@ const closeModal = () => {
 
 const syncSkillsField = () => {
   form.value.skills = skillTags.value.join(', ')
-}
-
-const syncQualificationsField = () => {
-  form.value.qualifications = qualificationItems.value.join('\n')
 }
 
 const addSkillTag = (rawSkill: string) => {
@@ -118,27 +113,6 @@ const removeSkillTag = (skill: string) => {
   syncSkillsField()
 }
 
-const addQualificationItem = (rawItem: string) => {
-  const item = rawItem.trim()
-
-  if (!item) {
-    return
-  }
-
-  qualificationItems.value.push(item)
-  qualificationInput.value = ''
-  syncQualificationsField()
-}
-
-const finalizeQualificationInput = () => {
-  addQualificationItem(qualificationInput.value)
-}
-
-const removeQualificationItem = (index: number) => {
-  qualificationItems.value = qualificationItems.value.filter((_, itemIndex) => itemIndex !== index)
-  syncQualificationsField()
-}
-
 const getTrimmedValue = (value: string) => value.trim()
 
 const getApiErrorDescription = (error: unknown, fallback: string) => {
@@ -175,7 +149,6 @@ const getApiErrorDescription = (error: unknown, fallback: string) => {
 
 const submitForm = async () => {
   finalizeSkillInput()
-  finalizeQualificationInput()
 
   const title = getTrimmedValue(form.value.title)
   const companyName = getTrimmedValue(form.value.companyName)
@@ -227,8 +200,8 @@ const submitForm = async () => {
     })
 
     emit('created', job)
-    toast.success('Job posted successfully', {
-      description: `${job.title || form.value.title || 'Your job'} is now ready for applicants.`,
+    toast.success('Job submitted', {
+      description: `${job.title || form.value.title || 'Your job'} will show after admin approval.`,
     })
 
     closeTimer = setTimeout(() => {
@@ -247,7 +220,6 @@ watch(
   (isOpen) => {
     if (isOpen) {
       skillInput.value = ''
-      qualificationInput.value = ''
       return
     }
 
@@ -397,42 +369,10 @@ watch(
             </label>
             <label class="space-y-2 md:col-span-2">
               <span class="text-sm font-semibold text-[var(--text-primary)]">Qualifications:*</span>
-              <div class="rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3 transition focus-within:border-[color:var(--accent-soft)]">
-                <ul v-if="qualificationItems.length" class="mb-3 space-y-2">
-                  <li
-                    v-for="(item, index) in qualificationItems"
-                    :key="`${item}-${index}`"
-                    class="flex items-start gap-2 rounded-[0.6rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-primary)]"
-                  >
-                    <span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-strong)]" />
-                    <span class="min-w-0 flex-1 leading-6">{{ item }}</span>
-                    <button
-                      type="button"
-                      class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]"
-                      @click="removeQualificationItem(index)"
-                    >
-                      <X class="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                </ul>
-                <div class="flex flex-col gap-2 sm:flex-row">
-                  <input
-                    v-model="qualificationInput"
-                    type="text"
-                    placeholder="Add one qualification, then press Enter"
-                    class="h-10 min-w-0 flex-1 border-none bg-transparent text-[0.86rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
-                    @keydown.enter.prevent="finalizeQualificationInput"
-                  />
-                  <button
-                    type="button"
-                    class="inline-flex h-10 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent-soft)]"
-                    @click="finalizeQualificationInput"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-              <input v-model="form.qualifications" type="hidden" />
+              <RichTextEditor
+                v-model="form.qualifications"
+                placeholder="List the qualifications, experience, certifications, and requirements for this job."
+              />
             </label>
 
             <label class="space-y-2">

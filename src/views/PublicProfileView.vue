@@ -5,20 +5,24 @@ import {
   Award,
   BookOpen,
   Briefcase,
+  ClipboardList,
   ExternalLink,
   GraduationCap,
-  Mail,
-  MapPin,
-  Phone,
+  Rocket,
+  Sparkles,
   UserCheck,
   UserPlus,
   Users,
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
+import AppFeedPost from '@/components/AppFeedPost.vue'
 import { ApiError } from '@/lib/api'
-import { getSeededPublicProfile } from '@/data/publicProfiles'
+import type { FeedPost } from '@/data/feedPosts'
+import { postsService, type PostRecord } from '@/services/posts'
+import { questionsService, type QuestionRecord } from '@/services/questions'
 import {
+  collectUserSkills,
   usersService,
   type UserCertification,
   type UserEducation,
@@ -30,7 +34,9 @@ import {
   type UserSkill,
 } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { feedPosts } from '@/data/feedPosts'
+import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
+import { getDisplayName } from '@/utils/displayName'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -44,7 +50,16 @@ const certifications = ref<UserCertification[]>([])
 const educations = ref<UserEducation[]>([])
 const experiences = ref<UserExperience[]>([])
 const followers = ref<UserFollower[]>([])
+const recentActivities = ref<FeedPost[]>([])
+const scoreEntries = ref<Array<{ id: string; title: string; community: string; score: number; typeLabel: string }>>([])
+const stats = ref({
+  posts: 0,
+  questions: 0,
+  answers: 0,
+  comments: 0,
+})
 const isLoadingProfile = ref(false)
+const isLoadingActivity = ref(false)
 const isTogglingFollow = ref(false)
 const profileModal = ref<null | 'score' | 'followers'>(null)
 const loadError = ref('')
@@ -55,6 +70,132 @@ const userId = computed(() => {
 })
 
 const readString = (value: unknown) => (typeof value === 'string' ? value : '')
+const isVideoMediaUrl = (url: string) => /\/video\/upload\/|\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url)
+const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown; label?: unknown }) => {
+  const record = skill as Record<string, unknown>
+  const directValue = [record.name, record.skillName, record.skill_name, record.title, record.label, record.skill]
+    .find((value) => typeof value === 'string' && value.trim())
+
+  if (typeof directValue === 'string') {
+    return directValue.trim()
+  }
+
+  if (record.skill && typeof record.skill === 'object') {
+    const nestedRecord = record.skill as Record<string, unknown>
+    const nestedValue = [nestedRecord.name, nestedRecord.skill, nestedRecord.title, nestedRecord.label]
+      .find((value) => typeof value === 'string' && value.trim())
+
+    if (typeof nestedValue === 'string') {
+      return nestedValue.trim()
+    }
+  }
+
+  return ''
+}
+
+const displaySkills = computed(() =>
+  skills.value
+    .map((skill) => ({
+      ...skill,
+      name: getSkillDisplayName(skill),
+    }))
+    .filter((skill) => skill.name),
+)
+
+const publicProfileData = computed(() => ({
+  user: user.value,
+  profile: userProfile.value,
+  skills: displaySkills.value,
+}))
+
+const loadRecentActivity = async () => {
+  if (!userId.value) {
+    return
+  }
+
+  isLoadingActivity.value = true
+
+  try {
+    const [postsResult, questionsResult] = await Promise.allSettled([
+      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+    ])
+    const allPosts = postsResult.status === 'fulfilled' ? postsResult.value.data : []
+    const allQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data : []
+    const userPosts = allPosts.filter((post: PostRecord) => post.user_id === userId.value)
+    const userQuestions = allQuestions.filter((question: QuestionRecord) => getQuestionUserId(question) === userId.value)
+    const [postCommentResults, questionAnswerResults] = await Promise.all([
+      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),
+      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken).catch(() => null))),
+    ])
+    const userCommentCount = postCommentResults.reduce((total, response) => {
+      const comments = response?.data ?? []
+      return total + comments.filter((comment) => comment.user_id === userId.value).length
+    }, 0)
+    const userAnswers = questionAnswerResults.flatMap((response) => response?.data ?? []).filter((answer) => {
+      const answerUserId = answer.userId || answer.user_id || ''
+      return answerUserId === userId.value
+    })
+    const postActivities = await Promise.all(userPosts.map(async (post) => {
+      const [mediaResponse, commentsResponse] = await Promise.all([
+        postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
+        postsService.listComments(post.id, authStore.authToken).catch(() => null),
+      ])
+      const mappedPost = mapApiPostToFeedPost(post, mediaResponse?.data ?? [], publicProfileData.value)
+
+      return {
+        ...mappedPost,
+        comments: commentsResponse?.total ?? ('comments' in mappedPost ? mappedPost.comments : 0),
+      }
+    }))
+    const questionActivities = userQuestions.map((question) =>
+      mapApiQuestionToFeedPost(
+        {
+          ...question,
+          answers_count: questionAnswerResults[allQuestions.findIndex((item) => item.id === question.id)]?.total ?? question.answers_count,
+        },
+        publicProfileData.value,
+      ),
+    )
+
+    stats.value = {
+      posts: userPosts.length,
+      questions: userQuestions.length,
+      answers: userAnswers.length,
+      comments: userCommentCount,
+    }
+    scoreEntries.value = [
+      ...userPosts.map((post) => ({
+        id: post.id,
+        title: post.title,
+        community: post.community?.name || 'Post',
+        score: getOptionalCount(post.score, post.reactions_count, post.reaction_count),
+        typeLabel: 'Post',
+      })),
+      ...userQuestions.map((question) => ({
+        id: question.id,
+        title: question.title,
+        community: 'Question',
+        score: getOptionalCount(question.score, question.reactions_count, question.reaction_count),
+        typeLabel: 'Question',
+      })),
+      ...userAnswers.map((answer) => ({
+        id: answer.id,
+        title: answer.content || answer.body || answer.answer || 'Answer',
+        community: 'Answer',
+        score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count),
+        typeLabel: 'Answer',
+      })),
+    ]
+    recentActivities.value = [...postActivities, ...questionActivities]
+      .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
+      .slice(0, 5)
+  } catch {
+    recentActivities.value = []
+  } finally {
+    isLoadingActivity.value = false
+  }
+}
 
 const loadProfile = async () => {
   if (!userId.value) {
@@ -78,12 +219,9 @@ const loadProfile = async () => {
 
   const [userResult, profileResult, skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult, followersResult] =
     results
-  const seededProfile = getSeededPublicProfile(userId.value)
 
   if (userResult.status === 'fulfilled') {
     user.value = userResult.value.data ?? null
-  } else if (userResult.reason instanceof ApiError && userResult.reason.status === 404) {
-    user.value = seededProfile?.user ?? null
   }
 
   if (profileResult.status === 'fulfilled') {
@@ -93,44 +231,42 @@ const loadProfile = async () => {
     }
   } else if (profileResult.reason instanceof ApiError && profileResult.reason.status !== 404) {
     loadError.value = profileResult.reason.message
-  } else if (profileResult.status === 'rejected') {
-    userProfile.value = seededProfile?.profile ?? null
   }
 
   if (skillsResult.status === 'fulfilled') {
-    skills.value = skillsResult.value.data ?? []
+    skills.value = collectUserSkills(skillsResult.value.data, profileResult.status === 'fulfilled' ? profileResult.value.data?.skills : null)
   } else {
-    skills.value = seededProfile?.skills ?? []
+    skills.value = collectUserSkills(profileResult.status === 'fulfilled' ? profileResult.value.data?.skills : null)
   }
 
   if (portfoliosResult.status === 'fulfilled') {
     portfolios.value = portfoliosResult.value.data ?? []
   } else {
-    portfolios.value = seededProfile?.portfolios ?? []
+    portfolios.value = []
   }
 
   if (certificationsResult.status === 'fulfilled') {
     certifications.value = certificationsResult.value.data ?? []
   } else {
-    certifications.value = seededProfile?.certifications ?? []
+    certifications.value = []
   }
 
   if (educationsResult.status === 'fulfilled') {
     educations.value = educationsResult.value.data ?? []
   } else {
-    educations.value = seededProfile?.educations ?? []
+    educations.value = []
   }
 
   if (experiencesResult.status === 'fulfilled') {
     experiences.value = experiencesResult.value.data ?? []
   } else {
-    experiences.value = seededProfile?.experiences ?? []
+    experiences.value = []
   }
 
   if (followersResult.status === 'fulfilled') {
     followers.value = followersResult.value.data ?? []
   } else {
-    followers.value = seededProfile?.followers ?? []
+    followers.value = []
   }
 
   if (!user.value && !userProfile.value && !loadError.value) {
@@ -141,7 +277,14 @@ const loadProfile = async () => {
 }
 
 const profile = computed(() => {
-  const name = readString((user.value as Record<string, unknown> | null)?.name) || userProfile.value?.username || 'Community Member'
+  const name = getDisplayName(
+    userProfile.value?.displayName ||
+      '',
+    readString((user.value as Record<string, unknown> | null)?.name),
+    userProfile.value?.username ||
+      '',
+    readString((user.value as Record<string, unknown> | null)?.username),
+  ) || 'Community Member'
   const username = userProfile.value?.username || readString((user.value as Record<string, unknown> | null)?.username) || 'skills4export-member'
   const email = readString(user.value?.email)
   const phone = readString((user.value as Record<string, unknown> | null)?.phone)
@@ -169,32 +312,41 @@ const profile = computed(() => {
 })
 
 const featuredExperience = computed(() => experiences.value[0] ?? null)
-const featuredSkill = computed(() => skills.value[0]?.name || '')
+const featuredSkill = computed(() => displaySkills.value[0]?.name || '')
 const profileSkillLabel = computed(() => featuredSkill.value || 'Community Member')
 const profileCompanyLabel = computed(() => featuredExperience.value?.company || 'Skills4Export')
 const profileCountryLabel = computed(() => profile.value.location || 'Location not shared')
 
-const activityEntries = computed(() =>
-  feedPosts.filter((post) =>
-    post.type === 'question'
-      ? post.authorName === profile.value.name
-      : post.author.name === profile.value.name,
-  ),
-)
-
-const scoreEntries = computed(() =>
-  activityEntries.value.map((post) => ({
-    id: post.slug,
-    title: post.title,
-    community: post.type === 'question' ? post.communityName : 'Personal post',
-    score: 'score' in post ? post.score : 0,
-    typeLabel: post.type === 'question' ? 'Question' : 'Post',
-  })),
-)
-
 const totalTScore = computed(() =>
   scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
 )
+
+const summaryCards = computed(() => [
+  {
+    label: 'Comments',
+    value: stats.value.comments,
+    icon: ClipboardList,
+    accentClass: 'bg-[var(--accent-soft)] text-[var(--accent-strong)]',
+  },
+  {
+    label: 'Questions',
+    value: stats.value.questions,
+    icon: Sparkles,
+    accentClass: 'bg-emerald-100 text-emerald-700',
+  },
+  {
+    label: 'Answers',
+    value: stats.value.answers,
+    icon: Rocket,
+    accentClass: 'bg-amber-100 text-amber-700',
+  },
+  {
+    label: 'Posts',
+    value: stats.value.posts,
+    icon: BookOpen,
+    accentClass: 'bg-violet-100 text-violet-700',
+  },
+])
 
 const isFollowingProfile = computed(() =>
   followers.value.some((entry) => entry.followerId === authStore.userId),
@@ -270,7 +422,7 @@ watch(
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl space-y-6">
+  <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
     <div v-if="loadError && !isLoadingProfile" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-elevated)]">
       <p class="text-lg font-semibold text-[var(--text-primary)]">Profile unavailable</p>
       <p class="mt-2 text-sm text-[var(--text-secondary)]">{{ loadError }}</p>
@@ -278,7 +430,8 @@ watch(
 
     <template v-else>
       <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
-        <div class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
+        <!-- Banner hidden to match the private profile page layout. -->
+        <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
           <img
             v-if="profile.banner"
             :src="profile.banner"
@@ -294,7 +447,7 @@ watch(
           <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,12,27,0.04),rgba(12,12,27,0.28))]" />
         </div>
 
-        <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-0 sm:px-7 lg:px-9 lg:pb-7">
+        <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-4 sm:px-7 lg:px-9 lg:pb-7 lg:pt-5">
           <div class="absolute right-0 top-0 hidden h-full w-48 lg:block">
             <div class="absolute right-10 top-0 h-full w-px rotate-[-32deg] bg-[var(--accent-soft)]" />
             <div class="absolute right-20 top-0 h-full w-px rotate-[-32deg] bg-[var(--accent-soft)]" />
@@ -303,7 +456,7 @@ watch(
 
           <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-              <div class="-mt-12 h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:-mt-14">
+              <div class="h-24 w-24 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
                 <img
                   v-if="profile.avatar"
                   :src="profile.avatar"
@@ -330,14 +483,6 @@ watch(
                   <span>{{ profileCountryLabel }}</span>
                 </div>
                 <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm font-semibold leading-5 sm:justify-start sm:text-[1rem]">
-                  <button
-                    type="button"
-                    class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
-                    @click="profileModal = 'score'"
-                  >
-                    {{ totalTScore }} T.Scores
-                  </button>
-                  <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
                   <button
                     type="button"
                     class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
@@ -368,15 +513,16 @@ watch(
         </div>
 
         <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
-          <div class="max-w-5xl space-y-6 text-[1.03rem] leading-9 text-[var(--text-secondary)] sm:text-[1.08rem]">
-            <p>{{ profile.bio }}</p>
-            <p>
-              <span class="font-medium text-[var(--text-primary)]">{{ featuredExperience?.title || 'Community member' }}</span>
-              <span v-if="featuredExperience?.company"> at {{ featuredExperience.company }}</span>
-              <span v-else> building visibility through Skills4Export.</span>
-              <span v-if="profile.location"> Based in {{ profile.location }}.</span>
+          <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
+            <p v-if="profile.bio" class="whitespace-pre-line">{{ profile.bio }}</p>
+            <p
+              v-else
+              class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-5 text-sm text-[var(--text-secondary)]"
+            >
+              No about information added yet.
             </p>
           </div>
+
         </div>
       </section>
 
@@ -388,59 +534,17 @@ watch(
       <div class="space-y-6">
         <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Contact</h2>
-            <Mail class="h-5 w-5 text-[var(--accent-strong)]" />
-          </div>
-
-          <div class="mt-5 space-y-3">
-            <div class="flex items-center gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-              <Mail class="h-4 w-4 text-[var(--accent-strong)]" />
-              <span class="text-sm text-[var(--text-secondary)]">{{ profile.email || 'Email not shared publicly' }}</span>
-            </div>
-            <div class="flex items-center gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-              <Phone class="h-4 w-4 text-[var(--accent-strong)]" />
-              <span class="text-sm text-[var(--text-secondary)]">{{ profile.phone || 'Phone not shared publicly' }}</span>
-            </div>
-            <div class="flex items-center gap-3 rounded-[1rem] bg-[var(--surface-secondary)] p-4">
-              <MapPin class="h-4 w-4 text-[var(--accent-strong)]" />
-              <span class="text-sm text-[var(--text-secondary)]">{{ profile.location || 'Location not shared publicly' }}</span>
-            </div>
-            <a
-              v-if="profile.website"
-              :href="profile.website"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-2 text-sm font-semibold text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
-            >
-              Visit website
-              <ExternalLink class="h-4 w-4" />
-            </a>
-          </div>
-        </section>
-
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="skills.length > 0" class="grid gap-3 sm:grid-cols-2">
+          <div v-if="displaySkills.length > 0" class="flex flex-wrap gap-3">
             <div
-              v-for="skill in skills"
+              v-for="skill in displaySkills"
               :key="skill.id || skill.name"
-              class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5"
+              class="inline-flex max-w-full items-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 shadow-[var(--shadow-soft)]"
             >
-              <p class="text-lg font-semibold text-[var(--text-primary)]">{{ skill.name || skill.skill }}</p>
-              <span
-                class="mt-2 inline-block rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em]"
-                :class="{
-                  'bg-blue-100 text-blue-700': skill.level === 'beginner',
-                  'bg-amber-100 text-amber-700': skill.level === 'intermediate',
-                  'bg-green-100 text-green-700': skill.level === 'advanced' || skill.level === 'expert',
-                }"
-              >
-                {{ skill.level || 'beginner' }}
-              </span>
+              <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">{{ skill.name }}</span>
             </div>
           </div>
           <p v-else class="text-sm text-[var(--text-secondary)]">No public skills added yet.</p>
@@ -458,6 +562,20 @@ watch(
               :key="portfolio.id || portfolio.title"
               class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5"
             >
+              <div v-if="portfolio.pictures?.[0]" class="-mx-5 -mt-5 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)]">
+                <video
+                  v-if="isVideoMediaUrl(portfolio.pictures[0])"
+                  :src="portfolio.pictures[0]"
+                  class="h-full w-full object-cover"
+                  controls
+                />
+                <img
+                  v-else
+                  :src="portfolio.pictures[0]"
+                  :alt="`${portfolio.title || 'Project'} media`"
+                  class="h-full w-full object-cover"
+                />
+              </div>
               <p class="break-words text-lg font-semibold text-[var(--text-primary)]">{{ portfolio.title }}</p>
               <p v-if="portfolio.description" class="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{{ portfolio.description }}</p>
               <a
@@ -534,6 +652,7 @@ watch(
           </div>
           <p v-else class="text-sm text-[var(--text-secondary)]">No public experience records yet.</p>
         </section>
+
       </div>
     </template>
   </section>
@@ -556,7 +675,7 @@ watch(
         </div>
         <button
           type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
           @click="profileModal = null"
         >
           <X class="h-4 w-4" />
@@ -595,7 +714,7 @@ watch(
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
             <div class="flex items-center gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
+              <div class="flex h-12 w-12 items-center justify-center rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
                 {{ (follower.followerId?.charAt(0) || 'U').toUpperCase() }}
               </div>
               <div>

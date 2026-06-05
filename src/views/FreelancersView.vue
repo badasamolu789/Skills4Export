@@ -9,10 +9,13 @@ import {
   MapPin,
   Search,
   Upload,
+  Wallet,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import RichTextEditor from '@/components/RichTextEditor.vue'
+import SkillPillInput from '@/components/SkillPillInput.vue'
 import {
   type FreelanceJobRecord,
   type FreelancerRecord,
@@ -28,6 +31,8 @@ const locationQuery = ref('')
 const availabilityFilter = ref('Any of the options')
 const isRegisterModalOpen = ref(false)
 const isPostJobModalOpen = ref(false)
+const isSubmittingFreelancerRegistration = ref(false)
+const isSubmittingFreelanceJob = ref(false)
 const agreedToTerms = ref(false)
 const freelancerTermsAgreed = ref(false)
 const passportFileName = ref('')
@@ -38,6 +43,13 @@ const visibleJobCount = ref(1)
 const revealSentinel = ref<HTMLElement | null>(null)
 const isApplyingToFreelanceJob = ref(false)
 const isFreelanceJobDetailOpen = ref(false)
+const isEmailModalOpen = ref(false)
+const isSendingEmail = ref(false)
+const selectedFreelancer = ref<FreelancerRecord | null>(null)
+const emailForm = ref({
+  message: '',
+  replyToEmail: '',
+})
 const freelancerForm = ref({
   name: '',
   title: '',
@@ -83,6 +95,23 @@ const getInitials = (value: string) =>
     .toUpperCase() || 'FR'
 
 const getFreelancerPath = (freelancer: FreelancerRecord) => `/profile/view/${freelancer.userId}`
+
+const getFreelancerEmail = (freelancer?: FreelancerRecord | null) =>
+  freelancer?.email || freelancer?.userEmail || ''
+
+const formatStatusLabel = (value?: string | null) => {
+  if (!value) {
+    return ''
+  }
+
+  if (value.toLowerCase() === 'pending_review') {
+    return 'Awaiting admin approval'
+  }
+
+  return value
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
 
 const formatFee = (job: FreelanceJobRecord) => {
   if (job.feeLabel) {
@@ -241,10 +270,16 @@ onBeforeUnmount(() => {
 })
 
 const submitFreelancerRegistration = async () => {
+  if (isSubmittingFreelancerRegistration.value) {
+    return
+  }
+
   if (!freelancerTermsAgreed.value) {
     toast.error('Accept the terms before submitting.')
     return
   }
+
+  isSubmittingFreelancerRegistration.value = true
 
   try {
     await freelancersStore.createFreelancer({
@@ -261,17 +296,36 @@ const submitFreelancerRegistration = async () => {
       description: 'Your freelancer profile is ready for review.',
     })
     isRegisterModalOpen.value = false
+    freelancerForm.value = {
+      name: '',
+      title: '',
+      skills: '',
+      location: '',
+      bio: '',
+      availability: 'available_now',
+      remoteOnly: false,
+    }
+    freelancerTermsAgreed.value = false
+    clearPassportUpload()
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to submit freelancer profile.'
     toast.error('Freelancer failed', { description: message })
+  } finally {
+    isSubmittingFreelancerRegistration.value = false
   }
 }
 
 const submitFreelanceJob = async () => {
+  if (isSubmittingFreelanceJob.value) {
+    return
+  }
+
   if (!agreedToTerms.value) {
     toast.error('Accept the terms before posting.')
     return
   }
+
+  isSubmittingFreelanceJob.value = true
 
   try {
     await freelancersStore.createFreelanceJob({
@@ -288,13 +342,84 @@ const submitFreelanceJob = async () => {
       applicationEndDate: freelanceJobForm.value.applicationEndDate,
       agreedToTerms: agreedToTerms.value,
     })
-    toast.success('Freelance job posted', {
-      description: 'Your freelance job is now ready for applicants.',
+    toast.success('Freelance job submitted', {
+      description: 'Your freelance job will show after admin approval.',
     })
     isPostJobModalOpen.value = false
+    freelanceJobForm.value = {
+      title: '',
+      skills: '',
+      location: '',
+      type: 'project-based',
+      description: '',
+      qualifications: '',
+      minFee: '',
+      maxFee: '',
+      currency: 'NGN',
+      companyName: '',
+      applicationEndDate: '',
+    }
+    agreedToTerms.value = false
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to post freelance job.'
     toast.error('Freelance job failed', { description: message })
+  } finally {
+    isSubmittingFreelanceJob.value = false
+  }
+}
+
+const openEmailModal = (freelancer: FreelancerRecord) => {
+  selectedFreelancer.value = freelancer
+  emailForm.value = {
+    message: '',
+    replyToEmail: authStore.signUpDraft.email || '',
+  }
+  isEmailModalOpen.value = true
+}
+
+const closeEmailModal = () => {
+  if (isSendingEmail.value) {
+    return
+  }
+
+  isEmailModalOpen.value = false
+  selectedFreelancer.value = null
+  emailForm.value = {
+    message: '',
+    replyToEmail: '',
+  }
+}
+
+const sendFreelancerEmail = () => {
+  if (!selectedFreelancer.value || isSendingEmail.value) {
+    return
+  }
+
+  const candidateEmail = getFreelancerEmail(selectedFreelancer.value)
+  const replyToEmail = emailForm.value.replyToEmail.trim()
+  const message = emailForm.value.message.trim()
+
+  if (!candidateEmail) {
+    toast.error('Candidate email is unavailable.')
+    return
+  }
+
+  if (!message || !replyToEmail) {
+    toast.error('Add a message and reply email before sending.')
+    return
+  }
+
+  isSendingEmail.value = true
+
+  try {
+    const subject = `Freelance opportunity for ${selectedFreelancer.value.name}`
+    const body = `${message}\n\nReply to: ${replyToEmail}`
+    window.location.href = `mailto:${encodeURIComponent(candidateEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    toast.success('Email composer opened')
+    isEmailModalOpen.value = false
+    selectedFreelancer.value = null
+  } finally {
+    isSendingEmail.value = false
   }
 }
 
@@ -507,58 +632,71 @@ const clearPassportUpload = () => {
             </div>
           </article>
 
-          <RouterLink
+          <article
             v-if="!freelancersStore.isLoadingFreelancers"
             v-for="freelancer in visibleFreelancers"
             :key="freelancer.id"
-            :to="getFreelancerPath(freelancer)"
-            class="block rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-soft)] transition hover:border-[color:var(--accent-soft)]"
+            class="rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] transition hover:border-[color:var(--accent-soft)]"
           >
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <span
-                class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[0.9rem] bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)]"
-              >
-                <img
-                  v-if="freelancer.avatar"
-                  :src="freelancer.avatar"
-                  :alt="freelancer.name"
-                  class="h-full w-full object-cover"
-                />
-                <span v-else>{{ getInitials(freelancer.name) }}</span>
-              </span>
-
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div class="min-w-0">
-                    <h2 class="text-base font-semibold text-[var(--text-primary)]">{{ freelancer.name }}</h2>
-                    <p class="mt-1 text-[0.84rem] text-[var(--text-secondary)]">{{ freelancer.title }}</p>
-                  </div>
-                  <span
-                    class="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] px-3 text-[0.8rem] font-semibold text-[var(--text-secondary)]"
+            <div class="flex flex-col gap-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex min-w-0 items-center gap-3">
+                  <RouterLink
+                    :to="getFreelancerPath(freelancer)"
+                    class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--accent-strong)] sm:h-14 sm:w-14"
                   >
-                    <Mail class="h-3.5 w-3.5" />
-                    Email {{ freelancer.name.split(' ')[0] }}
-                  </span>
+                    <img
+                      v-if="freelancer.avatar"
+                      :src="freelancer.avatar"
+                      :alt="freelancer.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <span v-else>{{ getInitials(freelancer.name) }}</span>
+                  </RouterLink>
+
+                  <div class="min-w-0">
+                    <RouterLink
+                      :to="getFreelancerPath(freelancer)"
+                      class="block truncate text-[0.98rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+                    >
+                      {{ freelancer.name }}
+                    </RouterLink>
+                    <p class="mt-1 truncate text-[0.86rem] font-medium text-[var(--text-secondary)]">{{ freelancer.title }}</p>
+                  </div>
                 </div>
 
-                <p class="mt-2 text-[0.92rem] font-semibold leading-6 text-[var(--text-primary)]">
+                <button
+                  type="button"
+                  class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[0.85rem] border border-[color:var(--border-soft)] px-4 text-[0.86rem] font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent-soft)] hover:text-[var(--accent-strong)]"
+                  @click="openEmailModal(freelancer)"
+                >
+                  <Mail class="h-3.5 w-3.5" />
+                  Email {{ freelancer.name.split(' ')[0] || 'user' }}
+                </button>
+              </div>
+
+              <div class="min-w-0">
+                <p class="text-[1.08rem] font-semibold leading-7 text-[var(--text-primary)] sm:text-[1.2rem]">
                   {{ freelancer.skills.join(', ') }}
                 </p>
-                <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.82rem] text-[var(--text-secondary)]">
-                  <span>Location - {{ freelancer.location }}</span>
-                  <span>|</span>
+                <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9rem] text-[var(--text-secondary)]">
+                  <span class="font-semibold text-[var(--text-primary)]">Location</span>
+                  <span>-</span>
+                  <span>{{ freelancer.location || 'Location not listed' }}</span>
+                  <span class="text-[var(--text-tertiary)]">|</span>
                   <span class="inline-flex items-center gap-1">
-                    Status -
-                  <span class="font-semibold text-[var(--danger)]">{{ freelancer.status }}</span>
+                    <span class="font-semibold text-[var(--text-primary)]">Status</span>
+                    <span>-</span>
+                    <span class="font-semibold text-[var(--danger)]">{{ formatStatusLabel(freelancer.status) }}</span>
                     <BadgeCheck v-if="freelancer.status === 'certified'" class="h-3.5 w-3.5 text-[var(--accent-strong)]" />
                   </span>
                 </p>
-                <p class="mt-3 line-clamp-3 text-[0.86rem] leading-7 text-[var(--text-secondary)]">
+                <p class="mt-5 line-clamp-3 text-[1rem] leading-8 text-[var(--text-secondary)] sm:text-[1.05rem]">
                   {{ freelancer.bio }}
                 </p>
               </div>
             </div>
-          </RouterLink>
+          </article>
 
           <button
             v-if="hasMoreFreelancers"
@@ -619,58 +757,70 @@ const clearPassportUpload = () => {
             </article>
           </div>
 
-          <div
-            v-else
-            class="divide-y divide-[color:var(--border-soft)] rounded-[1rem] bg-[var(--surface-primary)] px-4 py-2 shadow-[var(--shadow-soft)]"
-          >
+          <div v-else class="space-y-4">
             <article
               v-for="job in visibleJobs"
               :key="job.id"
-              class="py-5"
+              class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]"
             >
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="min-w-0">
-                  <button
-                    type="button"
-                    class="text-left text-[1.05rem] font-semibold leading-6 text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
-                    @click="openFreelanceJobDetail(job)"
-                  >
-                    {{ job.title }}
-                  </button>
-                  <p class="mt-2 line-clamp-2 text-[0.9rem] leading-7 text-[var(--text-secondary)]">{{ job.description }}</p>
-                </div>
-                <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-[0.78rem] font-semibold text-[var(--accent-strong)]">
-                  <BriefcaseBusiness class="h-3.5 w-3.5" />
-                  {{ job.companyName }}
-                </span>
-              </div>
-
-              <div class="mt-3 flex flex-wrap gap-1.5">
-                <span
-                  v-for="skill in job.skills"
-                  :key="`${job.id}-${skill}`"
-                  class="rounded-[0.45rem] bg-[var(--surface-secondary)] px-2.5 py-1 text-[0.7rem] font-medium text-[var(--text-secondary)]"
-                >
-                  {{ skill }}
-                </span>
-              </div>
-
-              <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-[0.84rem]">
-                <p class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span class="font-semibold text-emerald-600">Offer | {{ formatFee(job) }}</span>
-                  <span class="text-[var(--text-tertiary)]">|</span>
-                  <span class="font-semibold text-[var(--danger)]">{{ job.verified ? 'Verified' : job.status }}</span>
-                </p>
-                <p class="font-medium text-[var(--text-primary)]">{{ formatDeadline(job.applicationEndDate) }}</p>
-              </div>
-              <div class="mt-4 flex justify-end">
+              <div class="min-w-0">
                 <button
                   type="button"
-                  class="inline-flex h-9 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-[0.82rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+                  class="block text-left text-[1.08rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
                   @click="openFreelanceJobDetail(job)"
                 >
-                  View and apply
+                  {{ job.title }}
                 </button>
+
+                <p class="mt-2 inline-flex items-center gap-2 text-[0.86rem] font-semibold text-[var(--text-secondary)]">
+                  <BriefcaseBusiness class="h-4 w-4 text-[var(--accent-strong)]" />
+                  {{ job.companyName || 'Company not listed' }}
+                </p>
+
+                <p class="mt-2 line-clamp-2 max-w-3xl text-[0.84rem] leading-5 text-[var(--text-secondary)]">
+                  {{ job.description || 'No description has been added yet.' }}
+                </p>
+
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <span class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]">
+                    <MapPin class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
+                    <span class="truncate">{{ job.location || 'Location not listed' }}</span>
+                  </span>
+                  <span class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[12rem]">
+                    <BriefcaseBusiness class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
+                    <span class="truncate">{{ job.type || 'Type not listed' }}</span>
+                  </span>
+                  <span class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]">
+                    <Wallet class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
+                    <span class="truncate">{{ formatFee(job) }}</span>
+                  </span>
+                  <span class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] font-semibold text-[var(--danger)]">
+                    {{ job.verified ? 'Verified' : formatStatusLabel(job.status) }}
+                  </span>
+                </div>
+
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <span
+                    v-for="skill in job.skills || []"
+                    :key="`${job.id}-${skill}`"
+                    class="rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-1 text-[0.76rem] font-semibold text-[var(--text-secondary)]"
+                  >
+                    {{ skill }}
+                  </span>
+                </div>
+
+                <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <p class="text-[0.84rem] font-medium text-[var(--text-secondary)]">
+                    Deadline: <span class="font-semibold text-[var(--text-primary)]">{{ formatDeadline(job.applicationEndDate) }}</span>
+                  </p>
+                  <button
+                    type="button"
+                    class="inline-flex h-9 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-4 text-[0.82rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+                    @click="openFreelanceJobDetail(job)"
+                  >
+                    View and apply
+                  </button>
+                </div>
               </div>
             </article>
           </div>
@@ -722,7 +872,7 @@ const clearPassportUpload = () => {
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Required skills:<span class="text-[var(--danger)]">*</span></span>
-          <input v-model="freelanceJobForm.skills" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Java, Project Mgt, Event management" />
+          <SkillPillInput v-model="freelanceJobForm.skills" placeholder="Java, Project Mgt, Event management" />
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location:<span class="text-[var(--danger)]">*</span></span>
@@ -744,7 +894,10 @@ const clearPassportUpload = () => {
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Qualifications and Skills:<span class="text-[var(--danger)]">*</span></span>
-          <textarea v-model="freelanceJobForm.qualifications" rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <RichTextEditor
+            v-model="freelanceJobForm.qualifications"
+            placeholder="List the qualifications, skills, certifications, and requirements for this freelance job."
+          />
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Min fee:N</span>
@@ -774,10 +927,19 @@ const clearPassportUpload = () => {
         </span>
       </label>
       <div class="flex justify-between gap-2 border-t border-[color:var(--border-soft)] pt-4">
-        <button type="submit" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]">
-          Submit
+        <button
+          type="submit"
+          :disabled="isSubmittingFreelanceJob"
+          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+        >
+          {{ isSubmittingFreelanceJob ? 'Submitting...' : 'Submit' }}
         </button>
-        <button type="button" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90" @click="isPostJobModalOpen = false">
+        <button
+          type="button"
+          :disabled="isSubmittingFreelanceJob"
+          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          @click="isPostJobModalOpen = false"
+        >
           Close
         </button>
       </div>
@@ -803,7 +965,7 @@ const clearPassportUpload = () => {
           </label>
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Skills</span>
-            <input v-model="freelancerForm.skills" placeholder="Take from user profile, else, Java, Project Mgt.." class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
+            <SkillPillInput v-model="freelancerForm.skills" placeholder="Take from user profile, else, Java, Project Mgt.." />
           </label>
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location</span>
@@ -865,13 +1027,81 @@ const clearPassportUpload = () => {
           </span>
         </label>
 
-        <button type="submit" class="mt-4 inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]">
-          Submit
+        <button
+          type="submit"
+          :disabled="isSubmittingFreelancerRegistration"
+          class="mt-4 inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+        >
+          {{ isSubmittingFreelancerRegistration ? 'Submitting...' : 'Submit' }}
         </button>
       </div>
 
       <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
-        <button type="button" class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90" @click="isRegisterModalOpen = false">
+        <button
+          type="button"
+          :disabled="isSubmittingFreelancerRegistration"
+          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          @click="isRegisterModalOpen = false"
+        >
+          Close
+        </button>
+      </div>
+    </form>
+  </ResponsiveOverlay>
+
+  <ResponsiveOverlay
+    v-model="isEmailModalOpen"
+    label="Email freelancer"
+    title="Compose Email"
+    max-width-class="sm:max-w-3xl"
+  >
+    <form class="space-y-5" @submit.prevent="sendFreelancerEmail">
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Candidate email</span>
+        <input
+          :value="getFreelancerEmail(selectedFreelancer)"
+          readonly
+          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none"
+          placeholder="Candidate email unavailable"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Message</span>
+        <textarea
+          v-model="emailForm.message"
+          rows="4"
+          :disabled="isSendingEmail"
+          class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Reply to email</span>
+        <input
+          v-model="emailForm.replyToEmail"
+          type="email"
+          :disabled="isSendingEmail"
+          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+          placeholder="hr@skills4export.com"
+        />
+      </label>
+
+      <button
+        type="submit"
+        :disabled="isSendingEmail || !getFreelancerEmail(selectedFreelancer)"
+        class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+      >
+        {{ isSendingEmail ? 'Sending...' : 'Send' }}
+      </button>
+
+      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
+        <button
+          type="button"
+          :disabled="isSendingEmail"
+          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          @click="closeEmailModal"
+        >
           Close
         </button>
       </div>
@@ -894,7 +1124,7 @@ const clearPassportUpload = () => {
             <h2 class="mt-2 text-xl font-semibold text-[var(--text-primary)]">{{ selectedFreelanceJob.title }}</h2>
           </div>
           <span class="inline-flex w-fit rounded-full bg-[var(--surface-primary)] px-3 py-1 text-xs font-semibold text-[var(--accent-strong)]">
-            {{ selectedFreelanceJob.verified ? 'Verified' : selectedFreelanceJob.status }}
+            {{ selectedFreelanceJob.verified ? 'Verified' : formatStatusLabel(selectedFreelanceJob.status) }}
           </span>
         </div>
 
@@ -911,8 +1141,14 @@ const clearPassportUpload = () => {
         </div>
       </div>
 
-      <div v-if="freelancersStore.isLoadingFreelanceJobDetail" class="rounded-[1rem] border border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
-        Loading details...
+      <div
+        v-if="freelancersStore.isLoadingFreelanceJobDetail"
+        class="space-y-3 rounded-[1rem] border border-[color:var(--border-soft)] p-4"
+        aria-label="Loading freelance job details"
+      >
+        <div class="h-4 w-2/5 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+        <div class="h-4 w-full animate-pulse rounded-full bg-[var(--surface-muted)]" />
+        <div class="h-4 w-4/5 animate-pulse rounded-full bg-[var(--surface-muted)]" />
       </div>
       <div v-else-if="freelancersStore.freelanceJobDetailError" class="rounded-[1rem] border border-[color:var(--border-soft)] p-4 text-sm text-[var(--text-secondary)]">
         {{ freelancersStore.freelanceJobDetailError }}
@@ -928,9 +1164,12 @@ const clearPassportUpload = () => {
           </div>
           <div>
             <h3 class="text-base font-semibold text-[var(--text-primary)]">Qualifications</h3>
-            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-              {{ selectedFreelanceJob.qualifications || 'No qualifications have been added yet.' }}
-            </p>
+            <div
+              v-if="selectedFreelanceJob.qualifications"
+              class="prose-content mt-2 text-sm leading-7 text-[var(--text-secondary)]"
+              v-html="selectedFreelanceJob.qualifications"
+            />
+            <p v-else class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">No qualifications have been added yet.</p>
           </div>
           <div class="flex flex-wrap gap-2">
             <span

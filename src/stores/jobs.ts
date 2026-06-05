@@ -88,7 +88,9 @@ export const useJobsStore = defineStore('jobs', () => {
       const publicJobs =
         publicJobsResult.status === 'fulfilled' ? publicJobsResult.value.data.filter(isPublicJob) : []
       const ownPostedJobs =
-        ownPostedJobsResult.status === 'fulfilled' ? ownPostedJobsResult.value.data : []
+        ownPostedJobsResult.status === 'fulfilled'
+          ? ownPostedJobsResult.value.data.filter(isPublicJob)
+          : []
 
       if (ownPostedJobsResult.status === 'fulfilled') {
         postedJobs.value = ownPostedJobs
@@ -109,7 +111,9 @@ export const useJobsStore = defineStore('jobs', () => {
 
   const createJob = async (payload: CreateJobRequest) => {
     const response = await jobsService.createJob(payload, authStore.authToken)
-    jobs.value = [response.data, ...jobs.value]
+    if (isPublicJob(response.data)) {
+      jobs.value = [response.data, ...jobs.value]
+    }
     postedJobs.value = [response.data, ...postedJobs.value.filter((job) => job.id !== response.data.id)]
     return response.data
   }

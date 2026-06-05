@@ -10,6 +10,8 @@ export type FreelancerRecord = {
   location?: string | null
   bio?: string | null
   avatar?: string | null
+  email?: string | null
+  userEmail?: string | null
   passportMediaId?: string | null
   status: 'draft' | 'pending_review' | 'available' | 'certified' | 'suspended' | string
   availability: 'available_now' | 'open' | 'busy' | 'unavailable' | string

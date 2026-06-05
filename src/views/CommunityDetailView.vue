@@ -109,7 +109,7 @@ const loadCommunityQuestion = async (question: QuestionRecord) => {
     : null
 
   return {
-    ...mapApiQuestionToFeedPost(question, authorResponse?.data ?? null),
+    ...mapApiQuestionToFeedPost(question, authorResponse?.data ?? null, community.value?.name, community.value),
     communityName: community.value?.name || 'Community question',
   } satisfies FeedPost
 }

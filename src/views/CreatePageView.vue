@@ -3,24 +3,19 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
   ArrowLeft,
-  Bold,
   Building2,
   Check,
   ChevronRight,
   GraduationCap,
   Image,
-  Italic,
-  List,
   Loader2,
-  Plus,
-  Underline,
 } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
+import RichTextEditor from '@/components/RichTextEditor.vue'
+import SkillPillInput from '@/components/SkillPillInput.vue'
 import { pagesService } from '@/services/pages'
+import { mediaService } from '@/services/media'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore, type PageCategory } from '@/stores/pages'
 import { slugify } from '@/utils/slugify'
@@ -159,8 +154,6 @@ const handleAvatarFileChange = (event: Event) => {
 }
 
 const getBusinessMetadata = () => ({
-  pageType: 'business',
-  theme: 'business',
   slogan: businessForm.value.slogan.trim(),
   contactEmail: businessForm.value.contactEmail.trim(),
   website: businessForm.value.website.trim(),
@@ -169,8 +162,6 @@ const getBusinessMetadata = () => ({
 })
 
 const getStudentMetadata = () => ({
-  pageType: 'student',
-  theme: 'student',
   email: studentForm.value.email.trim(),
   phone: studentForm.value.phone.trim(),
   courseOfStudy: studentForm.value.courseOfStudy.trim(),
@@ -223,6 +214,17 @@ const validateCurrentForm = () => {
   return true
 }
 
+const findCreatedPage = async (slug: string) => {
+  const cachedPage = pagesStore.getPageByIdOrSlug(slug)
+
+  if (cachedPage) {
+    return cachedPage
+  }
+
+  await pagesStore.loadPages()
+  return pagesStore.getPageByIdOrSlug(slug)
+}
+
 const submitPage = async () => {
   if (isSubmitting.value || !selectedPageType.value || !validateCurrentForm()) {
     return
@@ -238,29 +240,79 @@ const submitPage = async () => {
   const name = currentName.value.trim()
   const description = currentDescription.value.trim()
   const slug = slugify(name)
+  const metadata = selectedPageType.value === 'business' ? getBusinessMetadata() : getStudentMetadata()
 
   isSubmitting.value = true
   const toastId = toast.loading('Creating page...')
 
   try {
-    const page = await pagesStore.createPageFromApi({
-      name,
-      slug,
-      description,
-      metadata: selectedPageType.value === 'business' ? getBusinessMetadata() : getStudentMetadata(),
-    })
+    let page
+    let recoveredExistingPage = false
+    let avatarPersistenceWarning = ''
+
+    try {
+      page = await pagesStore.createPageFromApi({
+        type: selectedPageType.value,
+        name,
+        slug,
+        description,
+        ...metadata,
+        metadata,
+      })
+    } catch (error) {
+      const isUncertainRequestFailure = error instanceof ApiError && (error.status === 0 || error.status === 408)
+
+      if (!isUncertainRequestFailure) {
+        throw error
+      }
+
+      // A timed-out create can still have committed on the server. Reconcile
+      // only uncertain network failures before allowing another create attempt.
+      page = await findCreatedPage(slug)
+      recoveredExistingPage = Boolean(page)
+
+      if (!page) throw error
+    }
 
     if (avatarFile.value) {
       toast.loading('Uploading page image...', { id: toastId })
-      await pagesService.uploadPageAvatarFile(page.id, avatarFile.value, authStore.authToken)
+
+      try {
+        const uploadResponse = await pagesService.uploadPageAvatarFile(page.id, avatarFile.value, authStore.authToken)
+        const processed = await mediaService.waitForProcessedMediaResult(uploadResponse.data.jobId, {
+          token: authStore.authToken,
+        })
+        const refreshedPage = await pagesStore.loadPage(page.id)
+        const processedUrl = processed.url || ''
+
+        if (refreshedPage) page = refreshedPage
+        if (!refreshedPage?.avatar || (processedUrl && refreshedPage.avatar !== processedUrl)) {
+          avatarPersistenceWarning = 'The image upload finished, but the saved page record did not return the uploaded image.'
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'The image upload did not finish.'
+        toast.warning('Page saved without its image', {
+          id: toastId,
+          description: `${message} You can upload the image again from the page settings.`,
+        })
+        await router.push(`/pages/${page.id}`)
+        return
+      }
     }
 
-    toast.success('Page created', {
-      id: toastId,
-      description: avatarFile.value
-        ? `${page.name} is ready. The image upload is processing.`
-        : `${page.name} is ready to manage.`,
-    })
+    if (pagesStore.pagePersistenceWarning || avatarPersistenceWarning) {
+      toast.warning('Page created with a backend persistence warning', {
+        id: toastId,
+        description: [pagesStore.pagePersistenceWarning, avatarPersistenceWarning].filter(Boolean).join(' '),
+      })
+    } else {
+      toast.success(recoveredExistingPage ? 'Page creation confirmed' : 'Page created and verified', {
+        id: toastId,
+        description: avatarFile.value
+          ? `${page.name} is ready and its image upload completed.`
+          : `${page.name} is ready to manage.`,
+      })
+    }
 
     await router.push(`/pages/${page.id}`)
   } catch (error) {
@@ -276,9 +328,7 @@ watch(selectedPageType, () => {
 })
 
 onBeforeUnmount(() => {
-  if (avatarPreviewUrl.value) {
-    URL.revokeObjectURL(avatarPreviewUrl.value)
-  }
+  if (avatarPreviewUrl.value) URL.revokeObjectURL(avatarPreviewUrl.value)
 })
 </script>
 
@@ -416,7 +466,7 @@ onBeforeUnmount(() => {
 
           <label class="space-y-2">
             <span class="text-sm font-semibold text-[var(--text-primary)]">Skills</span>
-            <input v-model="studentForm.skills" class="s4e-page-input" placeholder="e.g. Communication, design, research" />
+            <SkillPillInput v-model="studentForm.skills" placeholder="e.g. Communication, design, research" />
           </label>
         </div>
 
@@ -444,32 +494,16 @@ onBeforeUnmount(() => {
           <span class="text-sm font-semibold text-[var(--text-primary)]">
             {{ selectedPageType === 'business' ? 'Describe your business/organisation' : 'About - Describe your self' }}<span v-if="selectedPageType === 'student'" class="text-[var(--danger)]">*</span>
           </span>
-          <div class="overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
-            <div class="flex flex-wrap items-center gap-2 border-b border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-secondary)]">
-              <span class="mr-2 text-sm font-semibold text-[var(--text-primary)]">Paragraph</span>
-              <Bold class="h-4 w-4" />
-              <Italic class="h-4 w-4" />
-              <Underline class="h-4 w-4" />
-              <List class="h-4 w-4" />
-              <AlignLeft class="h-4 w-4" />
-              <AlignCenter class="h-4 w-4" />
-              <AlignRight class="h-4 w-4" />
-            </div>
-            <textarea
-              v-if="selectedPageType === 'business'"
-              v-model="businessForm.description"
-              rows="8"
-              class="w-full resize-y border-none bg-transparent px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-              placeholder="Describe the business, services, audience, and what people should expect."
-            />
-            <textarea
-              v-else
-              v-model="studentForm.about"
-              rows="8"
-              class="w-full resize-y border-none bg-transparent px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-              placeholder="Describe your academic achievements, skills, interests, and experience."
-            />
-          </div>
+          <RichTextEditor
+            v-if="selectedPageType === 'business'"
+            v-model="businessForm.description"
+            placeholder="Describe the business, services, audience, and what people should expect."
+          />
+          <RichTextEditor
+            v-else
+            v-model="studentForm.about"
+            placeholder="Describe your academic achievements, skills, interests, and experience."
+          />
         </label>
 
         <label class="mt-6 flex items-start gap-3 text-sm text-[var(--text-secondary)]">

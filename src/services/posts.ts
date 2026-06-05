@@ -5,7 +5,29 @@ export type PostRecord = {
   user_id: string
   community_id: string | null
   communityId?: string | null
+  community?: {
+    id?: string
+    name?: string | null
+  } | null
+  user?: {
+    id?: string
+    name?: string | null
+    username?: string | null
+    displayName?: string | null
+    display_name?: string | null
+    email?: string | null
+  } | null
   page_id: string | null
+  pageId?: string | null
+  page?: {
+    id?: string
+    name?: string | null
+    slug?: string | null
+    avatar?: string | null
+    logo?: string | null
+    is_follow?: boolean
+    isFollow?: boolean
+  } | null
   parent_post_id?: string | null
   originalPostId?: string | null
   title: string
@@ -192,6 +214,7 @@ const POST_ROUTES = {
   commentReactions: (id: string) => `/comments/${id}/reactions`,
   commentReport: (id: string) => `/comments/${id}/report`,
   postMediaById: (id: string) => `/posts/media/${id}`,
+  pagePosts: (id: string) => `/page/${id}/post`,
 } as const
 
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
@@ -216,6 +239,14 @@ export const postsService = {
 
   listPosts(params: ListPostsParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.posts, params), { token })
+  },
+
+  listPagePosts(id: string, params: Omit<ListPostsParams, 'pageId'> = {}, token?: string | null) {
+    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.pagePosts(id), params), { token })
+  },
+
+  listSavedPosts(params: ListPostsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<PostRecord>>(withQuery('/posts/saved', params), { token })
   },
 
   getPost(id: string, token?: string | null) {

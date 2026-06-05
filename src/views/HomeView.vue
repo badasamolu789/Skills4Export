@@ -6,11 +6,15 @@ import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { pagesService, type PageRecord } from '@/services/pages'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { mapWithConcurrency } from '@/utils/async'
 import { mapApiPostToFeedPost } from '@/utils/postMapper'
+import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 type FeedItem = {
@@ -34,6 +38,8 @@ type FeedRenderItem =
 
 const INITIAL_POST_COUNT = 4
 const LOAD_BATCH_SIZE = 3
+const FEED_PAGE_SIZE = 20
+const ENRICHMENT_CONCURRENCY = 4
 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 const visiblePostCount = ref(INITIAL_POST_COUNT)
@@ -42,6 +48,7 @@ const isLoadingFeed = ref(false)
 const feedError = ref('')
 const apiPosts = ref<FeedPost[]>([])
 const adverts = ref<AdvertRecord[]>([])
+const communitiesById = ref(new Map<string, CommunityRecord>())
 const authStore = useAuthStore()
 const currentUser = useCurrentUserIdentity()
 
@@ -119,6 +126,21 @@ const visibleFeedItems = computed<FeedRenderItem[]>(() => {
 const hasMorePosts = computed(() => visiblePostCount.value < feedItems.value.length)
 
 let observer: IntersectionObserver | null = null
+let realtimeTimer: ReturnType<typeof window.setInterval> | null = null
+
+type AuthorLookup = Awaited<ReturnType<typeof buildAuthorLookup>>
+type PageLookup = Awaited<ReturnType<typeof buildPageLookup>>
+
+const getFeedSignature = (items: FeedPost[]) =>
+  items
+    .map((item) => [
+      item.type,
+      item.apiId || item.slug,
+      item.updatedAt || item.createdAt || '',
+      item.score ?? 0,
+      'comments' in item ? item.comments ?? 0 : item.answers ?? 0,
+    ].join(':'))
+    .join('|')
 
 const loadMorePosts = async () => {
   if (isLoadingMore.value || !hasMorePosts.value) {
@@ -137,43 +159,89 @@ const loadMorePosts = async () => {
   }, 350)
 }
 
-const loadFeedPost = async (post: PostRecord) => {
-  const [mediaResponse, authorResponse, commentsResponse] = await Promise.all([
-    postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
-    post.user_id
-      ? usersService.getUserProfile(post.user_id, authStore.authToken).catch(() => null)
-      : Promise.resolve(null),
-    postsService.listComments(post.id, authStore.authToken).catch(() => null),
-  ])
+const buildAuthorLookup = async (posts: PostRecord[], questions: QuestionRecord[]) => {
+  const userIds = Array.from(new Set([
+    ...posts.filter((post) => !(post.pageId || post.page_id)).map((post) => post.user_id),
+    ...questions.map(getQuestionUserId),
+  ].filter(Boolean)))
+  const entries = await mapWithConcurrency(
+    userIds,
+    ENRICHMENT_CONCURRENCY,
+    async (userId) => {
+      const authorData = await loadQuestionAuthorProfile(
+        userId,
+        authStore.userId,
+        currentUser.profileData.value,
+        authStore.authToken,
+      )
 
-  const mappedPost = mapApiPostToFeedPost(
-    post,
-    mediaResponse?.data ?? [],
-    authorResponse?.data ?? null,
+      return [userId, authorData] as const
+    },
   )
 
-  if ('comments' in mappedPost && commentsResponse) {
-    return {
-      ...mappedPost,
-      comments: commentsResponse.total,
-    }
-  }
-
-  return mappedPost
+  return new Map(entries)
 }
 
-const loadFeedQuestion = async (question: QuestionRecord) => {
-  const userId = getQuestionUserId(question)
-  const authorResponse = userId
-    ? await usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
-    : null
-  const authorData =
-    authorResponse?.data ??
-    (userId && userId === authStore.userId
-      ? currentUser.profileData.value
-      : null)
+const buildPageLookup = async (posts: PostRecord[]) => {
+  const pagePosts = posts.filter((post) => post.pageId || post.page_id)
+  const lookup = new Map<string, NonNullable<PostRecord['page']> | PageRecord>()
 
-  return mapApiQuestionToFeedPost(question, authorData)
+  pagePosts.forEach((post) => {
+    const pageId = post.pageId || post.page_id
+
+    if (pageId && post.page?.name) {
+      lookup.set(pageId, post.page)
+    }
+  })
+
+  const missingPageIds = Array.from(new Set(
+    pagePosts
+      .map((post) => post.pageId || post.page_id)
+      .filter((pageId): pageId is string => Boolean(pageId && !lookup.has(pageId))),
+  ))
+  const entries = await mapWithConcurrency(
+    missingPageIds,
+    ENRICHMENT_CONCURRENCY,
+    async (pageId) => {
+      const response = await pagesService.getPage(pageId, authStore.authToken).catch(() => null)
+      return [pageId, response?.data ?? null] as const
+    },
+  )
+
+  entries.forEach(([pageId, page]) => {
+    if (page) {
+      lookup.set(pageId, page)
+    }
+  })
+
+  return lookup
+}
+
+const loadFeedPost = async (post: PostRecord, authorLookup: AuthorLookup, pageLookup: PageLookup) => {
+  const [mediaResponse] = await Promise.all([
+    postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
+  ])
+  const pageId = post.pageId || post.page_id
+
+  return mapApiPostToFeedPost(
+    post,
+    mediaResponse?.data ?? [],
+    authorLookup.get(post.user_id) ?? null,
+    communitiesById.value.get(post.community_id || post.communityId || '')?.name,
+    pageId ? pageLookup.get(pageId) ?? null : null,
+  )
+}
+
+const loadFeedQuestion = async (question: QuestionRecord, authorLookup: AuthorLookup) => {
+  const userId = getQuestionUserId(question)
+  const community = communitiesById.value.get(question.communityId || question.community_id || '')
+
+  return mapApiQuestionToFeedPost(
+    question,
+    userId ? authorLookup.get(userId) ?? null : null,
+    community?.name,
+    community,
+  )
 }
 
 const setupObserver = () => {
@@ -201,36 +269,58 @@ const setupObserver = () => {
   observer.observe(loadMoreTrigger.value)
 }
 
-const loadFeed = async () => {
-  isLoadingFeed.value = true
+const loadFeed = async (options: { background?: boolean } = {}) => {
+  if (!options.background) {
+    isLoadingFeed.value = true
+  }
   feedError.value = ''
 
   try {
-    const [postsResult, questionsResult, advertsResult] = await Promise.allSettled([
-      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+    const [postsResult, questionsResult, advertsResult, communitiesResult] = await Promise.allSettled([
+      postsService.listPosts({ per_page: FEED_PAGE_SIZE, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions({ per_page: FEED_PAGE_SIZE, sort: '-createdAt' }, authStore.authToken),
       advertsService.listAdverts(
         {
-          per_page: 100,
+          per_page: 20,
           sort: '-createdAt',
         },
         authStore.authToken,
       ),
+      communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken),
     ])
 
-    const posts =
-      postsResult.status === 'fulfilled'
-        ? await Promise.all(postsResult.value.data.map((post) => loadFeedPost(post)))
-        : []
+    if (communitiesResult.status === 'fulfilled') {
+      communitiesById.value = new Map(
+        (communitiesResult.value.data ?? []).map((community) => [community.id, community]),
+      )
+    }
 
-    const questions =
-      questionsResult.status === 'fulfilled'
-        ? await Promise.all(questionsResult.value.data.map((question) => loadFeedQuestion(question)))
-        : []
+    const rawPosts = postsResult.status === 'fulfilled' ? postsResult.value.data ?? [] : []
+    const rawQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data ?? [] : []
+    const [authorLookup, pageLookup] = await Promise.all([
+      buildAuthorLookup(rawPosts, rawQuestions),
+      buildPageLookup(rawPosts),
+    ])
+
+    const posts = await mapWithConcurrency(
+      rawPosts,
+      ENRICHMENT_CONCURRENCY,
+      (post) => loadFeedPost(post, authorLookup, pageLookup),
+    )
+    const questions = await Promise.all(rawQuestions.map((question) => loadFeedQuestion(question, authorLookup)))
 
     adverts.value = advertsResult.status === 'fulfilled' ? advertsResult.value.data ?? [] : []
-    apiPosts.value = shuffleFeedPosts([...posts, ...questions])
-    visiblePostCount.value = INITIAL_POST_COUNT
+    const nextPosts = [...posts, ...questions].sort(
+      (first, second) =>
+        new Date(second.createdAt || second.updatedAt || '').getTime() -
+        new Date(first.createdAt || first.updatedAt || '').getTime(),
+    )
+    if (getFeedSignature(apiPosts.value) !== getFeedSignature(nextPosts)) {
+      apiPosts.value = nextPosts
+    }
+    visiblePostCount.value = apiPosts.value.length
+      ? Math.max(visiblePostCount.value, INITIAL_POST_COUNT)
+      : INITIAL_POST_COUNT
 
     if (postsResult.status === 'rejected' && questionsResult.status === 'rejected') {
       throw postsResult.reason
@@ -249,18 +339,27 @@ const loadFeed = async () => {
           : 'Some feed items could not be loaded from the server.'
     }
   } catch (error) {
-    feedError.value =
-      error instanceof ApiError ? error.message : 'Unable to load the feed from the server.'
-    apiPosts.value = []
-    adverts.value = []
+    if (!options.background) {
+      feedError.value =
+        error instanceof ApiError ? error.message : 'Unable to load the feed from the server.'
+      apiPosts.value = []
+      adverts.value = []
+    }
   } finally {
-    isLoadingFeed.value = false
+    if (!options.background) {
+      isLoadingFeed.value = false
+    }
   }
 }
 
 onMounted(() => {
   void loadFeed()
   setupObserver()
+  realtimeTimer = window.setInterval(() => {
+    if (!isLoadingFeed.value) {
+      void loadFeed({ background: true })
+    }
+  }, 45000)
 })
 
 watch(loadMoreTrigger, async () => {
@@ -270,6 +369,9 @@ watch(loadMoreTrigger, async () => {
 
 onBeforeUnmount(() => {
   observer?.disconnect()
+  if (realtimeTimer) {
+    window.clearInterval(realtimeTimer)
+  }
 })
 </script>
 

@@ -124,6 +124,7 @@
 html {
   background: var(--app-bg);
   font-size: 15.5px;
+  overflow-x: hidden;
   transition: background 240ms ease;
 }
 
@@ -131,6 +132,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
   font-family: var(--font-sans);
   font-size: 1rem;
   line-height: 1.36;
@@ -328,6 +330,8 @@ textarea[data-state='success'],
 
 #app main.app-main {
   font-size: 0.9rem;
+  max-width: 100vw;
+  overflow-x: hidden;
 }
 
 #app main.app-main :is(p, li, label, input, textarea, select, button, a) {
@@ -671,6 +675,54 @@ body :is([class~="fixed"][class~="inset-0"]) :is([class~="rounded-[1.35rem]"], [
   --error-bg: linear-gradient(135deg, #7f1d1d, #101319);
   --warning-bg: linear-gradient(135deg, #78350f, #12121f);
   --info-bg: linear-gradient(135deg, #353266, #101319);
+}
+
+.prose-content ul,
+.prose-content ol {
+  margin: 0.5rem 0 0.5rem 1.25rem;
+  padding: 0;
+}
+
+.prose-content ul {
+  list-style: disc;
+}
+
+.prose-content ol {
+  list-style: decimal;
+}
+
+.prose-content li {
+  margin: 0.25rem 0;
+}
+
+.prose-content p {
+  margin: 0.5rem 0;
+}
+
+.rich-text-content {
+  overflow-wrap: anywhere;
+}
+
+.rich-text-content a {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.rich-text-content h1,
+.rich-text-content h2,
+.rich-text-content h3,
+.rich-text-content h4 {
+  margin: 0.8rem 0 0.35rem;
+  color: var(--text-primary);
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.rich-text-content--clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 @media (max-width: 640px) {

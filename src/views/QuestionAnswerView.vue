@@ -2,11 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
-import { questionPosts, type QuestionPost } from '@/data/feedPosts'
+import type { QuestionPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { questionsService, type QuestionRecord } from '@/services/questions'
-import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const authStore = useAuthStore()
@@ -15,19 +16,30 @@ const isLoadingQuestions = ref(false)
 const questionsError = ref('')
 const apiQuestions = ref<QuestionPost[]>([])
 const hasLoadedApiQuestions = ref(false)
+const communitiesById = ref(new Map<string, CommunityRecord>())
 
-const questions = computed(() => (hasLoadedApiQuestions.value ? apiQuestions.value : questionPosts))
+const questions = computed(() => apiQuestions.value)
 
 const loadQuestion = async (question: QuestionRecord) => {
   const userId = getQuestionUserId(question)
-  const authorResponse = userId
-    ? await usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
-    : null
-  const authorData =
-    authorResponse?.data ??
-    (userId && userId === authStore.userId ? currentUser.profileData.value : null)
+  const community = communitiesById.value.get(question.communityId || question.community_id || '')
+  const [authorData, answersResponse] = await Promise.all([
+    userId
+      ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
+      : Promise.resolve(null),
+    questionsService.listAnswers(question.id, authStore.authToken).catch(() => null),
+  ])
 
-  return mapApiQuestionToFeedPost(question, authorData)
+  return mapApiQuestionToFeedPost(
+    {
+      ...question,
+      answers_count: answersResponse?.total ?? question.answers_count,
+      answers: answersResponse?.data ?? question.answers,
+    },
+    authorData,
+    community?.name,
+    community,
+  )
 }
 
 const loadQuestions = async () => {
@@ -35,9 +47,15 @@ const loadQuestions = async () => {
   questionsError.value = ''
 
   try {
-    const response = await questionsService.listQuestions(
-      { per_page: 100, sort: '-createdAt' },
-      authStore.authToken,
+    const [response, communitiesResponse] = await Promise.all([
+      questionsService.listQuestions(
+        { per_page: 100, sort: '-createdAt' },
+        authStore.authToken,
+      ),
+      communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken).catch(() => null),
+    ])
+    communitiesById.value = new Map(
+      (communitiesResponse?.data ?? []).map((community) => [community.id, community]),
     )
     apiQuestions.value = await Promise.all(response.data.map((question) => loadQuestion(question)))
     hasLoadedApiQuestions.value = true
@@ -45,7 +63,7 @@ const loadQuestions = async () => {
     questionsError.value =
       error instanceof ApiError ? error.message : 'Unable to load questions from the server.'
     apiQuestions.value = []
-    hasLoadedApiQuestions.value = false
+    hasLoadedApiQuestions.value = true
   } finally {
     isLoadingQuestions.value = false
   }

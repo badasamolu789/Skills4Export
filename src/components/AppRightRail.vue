@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowUpRight, BadgeHelp } from 'lucide-vue-next'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
+import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { getDisplayName } from '@/utils/displayName'
+import { getQuestionUserId } from '@/utils/questionMapper'
 
 const props = withDefaults(
   defineProps<{
@@ -27,13 +30,48 @@ type TrendingQuestion = {
 
 const authStore = useAuthStore()
 const questions = ref<QuestionRecord[]>([])
+const questionAuthors = ref(new Map<string, string>())
 const isLoadingQuestions = ref(false)
 const hasLoadedQuestions = ref(false)
 const adverts = ref<AdvertRecord[]>([])
 const isLoadingAdverts = ref(false)
+let realtimeTimer: ReturnType<typeof window.setInterval> | null = null
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
+
+const getRecordStringValue = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return ''
+  }
+
+  const record = source as Record<string, unknown>
+
+  for (const key of keys) {
+    const value = record[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const getAuthorNameFromProfile = (source: unknown) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return ''
+  }
+
+  const record = source as Record<string, unknown>
+
+  return getDisplayName(
+    getRecordStringValue(record.user, ['name', 'displayName', 'display_name', 'username']) ||
+      '',
+    getRecordStringValue(record.profile, ['displayName', 'display_name', 'name', 'username']),
+    getRecordStringValue(record, ['displayName', 'display_name', 'name', 'username']),
+  )
+}
 
 const getQuestionTimestamp = (question: QuestionRecord) =>
   getStringValue(question.createdAt, question.created_at, question.updatedAt, question.updated_at)
@@ -64,8 +102,15 @@ const formatQuestionTime = (value: string) => {
   }).format(date)
 }
 
-const getQuestionAuthor = (question: QuestionRecord) =>
-  getStringValue(question.user?.name, question.user?.username, question.user?.email?.split('@')[0]) || 'Community member'
+const getQuestionAuthor = (question: QuestionRecord) => {
+  const userId = getQuestionUserId(question)
+
+  return (
+    (userId ? questionAuthors.value.get(userId) : '') ||
+    getDisplayName(question.user?.name, question.user?.username) ||
+    'Community member'
+  )
+}
 
 const trendingQuestions = computed<TrendingQuestion[]>(() =>
   [...questions.value]
@@ -111,8 +156,10 @@ const rightRailAdvert = computed(() => {
   return rightRailMatch ?? usableAdverts.value[0] ?? null
 })
 
-const loadTrendingQuestions = async () => {
-  isLoadingQuestions.value = true
+const loadTrendingQuestions = async (options: { background?: boolean } = {}) => {
+  if (!options.background) {
+    isLoadingQuestions.value = true
+  }
 
   try {
     const response = await questionsService.listQuestions(
@@ -121,11 +168,30 @@ const loadTrendingQuestions = async () => {
       { suppressErrorModal: true },
     )
     questions.value = response.data ?? []
+    const userIds = [...new Set(questions.value.map(getQuestionUserId).filter(Boolean))]
+    const authorEntries = await Promise.all(
+      userIds.map(async (userId) => {
+        const profileResponse = await usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
+        let name = getAuthorNameFromProfile(profileResponse?.data)
+
+        if (!name) {
+          const userResponse = await usersService.getUser(userId, authStore.authToken).catch(() => null)
+          name = getAuthorNameFromProfile(userResponse?.data)
+        }
+
+        return [userId, name || 'Community member'] as const
+      }),
+    )
+    questionAuthors.value = new Map(authorEntries)
   } catch {
-    questions.value = []
+    if (!options.background) {
+      questions.value = []
+    }
   } finally {
     hasLoadedQuestions.value = true
-    isLoadingQuestions.value = false
+    if (!options.background) {
+      isLoadingQuestions.value = false
+    }
   }
 }
 
@@ -151,6 +217,17 @@ const loadAdverts = async () => {
 onMounted(() => {
   void loadTrendingQuestions()
   void loadAdverts()
+  realtimeTimer = window.setInterval(() => {
+    if (!isLoadingQuestions.value) {
+      void loadTrendingQuestions({ background: true })
+    }
+  }, 15000)
+})
+
+onBeforeUnmount(() => {
+  if (realtimeTimer) {
+    window.clearInterval(realtimeTimer)
+  }
 })
 </script>
 

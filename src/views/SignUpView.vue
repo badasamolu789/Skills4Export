@@ -22,6 +22,7 @@ const {
   clearFieldError,
   clearFieldErrors,
 } = useFormFieldStates<'name' | 'email' | 'password' | 'acceptedTerms'>()
+
 const form = ref({
   name: authStore.signUpDraft.name,
   email: authStore.signUpDraft.email,
@@ -46,6 +47,7 @@ const continueSignUp = async () => {
   authStore.signUpDraft.password = form.value.password
   authStore.signUpDraft.rememberMe = form.value.rememberMe
   authStore.signUpDraft.acceptedTerms = form.value.acceptedTerms
+  authStore.signUpDraft.signUpDetailsCompleted = false
   authStore.signUpDraft.emailVerified = false
   authStore.signUpDraft.verificationCode = ''
   authStore.signUpDraft.verificationSentAt = ''
@@ -61,7 +63,7 @@ const continueSignUp = async () => {
         response.message || 'Check your email for the OTP to continue. Redirecting now.',
     })
 
-    router.push('/auth/signup/verify')
+    router.push('/auth/signup/details')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -127,7 +129,7 @@ const signUpWithGoogle = async () => {
     :centered="true"
     badge="Step 1 of 3"
     title="Build your account and join the platform properly."
-    description="Start with your essentials, verify your email with an OTP, then continue into the richer profile setup."
+    description="Start with your essentials, add your onboarding details, then verify your email with an OTP."
   >
     <div class="relative mx-auto flex w-full max-w-md flex-col justify-center overflow-hidden rounded-[1.75rem] sm:max-w-md">
       <div class="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[1.75rem]">
@@ -147,7 +149,7 @@ const signUpWithGoogle = async () => {
 
       <form class="space-y-3.5 sm:space-y-4" @submit.prevent="continueSignUp">
         <div class="space-y-2">
-          <label class="text-sm font-semibold text-(--text-primary) sm:text-base">Name</label>
+          <label class="text-sm font-semibold text-(--text-primary) sm:text-base">Full Name</label>
           <input
             v-model="form.name"
             type="text"
@@ -179,7 +181,7 @@ const signUpWithGoogle = async () => {
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-semibold text-(--text-primary)sm:text-base">Password</label>
+          <label class="text-sm font-semibold text-(--text-primary) sm:text-base">Password</label>
           <div class="relative">
             <input
               v-model="form.password"
@@ -243,7 +245,7 @@ const signUpWithGoogle = async () => {
           :disabled="isSubmitting"
           class="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-(--accent) text-sm font-semibold text-white transition hover:bg-(--accent-strong) sm:h-13 sm:text-base"
         >
-          {{ isSubmitting ? 'Sending verification...' : 'Continue to verification' }}
+          {{ isSubmitting ? 'Sending verification...' : 'Continue to details' }}
         </button>
 
         <div class="flex items-center gap-4 pt-1">

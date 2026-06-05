@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   ArrowUp,
   Bookmark,
   Check,
   ChevronDown,
-  Users,
   Copy,
   Edit2,
   Flag,
@@ -18,13 +17,15 @@ import {
 import { toast } from 'vue-sonner'
 import { useCurrentUserIdentity, getInitials, getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
-import { getSeededPublicProfile } from '@/data/publicProfiles'
 import { ApiError } from '@/lib/api'
 import PostCommentThread from '@/components/PostCommentThread.vue'
+import RichTextContent from '@/components/RichTextContent.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { pagesService } from '@/services/pages'
 import { postsService, type PostCommentRecord } from '@/services/posts'
-import { usersService, type MyProfileData } from '@/services/users'
+import { questionsService } from '@/services/questions'
+import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
 type PostComment = {
@@ -57,11 +58,12 @@ const currentUser = useCurrentUserIdentity()
 const isFollowing = ref(props.post.isFollowing ?? false)
 const isSaved = ref(props.post.isSaved ?? false)
 const isScored = ref(props.post.isScored ?? false)
-const currentScore = ref('score' in props.post ? props.post.score : 0)
+const currentScore = ref('score' in props.post ? props.post.score || 0 : 0)
 const isCommentsOpen = ref(false)
 const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
+const postMenuRoot = ref<HTMLElement | null>(null)
 const isEditModalOpen = ref(false)
 const editPostTitle = ref('')
 const editPostContent = ref('')
@@ -90,6 +92,7 @@ const apiPostId = computed(() => props.post.apiId)
 const detailPath = computed(() =>
   props.post.type === 'question' ? `/questions/${props.post.slug}` : `/posts/${props.post.slug}`,
 )
+const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 const shareLink = computed(() => {
   const path = detailPath.value
   return typeof window === 'undefined' ? path : new URL(path, window.location.origin).toString()
@@ -166,37 +169,60 @@ const authorUserId = computed(() => {
   return getPublicProfileIdFromRoute(authorRoute.value)
 })
 const isOwnPost = computed(() => Boolean(authStore.userId && authorUserId.value === authStore.userId))
-const showFollowAction = computed(() => Boolean(props.post.pageId && !isOwnPost.value))
+const isCommunityQuestion = computed(() => props.post.type === 'question' && Boolean(props.post.communityId))
+const showFollowAction = computed(() =>
+  isCommunityQuestion.value || Boolean(!isOwnPost.value && (props.post.pageId || authorUserId.value)),
+)
 const canEditPost = computed(() => Boolean(props.allowEdit && isOwnPost.value && apiPostId.value && props.post.type !== 'question'))
 const isSharedPost = computed(() => Boolean(props.post.originalPostId))
+const contentLabel = computed(() => (props.post.type === 'question' ? 'Question' : 'Post'))
+
+const getStoredCommunityFollows = () => {
+  if (typeof window === 'undefined') {
+    return {} as Record<string, string[]>
+  }
+
+  try {
+    return JSON.parse(window.localStorage.getItem(COMMUNITY_FOLLOWS_KEY) || '{}') as Record<string, string[]>
+  } catch {
+    return {}
+  }
+}
+
+const setStoredCommunityFollow = (communityId: string, nextValue: boolean) => {
+  if (typeof window === 'undefined' || !authStore.userId) {
+    return
+  }
+
+  const follows = getStoredCommunityFollows()
+  const userFollows = new Set(follows[authStore.userId] ?? [])
+
+  if (nextValue) {
+    userFollows.add(communityId)
+  } else {
+    userFollows.delete(communityId)
+  }
+
+  follows[authStore.userId] = [...userFollows]
+  window.localStorage.setItem(COMMUNITY_FOLLOWS_KEY, JSON.stringify(follows))
+}
+
+const hasStoredCommunityFollow = (communityId?: string | null) => {
+  if (!communityId || !authStore.userId) {
+    return false
+  }
+
+  return getStoredCommunityFollows()[authStore.userId]?.includes(communityId) ?? false
+}
 
 const authorProfileDetails = computed(() => {
-  const publicProfileId = getPublicProfileIdFromRoute(authorRoute.value)
-  const publicProfile = publicProfileId ? getSeededPublicProfile(publicProfileId) : null
+  const tag = props.post.type === 'question' ? props.post.tag : props.post.author.tag
 
-  if (!publicProfile) {
-    const tag = props.post.type === 'question' ? props.post.tag : props.post.author.tag
-
-    return (tag || 'Skills4Export member')
-      .split('|')
-      .map((item: string) => item.trim())
-      .filter(Boolean)
-  }
-
-  const details: string[] = []
-  const jobTitle = publicProfile.experiences[0]?.title?.trim()
-  const skillNames = publicProfile.skills
-    .map((skill) => (skill.name || skill.skill || '').trim())
-    .filter(Boolean)
+  return (tag || '')
+    .split('|')
+    .map((item: string) => item.trim())
+    .filter((item: string) => item && item.toLowerCase() !== 'skills4export member')
     .slice(0, 3)
-
-  if (jobTitle) {
-    details.push(jobTitle)
-  }
-
-  details.push(...skillNames)
-
-  return details
 })
 
 const authorMetaItems = computed(() => authorProfileDetails.value.slice(0, 3))
@@ -348,17 +374,35 @@ const loadSharedOriginalPost = async () => {
   try {
     const originalResponse = await postsService.getPost(props.post.originalPostId, authStore.authToken)
     const original = originalResponse.data
-    const [mediaResponse, authorResponse] = await Promise.all([
+    const [mediaResponse, authorResponse, userResponse, skillsResponse] = await Promise.all([
       postsService.listPostMedia(original.id, authStore.authToken).catch(() => null),
       original.user_id
         ? usersService.getUserProfile(original.user_id, authStore.authToken).catch(() => null)
         : Promise.resolve(null),
+      original.user_id
+        ? usersService.getUser(original.user_id, authStore.authToken).catch(() => null)
+        : Promise.resolve(null),
+      original.user_id
+        ? usersService.listUserSkills(original.user_id, authStore.authToken).catch(() => null)
+        : Promise.resolve(null),
     ])
+    const authorData = authorResponse?.data
+      ? {
+        ...authorResponse.data,
+        user: {
+          ...(authorResponse.data.user ?? {}),
+          ...(userResponse?.data ?? {}),
+        },
+        skills: collectUserSkills(skillsResponse?.data, authorResponse.data.skills, authorResponse.data, userResponse?.data),
+      }
+      : userResponse?.data
+        ? { user: userResponse.data, skills: collectUserSkills(skillsResponse?.data, userResponse.data) }
+        : null
 
     sharedOriginalPost.value = mapApiPostToFeedPost(
       original,
       mediaResponse?.data ?? [],
-      authorResponse?.data ?? null,
+      authorData,
     )
   } catch {
     sharedOriginalPost.value = null
@@ -368,11 +412,34 @@ const loadSharedOriginalPost = async () => {
 }
 
 const syncPostCounters = () => {
-  currentScore.value = 'score' in props.post ? props.post.score : 0
+  currentScore.value = 'score' in props.post ? props.post.score || 0 : 0
   currentComments.value = 'comments' in props.post ? props.post.comments : 0
 }
 
+const syncFollowState = () => {
+  isFollowing.value = props.post.isFollowing ?? false
+
+  if (props.post.type === 'question' && props.post.communityId) {
+    isFollowing.value = props.post.isFollowing ?? hasStoredCommunityFollow(props.post.communityId)
+  }
+}
+
+const handleDocumentPointerDown = (event: PointerEvent) => {
+  if (!isPostMenuOpen.value) {
+    return
+  }
+
+  const target = event.target as Node | null
+  if (target && postMenuRoot.value?.contains(target)) {
+    return
+  }
+
+  isPostMenuOpen.value = false
+}
+
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  syncFollowState()
   syncEditForm()
   void loadSharedOriginalPost()
 
@@ -381,11 +448,15 @@ onMounted(() => {
   }
 })
 
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+})
+
 watch(
   () => props.post,
   () => {
     syncPostCounters()
-    isFollowing.value = props.post.isFollowing ?? false
+    syncFollowState()
     isSaved.value = props.post.isSaved ?? false
     isScored.value = props.post.isScored ?? false
     syncEditForm()
@@ -457,15 +528,52 @@ const submitPostEdit = async () => {
   }
 }
 
-const toggleFollow = () => {
-  if (isOwnPost.value) {
+const toggleFollow = async () => {
+  if (isOwnPost.value && !isCommunityQuestion.value) {
     toast.info('This is your post', {
       description: 'You cannot follow your own account.',
     })
     return
   }
 
-  isFollowing.value = !isFollowing.value
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before following.',
+    })
+    return
+  }
+
+  const nextValue = !isFollowing.value
+
+  try {
+    if (props.post.type === 'question' && props.post.communityId) {
+      if (nextValue) {
+        await communitiesService.joinCommunity(props.post.communityId, authStore.authToken)
+      } else {
+        await communitiesService.leaveCommunity(props.post.communityId, authStore.authToken)
+      }
+
+      setStoredCommunityFollow(props.post.communityId, nextValue)
+    } else if (props.post.pageId) {
+      if (nextValue) {
+        await pagesService.followPage(props.post.pageId, authStore.authToken)
+      } else {
+        await pagesService.unfollowPage(props.post.pageId, authStore.authToken)
+      }
+    } else if (authorUserId.value) {
+      if (nextValue) {
+        await usersService.followUser(authorUserId.value, { followerId: authStore.userId }, authStore.authToken)
+      } else {
+        await usersService.unfollowUser(authorUserId.value, authStore.authToken)
+      }
+    }
+
+    isFollowing.value = nextValue
+    toast.success(nextValue ? 'Following' : 'Unfollowed')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
+    toast.error('Follow failed', { description: message })
+  }
 }
 
 const toggleScore = async () => {
@@ -496,14 +604,24 @@ const toggleScore = async () => {
   isReactingToPost.value = true
 
   try {
-    const response = await postsService.togglePostReaction(
-      apiPostId.value,
-      {
-        userId: authStore.userId,
-        type: 'like',
-      },
-      authStore.authToken,
-    )
+    const response =
+      props.post.type === 'question'
+        ? await questionsService.toggleQuestionReaction(
+            apiPostId.value,
+            {
+              userId: authStore.userId,
+              type: 'like',
+            },
+            authStore.authToken,
+          )
+        : await postsService.togglePostReaction(
+            apiPostId.value,
+            {
+              userId: authStore.userId,
+              type: 'like',
+            },
+            authStore.authToken,
+          )
     isScored.value = !isScored.value
     currentScore.value = response.data.count
   } catch (error) {
@@ -518,17 +636,17 @@ const toggleSave = async () => {
   if (!apiPostId.value) {
     isSaved.value = !isSaved.value
 
-    toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved', {
+    toast.success(isSaved.value ? `${contentLabel.value} saved` : `${contentLabel.value} removed from saved`, {
       description: isSaved.value
-        ? 'This post is now in your saved list.'
-        : 'This post has been removed from your saved list.',
+        ? `This ${contentLabel.value.toLowerCase()} is now in your saved list.`
+        : `This ${contentLabel.value.toLowerCase()} has been removed from your saved list.`,
     })
     return
   }
 
   if (!authStore.authToken || !authStore.userId) {
     toast.error('Sign in required', {
-      description: 'Please sign in again before saving posts.',
+      description: `Please sign in again before saving ${contentLabel.value.toLowerCase()}s.`,
     })
     return
   }
@@ -540,17 +658,26 @@ const toggleSave = async () => {
   isSavingPost.value = true
 
   try {
-    const response = await postsService.toggleSave(
-      apiPostId.value,
-      { userId: authStore.userId },
-      authStore.authToken,
-    )
-    isSaved.value = response.data.saved
+    if (props.post.type === 'question') {
+      const response = await questionsService.toggleQuestionSave(
+        apiPostId.value,
+        { userId: authStore.userId },
+        authStore.authToken,
+      )
+      isSaved.value = typeof response.data.saved === 'boolean' ? response.data.saved : !isSaved.value
+    } else {
+      const response = await postsService.toggleSave(
+        apiPostId.value,
+        { userId: authStore.userId },
+        authStore.authToken,
+      )
+      isSaved.value = response.data.saved
+    }
 
-    toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved', {
+    toast.success(isSaved.value ? `${contentLabel.value} saved` : `${contentLabel.value} removed from saved`, {
       description: isSaved.value
-        ? 'This post is now in your saved list.'
-        : 'This post has been removed from your saved list.',
+        ? `This ${contentLabel.value.toLowerCase()} is now in your saved list.`
+        : `This ${contentLabel.value.toLowerCase()} has been removed from your saved list.`,
     })
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
@@ -757,7 +884,7 @@ const submitShare = async () => {
 }
 
 const openReportModal = () => {
-  reportTargetLabel.value = 'this post'
+  reportTargetLabel.value = props.post.type === 'question' ? 'this question' : 'this post'
   selectedReportReason.value = ''
   isReportModalOpen.value = true
 }
@@ -786,7 +913,7 @@ const submitReport = async () => {
     return
   }
 
-  if (!apiPostId.value && reportTargetLabel.value === 'this post') {
+  if (!apiPostId.value && (reportTargetLabel.value === 'this post' || reportTargetLabel.value === 'this question')) {
     toast.error('Report needs an endpoint', {
       description: 'Only API content can be reported live.',
     })
@@ -806,7 +933,18 @@ const submitReport = async () => {
       details: reportReasonDescriptions[selectedReportReason.value] ?? '',
     }
 
-    if (reportTargetLabel.value === 'this post') {
+    if (reportTargetLabel.value === 'this question') {
+      await questionsService.reportQuestion(
+        apiPostId.value as string,
+        {
+          ...reportPayload,
+          id: apiPostId.value,
+          itemId: apiPostId.value,
+          type: 'question',
+        },
+        authStore.authToken,
+      )
+    } else if (reportTargetLabel.value === 'this post') {
       await postsService.reportPost(apiPostId.value as string, reportPayload, authStore.authToken)
     } else {
       const comment = commentList.value.find((item) => `${item.author}'s comment` === reportTargetLabel.value)
@@ -947,48 +1085,68 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
   >
     <template v-if="post.type === 'question'">
       <div class="min-w-0">
-        <div>
-          <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-            <span class="font-semibold text-[var(--accent-strong)]">Q.</span>
-            <Users class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
-            <span class="truncate">{{ post.communityName }}</span>
-          </div>
-          <RouterLink
-            :to="detailPath"
-            class="mt-3 block text-[1.22rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.4rem] lg:text-[1.55rem]"
-          >
-            {{ post.title }}
-          </RouterLink>
-          <div class="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[0.78rem] leading-5 text-[var(--text-secondary)]">
+        <div class="flex items-start gap-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 items-center gap-2 text-sm text-[var(--text-secondary)]">
+              <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_12%,var(--surface-primary))] text-[var(--accent-strong)]">
+                Q
+              </span>
+              <i :class="post.communityIconClass || 'las la-users'" class="shrink-0 text-base leading-none text-[var(--accent-strong)]" aria-hidden="true" />
+              <span class="truncate font-semibold">{{ post.communityName }}</span>
+            </div>
             <RouterLink
-              :to="authorRoute"
-              class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.62rem] font-semibold text-[var(--text-tertiary)]"
+              :to="detailPath"
+              class="mt-3 block text-[1.28rem] font-semibold leading-tight tracking-[-0.015em] text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.45rem] lg:text-[1.58rem]"
             >
-              <img
-                v-if="post.authorAvatarSrc"
-                :src="post.authorAvatarSrc"
-                :alt="authorName"
-                class="h-full w-full object-cover"
-              />
-              <span v-else>{{ getInitials(authorName) }}</span>
+              {{ post.title }}
             </RouterLink>
-            <RouterLink :to="authorRoute" class="shrink-0 font-semibold text-[var(--accent-strong)]">
-              {{ authorName }}
-            </RouterLink>
-            <span class="text-[var(--text-tertiary)]">-</span>
-            <span class="shrink-0">{{ post.time }}</span>
-            <span v-if="authorMetaItems.length" class="text-[var(--text-tertiary)]">-</span>
-            <span
-              v-for="item in authorMetaItems"
-              :key="item"
-              class="inline-flex max-w-[9rem] truncate rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-[0.62rem] font-medium leading-4 text-[var(--text-secondary)]"
-            >
-              {{ item }}
-            </span>
+            <div class="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[0.82rem] leading-5 text-[var(--text-secondary)]">
+              <span class="shrink-0">{{ post.time }}</span>
+              <span class="text-[var(--text-tertiary)]">-</span>
+              <RouterLink :to="authorRoute" class="shrink-0 font-semibold text-[var(--accent-strong)]">
+                {{ authorName }}
+              </RouterLink>
+              <template v-if="authorMetaItems.length">
+                <span class="text-[var(--text-tertiary)]">-</span>
+                <span class="min-w-0 truncate font-semibold text-[var(--text-tertiary)]">
+                  {{ authorMetaItems.join(' | ') }}
+                </span>
+              </template>
+            </div>
           </div>
-          <p v-if="post.body" class="mt-3 line-clamp-2 text-[0.9rem] leading-7 text-[var(--text-secondary)]">
-            {{ post.body }}
-          </p>
+
+          <div ref="postMenuRoot" class="relative shrink-0">
+            <button
+              type="button"
+              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
+              aria-label="Question actions"
+              @click="togglePostMenu"
+            >
+              <MoreHorizontal class="h-4 w-4" />
+            </button>
+
+            <div
+              v-if="isPostMenuOpen"
+              class="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[9rem] rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-2 shadow-[var(--shadow-elevated)]"
+            >
+              <button
+                type="button"
+                class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                @click="handleMobileSave"
+              >
+                <Bookmark class="h-4 w-4" />
+                {{ isSaved ? 'Saved' : 'Save' }}
+              </button>
+              <button
+                type="button"
+                class="mt-1 flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                @click="handleMobileReport"
+              >
+                <Flag class="h-4 w-4" />
+                Report
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1012,6 +1170,19 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         >
           {{ followLabel }}
         </button>
+        <button
+          type="button"
+          class="inline-flex h-9 items-center rounded-[1rem] border px-3 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+          :class="
+            isScored
+              ? activeActionClass
+              : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+          "
+          @click="toggleScore"
+        >
+          <ArrowUp class="mr-1 h-3.5 w-3.5" />
+          {{ currentScore }} score
+        </button>
         <span
           class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
         >
@@ -1024,13 +1195,13 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
       <div class="space-y-3">
         <div class="flex items-start gap-3">
           <span
-            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] text-sm font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
+            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] text-sm font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
           >
             <img
               v-if="post.author.avatarSrc"
               :src="post.author.avatarSrc"
               :alt="post.author.name"
-              class="h-full w-full rounded-full object-cover"
+              class="h-full w-full rounded-[0.75rem] object-cover"
             />
             <span v-else>{{ post.author.avatarText }}</span>
           </span>
@@ -1046,15 +1217,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     {{ authorName }}
                   </RouterLink>
                   <span
-                    v-for="item in authorMetaItems"
-                    :key="item"
-                    class="inline-flex max-w-[8.5rem] truncate rounded-full bg-[var(--surface-secondary)] px-2 py-0.5 text-[0.61rem] font-medium leading-4 text-[var(--text-secondary)]"
+                    v-if="authorMetaItems.length"
+                    class="min-w-0 truncate text-[0.92rem] font-semibold text-[var(--text-tertiary)]"
                   >
-                    {{ item }}
+                    {{ authorMetaItems.join(' | ') }}
                   </span>
                 </div>
 
-                <div class="relative ml-auto sm:hidden">
+                <div ref="postMenuRoot" class="relative ml-auto sm:hidden">
                   <button
                     type="button"
                     class="inline-flex h-8 w-8 items-center justify-center text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -1139,18 +1309,25 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           >
             {{ post.title }}
           </RouterLink>
-          <p
+          <RichTextContent
+            :content="post.description"
+            :clamp="!props.expanded"
             class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)] sm:text-[0.9rem] sm:leading-7"
-            :class="props.expanded ? '' : 'feed-post-description'"
-          >
-            {{ post.description }}
-          </p>
+          />
 
           <div
             v-if="isSharedPost"
             class="mt-4 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3"
           >
-            <p v-if="isLoadingSharedOriginal" class="text-sm text-[var(--text-secondary)]">Loading shared post...</p>
+            <div
+              v-if="isLoadingSharedOriginal"
+              class="space-y-2"
+              aria-label="Loading shared post"
+            >
+              <div class="h-3 w-1/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-4 w-4/5 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-3 w-2/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+            </div>
             <template v-else-if="sharedOriginalPost && sharedOriginalPost.type !== 'question'">
               <div class="flex items-center gap-2 text-[0.78rem] text-[var(--text-secondary)]">
                 <span class="font-semibold text-[var(--text-primary)]">{{ sharedOriginalPost.author.name }}</span>
@@ -1162,9 +1339,11 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               >
                 {{ sharedOriginalPost.title }}
               </RouterLink>
-              <p class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]">
-                {{ sharedOriginalPost.description }}
-              </p>
+              <RichTextContent
+                :content="sharedOriginalPost.description"
+                clamp
+                class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]"
+              />
               <img
                 v-if="sharedOriginalPost.imageSrc"
                 :src="sharedOriginalPost.imageSrc"
@@ -1279,7 +1458,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   :key="item"
                   class="flex animate-pulse items-start gap-2.5"
                 >
-                  <div class="h-8 w-8 rounded-full bg-[var(--surface-muted)]" />
+                  <div class="h-8 w-8 rounded-[0.75rem] bg-[var(--surface-muted)]" />
                   <div class="flex-1 space-y-2">
                     <div class="h-3 w-32 rounded-full bg-[var(--surface-muted)]" />
                     <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
@@ -1307,7 +1486,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   <div class="flex items-start gap-2.5">
                     <RouterLink
                       :to="comment.authorTo"
-                      class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                      class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                     >
                       <img
                         v-if="comment.avatarSrc"
@@ -1569,9 +1748,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   {{ community.name }}
                 </option>
               </select>
-              <p class="text-xs leading-5 text-[var(--text-tertiary)]">
-                {{ isLoadingShareCommunities ? 'Loading communities...' : 'Select a community to repost this content there.' }}
+              <p v-if="!isLoadingShareCommunities" class="text-xs leading-5 text-[var(--text-tertiary)]">
+                Select a community to repost this content there.
               </p>
+              <div
+                v-else
+                class="h-3 w-44 animate-pulse rounded-full bg-[var(--surface-muted)]"
+                aria-label="Loading communities"
+              />
             </div>
 
             <div class="space-y-2">
@@ -1641,7 +1825,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
         <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           <p class="max-w-3xl text-[0.92rem] leading-6 text-[var(--text-primary)]">
-            Thank you for reporting to us posts that break the rules. Let us know which of the rules applies.
+            Thank you for reporting {{ contentLabel.toLowerCase() }}s that break the rules. Let us know which of the rules applies.
           </p>
 
           <button

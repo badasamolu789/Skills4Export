@@ -1,17 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, MoreHorizontal, Rocket, Save, Sparkles, Trash2, UserRound, Users, X } from 'lucide-vue-next'
+import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, Image as ImageIcon, MoreHorizontal, Rocket, Sparkles, Trash2, UploadCloud, UserCheck, UserPlus, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import AppFeedPost from '@/components/AppFeedPost.vue'
-import type { FeedPost } from '@/data/feedPosts'
+import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
-import { usersService } from '@/services/users'
+import { collectUserSkills, usersService } from '@/services/users'
+import { mediaService } from '@/services/media'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
-import { mapApiPostToFeedPost } from '@/utils/postMapper'
-import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience } from '@/services/users'
+import { getOptionalCount } from '@/utils/postMapper'
+import { getQuestionUserId } from '@/utils/questionMapper'
+import { getDisplayName } from '@/utils/displayName'
+import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower } from '@/services/users'
+
+type ProfileUploadItem = {
+  id: string
+  title: string
+  externalUrl?: string
+  url: string
+  mediaType: 'image' | 'video'
+  isLocal?: boolean
+}
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -24,6 +35,7 @@ const isLoadingEducations = ref(false)
 const isLoadingExperiences = ref(false)
 const isLoadingActivity = ref(false)
 const isProfileDetailsModalOpen = ref(false)
+const isLoadingProfileDetails = ref(false)
 const isSavingProfileDetails = ref(false)
 const isSavingSectionEdit = ref(false)
 const skills = ref<UserSkill[]>([])
@@ -31,20 +43,27 @@ const portfolios = ref<UserPortfolio[]>([])
 const certifications = ref<UserCertification[]>([])
 const educations = ref<UserEducation[]>([])
 const experiences = ref<UserExperience[]>([])
-const followers = ref<Array<{
-  id?: string
-  followerId?: string
-  followingId?: string
-  createdAt?: string
-}>>([])
+const followers = ref<UserFollower[]>([])
 const profileResponseData = ref<MyProfileData | null>(null)
-const recentActivities = ref<FeedPost[]>([])
 const following = ref<Array<{
   id: string
   name: string
-  subtitle: string
+  avatar: string
   initials: string
 }>>([])
+const isUploadModalOpen = ref(false)
+const isUploadingProfileMedia = ref(false)
+const uploadFileInput = ref<HTMLInputElement | null>(null)
+const uploadFile = ref<File | null>(null)
+const uploadPreviewUrl = ref('')
+const uploadFileName = ref('')
+const profileUploads = ref<ProfileUploadItem[]>([])
+const uploadForm = ref({
+  title: '',
+  externalUrl: '',
+})
+const followStates = ref<Record<string, boolean>>({})
+const followToggles = ref<Record<string, boolean>>({})
 const activeActionMenu = ref<{ type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience'; id: string } | null>(null)
 const deletingItem = ref<string | null>(null)
 const deleteModal = ref<{ isOpen: boolean; type?: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience'; id?: string; label?: string }>({
@@ -58,9 +77,12 @@ const stats = ref({
   pages: 0,
   communities: 0,
   posts: 0,
+  questions: 0,
+  answers: 0,
   comments: 0,
   followers: 0,
 })
+const scoreEntries = ref<Array<{ id: string; title: string; community: string; score: number; typeLabel: string }>>([])
 
 const optionalField = (value?: string | null) => {
   const trimmed = value?.trim()
@@ -76,6 +98,160 @@ const getStringField = (record: Record<string, unknown> | null | undefined, keys
   }
 
   return ''
+}
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+
+const getBooleanField = (record: Record<string, unknown> | null | undefined, keys: string[]) => {
+  for (const key of keys) {
+    const value = record?.[key]
+
+    if (typeof value === 'boolean') {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+const getAccountInitials = (name: string) =>
+  name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'U'
+
+const isVideoMediaUrl = (url: string) => /\/video\/upload\/|\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url)
+
+const hasProfileUploads = computed(() => profileUploads.value.length > 0)
+
+const makeUploadClientId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+
+  return `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+const clearUploadSelection = (options?: { keepPreview?: boolean }) => {
+  if (!options?.keepPreview && uploadPreviewUrl.value) {
+    URL.revokeObjectURL(uploadPreviewUrl.value)
+  }
+
+  uploadFile.value = null
+  uploadFileName.value = ''
+  uploadPreviewUrl.value = ''
+
+  if (uploadFileInput.value) {
+    uploadFileInput.value.value = ''
+  }
+}
+
+const openUploadModal = () => {
+  uploadForm.value = { title: '', externalUrl: '' }
+  clearUploadSelection()
+  isUploadModalOpen.value = true
+}
+
+const selectUploadFile = (file?: File | null) => {
+  if (!file) {
+    return
+  }
+
+  if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+    toast.error('Please choose an image or video file.')
+    return
+  }
+
+  clearUploadSelection()
+  uploadFile.value = file
+  uploadFileName.value = file.name
+  uploadPreviewUrl.value = URL.createObjectURL(file)
+}
+
+const handleUploadFileChange = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  selectUploadFile(input.files?.[0])
+}
+
+const handleUploadDrop = (event: DragEvent) => {
+  selectUploadFile(event.dataTransfer?.files?.[0])
+}
+
+const submitProfileUpload = async () => {
+  if (isUploadingProfileMedia.value) {
+    return
+  }
+
+  const title = uploadForm.value.title.trim()
+  const externalUrl = uploadForm.value.externalUrl.trim()
+
+  if (!title) {
+    toast.error('Upload title is required.')
+    return
+  }
+
+  if (!uploadFile.value) {
+    toast.error('Choose an image or video to upload.')
+    return
+  }
+
+  if (!authStore.authToken) {
+    toast.error('Please sign in before uploading media.')
+    return
+  }
+
+  const selectedFile = uploadFile.value
+  const mediaType = selectedFile.type.startsWith('video/') ? 'video' : 'image'
+  const toastId = toast.loading('Uploading media...')
+  isUploadingProfileMedia.value = true
+
+  try {
+    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
+    const uploadResponse = await mediaService.uploadCloudinaryFile(selectedFile, signatureResponse.data)
+
+    if (!uploadResponse.public_id) {
+      throw new Error('Media upload completed without a public ID.')
+    }
+
+    const registerResponse = await mediaService.registerMedia(
+      {
+        publicId: uploadResponse.public_id,
+        title,
+        ...(externalUrl ? { externalUrl } : {}),
+        kind: mediaType,
+        userId: authStore.userId,
+      },
+      authStore.authToken,
+    )
+
+    const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+      token: authStore.authToken,
+    })
+    const remoteUrl = processed.url || uploadResponse.secure_url || uploadPreviewUrl.value
+    const shouldKeepPreview = remoteUrl === uploadPreviewUrl.value
+
+    profileUploads.value.unshift({
+      id: processed.assetId || makeUploadClientId(),
+      title,
+      ...(externalUrl ? { externalUrl } : {}),
+      url: remoteUrl,
+      mediaType,
+      isLocal: shouldKeepPreview,
+    })
+
+    toast.success('Upload added', { id: toastId })
+    isUploadModalOpen.value = false
+    uploadForm.value = { title: '', externalUrl: '' }
+    clearUploadSelection({ keepPreview: shouldKeepPreview })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to upload this media.'
+    toast.error('Upload failed', { id: toastId, description: message })
+  } finally {
+    isUploadingProfileMedia.value = false
+  }
 }
 
 const toDateInputValue = (value?: string | null) => optionalField(value)?.slice(0, 10) || ''
@@ -102,6 +278,26 @@ const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknow
   }
 
   return ''
+}
+
+const toSkillArray = (value: unknown): UserSkill[] => {
+  if (Array.isArray(value)) {
+    return value as UserSkill[]
+  }
+
+  if (!value || typeof value !== 'object') {
+    return []
+  }
+
+  const record = value as Record<string, unknown>
+
+  for (const key of ['data', 'skills', 'items', 'records', 'results']) {
+    if (Array.isArray(record[key])) {
+      return record[key] as UserSkill[]
+    }
+  }
+
+  return []
 }
 
 const toggleActionMenu = (type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience', id: string | undefined) => {
@@ -334,32 +530,6 @@ const profileDetailsForm = ref({
   currentJobTitle: '',
 })
 
-const formatActivityTime = (value: string) => {
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(date)
-}
-
-const getPostDescription = (content: string) => {
-  if (typeof document === 'undefined') {
-    return content.replace(/<[^>]*>/g, '').trim()
-  }
-
-  const element = document.createElement('div')
-  element.innerHTML = content
-
-  return (element.textContent || '').trim()
-}
-
 const loadRecentActivity = async (userId: string) => {
   isLoadingActivity.value = true
 
@@ -368,54 +538,55 @@ const loadRecentActivity = async (userId: string) => {
       postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
       questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
     ])
+    const allPosts = postsResult.status === 'fulfilled' ? postsResult.value.data : []
+    const allQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data : []
+    const userPosts = allPosts.filter((post: PostRecord) => post.user_id === userId)
+    const userQuestions = allQuestions.filter((question: QuestionRecord) => getQuestionUserId(question) === userId)
+    const [postCommentResults, questionAnswerResults] = await Promise.all([
+      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),
+      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken).catch(() => null))),
+    ])
+    const userCommentCount = postCommentResults.reduce((total, response) => {
+      const comments = response?.data ?? []
+      return total + comments.filter((comment) => comment.user_id === userId).length
+    }, 0)
+    const userAnswers = questionAnswerResults.flatMap((response) => response?.data ?? []).filter((answer) => {
+      const answerUserId = answer.userId || answer.user_id || ''
+      return answerUserId === userId
+    })
 
-    const postActivities =
-      postsResult.status === 'fulfilled'
-        ? await Promise.all(postsResult.value.data
-          .filter((post: PostRecord) => post.user_id === userId)
-          .map(async (post) => {
-            const [mediaResponse, commentsResponse] = await Promise.all([
-              postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
-              postsService.listComments(post.id, authStore.authToken).catch(() => null),
-            ])
-            const mappedPost = mapApiPostToFeedPost(post, mediaResponse?.data ?? [], profileResponseData.value)
+    const postScores = userPosts.map((post) => ({
+      id: post.id,
+      title: post.title,
+      community: post.community?.name || 'Post',
+      score: getOptionalCount(post.score, post.reactions_count, post.reaction_count),
+      typeLabel: 'Post',
+    }))
+    const questionScores = userQuestions.map((question) => ({
+      id: question.id,
+      title: question.title,
+      community: 'Question',
+      score: getOptionalCount(question.score, question.reactions_count, question.reaction_count),
+      typeLabel: 'Question',
+    }))
+    const answerScores = userAnswers.map((answer) => ({
+      id: answer.id,
+      title: answer.content || answer.body || answer.answer || 'Answer',
+      community: 'Answer',
+      score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count),
+      typeLabel: 'Answer',
+    }))
 
-            return {
-              ...mappedPost,
-              description: getPostDescription(post.content),
-              comments: commentsResponse?.total ?? ('comments' in mappedPost ? mappedPost.comments : 0),
-            }
-          }))
-        : []
-
-    const questionActivities =
-      questionsResult.status === 'fulfilled'
-        ? questionsResult.value.data
-          .filter((question: QuestionRecord) => question.userId === userId)
-          .map((question) => ({
-            id: question.id,
-            apiId: question.id,
-            userId: question.userId,
-            type: 'question' as const,
-            slug: question.id,
-            communityId: question.communityId,
-            communityName: 'Question',
-            title: question.title,
-            body: question.body,
-            time: formatActivityTime(question.createdAt),
-            authorName: profile.value.name || 'Community member',
-            authorTo: '/profile',
-            tag: profileSkillLabel.value || 'Skills4Export member',
-            answers: 0,
-            createdAt: question.createdAt,
-          }))
-        : []
-
-    recentActivities.value = [...postActivities, ...questionActivities]
-      .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
-      .slice(0, 5)
+    stats.value = {
+      ...stats.value,
+      posts: userPosts.length,
+      questions: userQuestions.length,
+      answers: userAnswers.length,
+      comments: userCommentCount,
+    }
+    scoreEntries.value = [...postScores, ...questionScores, ...answerScores]
   } catch {
-    recentActivities.value = []
+    scoreEntries.value = []
   } finally {
     isLoadingActivity.value = false
   }
@@ -452,8 +623,9 @@ const loadProfile = async () => {
       authStore.signUpDraft.email = profileResponse.data.user.email
     }
 
-    if (profileResponse.data?.user?.name && typeof profileResponse.data.user.name === 'string') {
-      authStore.signUpDraft.name = profileResponse.data.user.name
+    const responseDisplayName = getDisplayName(profileResponse.data?.user?.name)
+    if (responseDisplayName) {
+      authStore.signUpDraft.name = responseDisplayName
     }
 
     // Sync profile data to store for persistence across reloads
@@ -476,6 +648,8 @@ const loadProfile = async () => {
         pages: statsResult.value.data?.pages ?? 0,
         communities: statsResult.value.data?.communities ?? 0,
         posts: statsResult.value.data?.posts ?? 0,
+        questions: 0,
+        answers: 0,
         comments: statsResult.value.data?.comments ?? 0,
         followers: 0,
       }
@@ -485,6 +659,8 @@ const loadProfile = async () => {
         pages: 0,
         communities: 0,
         posts: 0,
+        questions: 0,
+        answers: 0,
         comments: 0,
       }
     }
@@ -503,8 +679,8 @@ const loadProfile = async () => {
         : []
 
     const sourceSkills = skillsResult?.status === 'fulfilled'
-      ? skillsResult.value.data
-      : profileResponse.data?.skills ?? []
+      ? collectUserSkills(skillsResult.value.data, profileResponse.data?.skills, profileResponse.data)
+      : collectUserSkills(profileResponse.data?.skills, profileResponse.data)
     const sourcePortfolios = portfoliosResult?.status === 'fulfilled'
       ? portfoliosResult.value.data
       : profileResponse.data?.portfolios ?? []
@@ -518,10 +694,17 @@ const loadProfile = async () => {
       ? experiencesResult.value.data
       : profileResponse.data?.experiences ?? []
 
-    skills.value = sourceSkills.map((skill) => ({
+    const profileSkills = sourceSkills.length
+      ? sourceSkills
+      : authStore.signUpDraft.interests.map((name, index) => ({
+          id: `draft-skill-${index}`,
+          name,
+        }))
+
+    skills.value = profileSkills.map((skill) => ({
       id: skill.id || '',
       name: getSkillDisplayName(skill),
-      level: skill.level,
+      level: 'level' in skill ? skill.level : undefined,
     })).filter((skill) => skill.name)
 
     portfolios.value = sourcePortfolios
@@ -531,8 +714,6 @@ const loadProfile = async () => {
     educations.value = sourceEducations
 
     experiences.value = sourceExperiences
-
-    following.value = []
 
     // Load followers data separately
     if (profileResponse.data?.user?.id) {
@@ -554,8 +735,52 @@ const loadFollowersData = async (userId: string) => {
 
   try {
     const response = await usersService.listFollowers(userId, authStore.authToken)
-    followers.value = response.data ?? []
+    const followerRecords = response.data ?? []
+    const enrichedFollowers = await Promise.all(
+      followerRecords.map(async (follower) => {
+        const followerRecord = follower as Record<string, unknown>
+        const followerId = getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id'])
+
+        if (!followerId) {
+          return follower
+        }
+
+        const [profileResponse, userResponse] = await Promise.all([
+          usersService.getUserProfile(followerId, authStore.authToken).catch(() => null),
+          usersService.getUser(followerId, authStore.authToken).catch(() => null),
+        ])
+
+        return {
+          ...follower,
+          follower: profileResponse?.data?.user || userResponse?.data || follower.follower,
+          followerProfile: profileResponse?.data?.profile || follower.followerProfile,
+        }
+      }),
+    )
+
+    followers.value = enrichedFollowers
     stats.value.followers = followers.value.length
+    const nextFollowStates = { ...followStates.value }
+
+    for (const follower of followers.value) {
+      const followerRecord = follower as Record<string, unknown>
+      const followerId = getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id'])
+      const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+
+      if (followerId) {
+        nextFollowStates[followerId] = explicitState ?? true
+      }
+    }
+
+    followStates.value = nextFollowStates
+    following.value = followerAccounts.value
+      .filter((account) => account.isFollowing && !account.isCurrentUser)
+      .map((account) => ({
+        id: account.id,
+        name: account.name,
+        avatar: account.avatar,
+        initials: account.initials,
+      }))
   } catch (error) {
     followers.value = []
     stats.value.followers = 0
@@ -564,19 +789,143 @@ const loadFollowersData = async (userId: string) => {
   }
 }
 
-const openProfileDetailsModal = () => {
+const getFollowerAccount = (follower: UserFollower) => {
+  const followerRecord = follower as Record<string, unknown>
+  const userRecord =
+    asRecord(followerRecord.follower) ||
+    asRecord(followerRecord.user) ||
+    asRecord(followerRecord.account)
+  const profileRecord =
+    asRecord(followerRecord.followerProfile) ||
+    asRecord(followerRecord.profile) ||
+    asRecord(userRecord?.profile)
+  const id =
+    getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id']) ||
+    getStringField(userRecord, ['id', 'userId', 'user_id'])
+  const name = getDisplayName(
+    getStringField(profileRecord, ['displayName', 'display_name', 'name']),
+    getStringField(userRecord, ['name', 'displayName', 'display_name', 'fullName', 'full_name', 'username']),
+    id ? `User ${id.slice(0, 8)}` : 'User',
+  )
+  const avatar =
+    getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
+    getStringField(userRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image'])
+  const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+
+  return {
+    id,
+    name,
+    avatar,
+    initials: getAccountInitials(name),
+    isCurrentUser: Boolean(id && id === authStore.userId),
+    isFollowing: id ? followStates.value[id] ?? explicitState ?? false : false,
+  }
+}
+
+const followerAccounts = computed(() =>
+  followers.value
+    .map(getFollowerAccount)
+    .filter((account) => account.id),
+)
+
+const toggleFollowFromModal = async (targetUserId: string) => {
+  if (!targetUserId || followToggles.value[targetUserId]) {
+    return
+  }
+
+  if (!authStore.isAuthenticated) {
+    return
+  }
+
+  followToggles.value[targetUserId] = true
+
+  try {
+    if (followStates.value[targetUserId]) {
+      await usersService.unfollowUser(targetUserId, authStore.authToken)
+      followStates.value = {
+        ...followStates.value,
+        [targetUserId]: false,
+      }
+      following.value = following.value.filter((account) => account.id !== targetUserId)
+      toast.success('User unfollowed.')
+      return
+    }
+
+    await usersService.followUser(targetUserId, {}, authStore.authToken)
+    followStates.value = {
+      ...followStates.value,
+      [targetUserId]: true,
+    }
+    const account = followerAccounts.value.find((item) => item.id === targetUserId)
+    if (account && !following.value.some((item) => item.id === targetUserId)) {
+      following.value = [
+        ...following.value,
+        {
+          id: account.id,
+          name: account.name,
+          avatar: account.avatar,
+          initials: account.initials,
+        },
+      ]
+    }
+    toast.success('Following user.')
+  } catch (error) {
+    const message = error instanceof ApiError || error instanceof Error ? error.message : 'Unable to update follow status.'
+    toast.error('Follow action failed', { description: message })
+  } finally {
+    followToggles.value[targetUserId] = false
+  }
+}
+
+const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
+  const profileData = data?.profile ?? authStore.userProfile
+  const userData = data?.user ?? authStore.currentUser
+  const currentExperience =
+    data?.experiences?.find((experience) => Boolean(experience.isCurrent)) ||
+    data?.experiences?.[0] ||
+    featuredExperience.value
+
   profileDetailsForm.value = {
     displayName:
-      authStore.userProfile?.displayName ||
-      authStore.currentUser?.name ||
-      authStore.signUpDraft.name ||
-      authStore.userProfile?.username ||
-      '',
-    location: authStore.userProfile?.location || '',
-    currentWorkplace: featuredExperience.value?.company || '',
-    currentJobTitle: featuredExperience.value?.title || '',
+      getDisplayName(
+        profileData?.displayName,
+        userData?.name,
+        authStore.signUpDraft.name,
+        profileData?.username,
+      ),
+    location: profileData?.location || '',
+    currentWorkplace: currentExperience?.company || '',
+    currentJobTitle: currentExperience?.title || '',
   }
-  isProfileDetailsModalOpen.value = true
+}
+
+const openProfileDetailsModal = async () => {
+  if (isLoadingProfileDetails.value) {
+    return
+  }
+
+  isLoadingProfileDetails.value = true
+  let latestData = profileResponseData.value
+  try {
+    const response = await usersService.getMyProfile(authStore.authToken)
+    const data = response.data ?? null
+
+    latestData = data
+    profileResponseData.value = data
+    authStore.setCurrentUser(data?.user ?? null)
+    authStore.setUserProfile(data?.profile ?? null)
+    if (data?.experiences) {
+      experiences.value = data.experiences
+    }
+  } catch (error) {
+    toast.error('Unable to refresh profile details', {
+      description: error instanceof Error ? error.message : 'Using the most recently loaded profile information.',
+    })
+  } finally {
+    prefillProfileDetailsForm(latestData)
+    isProfileDetailsModalOpen.value = true
+    isLoadingProfileDetails.value = false
+  }
 }
 
 const closeProfileDetailsModal = () => {
@@ -897,6 +1246,16 @@ onMounted(() => {
   void loadProfile()
 })
 
+onBeforeUnmount(() => {
+  clearUploadSelection()
+
+  profileUploads.value.forEach((item) => {
+    if (item.isLocal) {
+      URL.revokeObjectURL(item.url)
+    }
+  })
+})
+
 // Refresh data when user profile changes (after edits)
 watch(
   () => authStore.userProfile?.id,
@@ -919,16 +1278,21 @@ const profile = computed(() => {
   const draft = authStore.signUpDraft
   const apiProfile = authStore.userProfile
   const apiUser = authStore.currentUser
-  const name =
+  const name = getDisplayName(
     apiProfile?.displayName ||
-    getStringField(apiUser, ['name', 'displayName', 'fullName', 'full_name']) ||
-    draft.name
+      '',
+    getStringField(apiUser, ['name', 'displayName', 'fullName', 'full_name']),
+    draft.name,
+    apiProfile?.username,
+    getStringField(apiUser, ['username']),
+    draft.username,
+  )
   const username = apiProfile?.username || getStringField(apiUser, ['username']) || draft.username
   const email = getStringField(apiUser, ['email']) || draft.email
   const phone = getStringField(apiProfile, ['phone', 'phoneNumber', 'phone_number']) || getStringField(apiUser, ['phone', 'phoneNumber', 'phone_number']) || draft.phone
   const location = apiProfile?.location || ''
   const bio = apiProfile?.bio || ''
-  const initialsSource = name || username || email
+  const initialsSource = name || username || 'Member'
 
   return {
     name,
@@ -960,11 +1324,9 @@ const profileHeadlineParts = computed(() =>
   [profileSkillLabel.value, profileCompanyLabel.value, profileCountryLabel.value].filter(Boolean),
 )
 
-const scoreEntries = computed<Array<{ id: string; title: string; community: string; score: number; typeLabel: string }>>(() => [])
-
-const totalTScore = computed(() => 0)
-
-const questionCount = computed(() => 0)
+const totalTScore = computed(() =>
+  scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+)
 
 const summaryCards = computed(() => [
   {
@@ -975,15 +1337,21 @@ const summaryCards = computed(() => [
   },
   {
     label: 'Questions',
-    value: questionCount.value,
+    value: stats.value.questions || 0,
     icon: Sparkles,
     accentClass: 'bg-emerald-100 text-emerald-700',
   },
   {
-    label: 'Answers & Posts',
-    value: stats.value.posts || 0,
+    label: 'Answers',
+    value: stats.value.answers || 0,
     icon: Rocket,
     accentClass: 'bg-amber-100 text-amber-700',
+  },
+  {
+    label: 'Posts',
+    value: stats.value.posts || 0,
+    icon: BookOpen,
+    accentClass: 'bg-violet-100 text-violet-700',
   },
 ])
 
@@ -1045,7 +1413,7 @@ const editModalTitle = computed(() => {
 
         <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-            <div class="h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
+            <div class="h-24 w-24 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
               <img
                 v-if="profile.avatar"
                 :src="profile.avatar"
@@ -1070,8 +1438,9 @@ const editModalTitle = computed(() => {
                 </h2>
                 <button
                   type="button"
-                  class="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--accent-strong)] transition hover:bg-[var(--surface-secondary)]"
-                  aria-label="Edit display name"
+                  :disabled="isLoadingProfileDetails"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-full text-[var(--accent-strong)] transition hover:bg-[var(--surface-secondary)] disabled:cursor-wait disabled:opacity-50"
+                  :aria-label="isLoadingProfileDetails ? 'Loading profile details' : 'Edit display name'"
                   @click="openProfileDetailsModal"
                 >
                   <Edit2 class="h-4 w-4" />
@@ -1134,14 +1503,14 @@ const editModalTitle = computed(() => {
           </p>
         </div>
 
-        <div class="grid gap-4 lg:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <article
             v-for="card in summaryCards"
             :key="card.label"
             class="flex items-center gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-5 shadow-[var(--shadow-soft)]"
           >
             <div
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
+              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[0.75rem]"
               :class="card.accentClass"
             >
               <component :is="card.icon" class="h-5 w-5" />
@@ -1165,8 +1534,8 @@ const editModalTitle = computed(() => {
     </div>
 
     <div class="space-y-6">
-      <div class="space-y-6">
-        <section id="skills" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+      <div class="flex flex-col gap-6">
+        <section id="skills" class="order-5 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -1184,16 +1553,6 @@ const editModalTitle = computed(() => {
             >
               <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
                 {{ skill.name }}
-              </span>
-              <span
-                class="inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.16em]"
-                :class="{
-                  'bg-blue-100 text-blue-700': skill.level === 'beginner',
-                  'bg-amber-100 text-amber-700': skill.level === 'intermediate',
-                  'bg-green-100 text-green-700': skill.level === 'advanced' || skill.level === 'expert',
-                }"
-              >
-                {{ skill.level || 'beginner' }}
               </span>
               <div class="relative">
                 <button
@@ -1243,9 +1602,9 @@ const editModalTitle = computed(() => {
         </section>
 
         <!-- Portfolio Section -->
-        <section id="portfolio" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section id="portfolio" class="order-4 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Portfolio</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Projects</h2>
             <BookOpen class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
@@ -1263,6 +1622,20 @@ const editModalTitle = computed(() => {
               :key="portfolio.id"
               class="flex h-full flex-col rounded-[1.1rem] bg-[var(--surface-secondary)] p-5 border border-[color:var(--border-soft)] transition hover:border-[var(--accent)]"
             >
+              <div v-if="portfolio.pictures?.[0]" class="-mx-5 -mt-5 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)]">
+                <video
+                  v-if="isVideoMediaUrl(portfolio.pictures[0])"
+                  :src="portfolio.pictures[0]"
+                  class="h-full w-full object-cover"
+                  controls
+                />
+                <img
+                  v-else
+                  :src="portfolio.pictures[0]"
+                  :alt="`${portfolio.title || 'Project'} media`"
+                  class="h-full w-full object-cover"
+                />
+              </div>
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <p class="text-lg font-semibold text-[var(--text-primary)] break-words">{{ portfolio.title }}</p>
@@ -1284,7 +1657,7 @@ const editModalTitle = computed(() => {
                 <div class="relative">
                   <button
                     type="button"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
                     @click.stop="toggleActionMenu('portfolio', portfolio.id)"
                   >
                     <MoreHorizontal class="h-5 w-5" />
@@ -1329,9 +1702,9 @@ const editModalTitle = computed(() => {
         </section>
 
         <!-- Certifications Section -->
-        <section id="certifications" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section id="certifications" class="order-3 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Certifications</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Professional Certifications</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
@@ -1358,7 +1731,7 @@ const editModalTitle = computed(() => {
                 <div class="relative">
                   <button
                     type="button"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
                     @click.stop="toggleActionMenu('certification', certification.id)"
                   >
                     <MoreHorizontal class="h-5 w-5" />
@@ -1403,9 +1776,9 @@ const editModalTitle = computed(() => {
         </section>
 
         <!-- Education Section -->
-        <section id="education" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section id="education" class="order-2 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Education</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Highest Level Education</h2>
             <GraduationCap class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
@@ -1438,7 +1811,7 @@ const editModalTitle = computed(() => {
                 <div class="relative">
                   <button
                     type="button"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
                     @click.stop="toggleActionMenu('education', education.id)"
                   >
                     <MoreHorizontal class="h-5 w-5" />
@@ -1483,9 +1856,9 @@ const editModalTitle = computed(() => {
         </section>
 
         <!-- Experience Section -->
-        <section id="experience" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section id="experience" class="order-1 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="flex items-center justify-between gap-3 mb-5">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Work Experience</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Experience</h2>
             <Briefcase class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
@@ -1521,7 +1894,7 @@ const editModalTitle = computed(() => {
                 <div class="relative">
                   <button
                     type="button"
-                    class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                    class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
                     @click.stop="toggleActionMenu('experience', experience.id)"
                   >
                     <MoreHorizontal class="h-5 w-5" />
@@ -1565,54 +1938,143 @@ const editModalTitle = computed(() => {
           </div>
         </section>
 
-        <!-- Recent Activity Section -->
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
-          <div class="flex items-center justify-between gap-3 mb-5">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Recent activity</h2>
-            <RouterLink to="/feed" class="text-sm font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]">
-              View feed
-            </RouterLink>
+        <!-- Uploads Section -->
+        <section id="uploads" class="order-6 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+          <div class="mb-5 flex items-center justify-between gap-3">
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Uploads</h2>
+            <button
+              type="button"
+              class="inline-flex h-11 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 text-sm font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
+              @click="openUploadModal"
+            >
+              <ImageIcon class="h-4 w-4" />
+              Upload Photos
+            </button>
           </div>
 
-          <div v-if="isLoadingActivity" class="space-y-3">
-            <div
-              v-for="item in 3"
-              :key="item"
-              class="animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          <div v-if="hasProfileUploads" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article
+              v-for="item in profileUploads"
+              :key="item.id"
+              class="overflow-hidden rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]"
             >
-              <div class="flex items-center justify-between gap-3">
-                <div class="h-3 w-24 rounded-full bg-[var(--surface-muted)]" />
-                <div class="h-3 w-20 rounded-full bg-[var(--surface-muted)]" />
+              <div class="aspect-square bg-[var(--surface-secondary)]">
+                <img
+                  v-if="item.mediaType === 'image'"
+                  :src="item.url"
+                  :alt="item.title"
+                  class="h-full w-full object-cover"
+                />
+                <video
+                  v-else
+                  :src="item.url"
+                  class="h-full w-full object-cover"
+                  controls
+                />
               </div>
-              <div class="mt-3 h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
-              <div class="mt-3 h-3 w-full rounded-full bg-[var(--surface-muted)]" />
-              <div class="mt-2 h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
-            </div>
+              <div class="px-4 py-3">
+                <a
+                  v-if="item.externalUrl"
+                  :href="item.externalUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+                >
+                  {{ item.title }}
+                </a>
+                <h3 v-else class="text-base font-semibold text-[var(--text-primary)]">{{ item.title }}</h3>
+              </div>
+            </article>
           </div>
 
-          <div v-else-if="recentActivities.length === 0" class="text-center py-8 text-sm text-[var(--text-secondary)]">
-            <p class="mb-3">No posts shared yet.</p>
-            <RouterLink
-              to="/feed"
-              class="text-sm font-semibold text-[var(--accent-strong)] hover:text-[var(--accent)] transition"
-            >
-              Start sharing →
-            </RouterLink>
-          </div>
-
-          <div v-else class="grid gap-4 lg:grid-cols-2">
-            <AppFeedPost
-              v-for="activity in recentActivities"
-              :key="activity.apiId || activity.slug"
-              :post="activity"
-              expanded
-              allow-edit
-            />
+          <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-8 text-center">
+            <ImageIcon class="mx-auto h-9 w-9 text-[var(--text-tertiary)]" />
+            <p class="mt-3 text-base font-semibold text-[var(--text-primary)]">No profile uploads yet</p>
+            <p class="mt-1 text-sm text-[var(--text-secondary)]">Your uploaded images and videos will appear here.</p>
           </div>
         </section>
       </div>
     </div>
   </section>
+
+  <ResponsiveOverlay
+    v-model="isUploadModalOpen"
+    label="Uploads"
+    title="Uploads"
+    max-width-class="sm:max-w-xl"
+  >
+    <form class="space-y-5" @submit.prevent="submitProfileUpload">
+      <p class="text-sm leading-7 text-[var(--text-secondary)]">
+        If you post image/video and url, the url will open when the upload title is clicked. If no image or video uploaded, the url preview will appear.
+      </p>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Upload title</span>
+        <input
+          v-model="uploadForm.title"
+          type="text"
+          placeholder="photosynthesis in plants"
+          class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">publication/project url</span>
+        <input
+          v-model="uploadForm.externalUrl"
+          type="url"
+          placeholder="www.myproject.here"
+          class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+        />
+      </label>
+
+      <div>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Video/Image</span>
+        <button
+          type="button"
+          class="mt-2 flex min-h-40 w-full items-center justify-center overflow-hidden rounded-[0.65rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 text-center transition hover:border-[color:var(--accent-soft)] hover:bg-[var(--surface-secondary)]"
+          @click="uploadFileInput?.click()"
+          @dragover.prevent
+          @drop.prevent="handleUploadDrop"
+        >
+          <img
+            v-if="uploadPreviewUrl && uploadFile?.type.startsWith('image/')"
+            :src="uploadPreviewUrl"
+            alt="Selected upload preview"
+            class="max-h-56 w-full rounded-[0.55rem] object-cover"
+          />
+          <video
+            v-else-if="uploadPreviewUrl"
+            :src="uploadPreviewUrl"
+            class="max-h-56 w-full rounded-[0.55rem] object-cover"
+            controls
+          />
+          <span v-else class="inline-flex items-center gap-3 text-sm font-medium text-[var(--text-secondary)]">
+            <UploadCloud class="h-4 w-4" />
+            Drop files here or click to upload.
+          </span>
+        </button>
+        <input
+          ref="uploadFileInput"
+          type="file"
+          accept="image/*,video/*"
+          class="sr-only"
+          @change="handleUploadFileChange"
+        />
+        <p v-if="uploadFileName" class="mt-2 text-xs font-medium text-[var(--text-tertiary)]">
+          {{ uploadFileName }}
+        </p>
+      </div>
+
+      <button
+        type="submit"
+        :disabled="isUploadingProfileMedia"
+        class="inline-flex h-12 w-full items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+      >
+        {{ isUploadingProfileMedia ? 'Uploading...' : 'Upload' }}
+      </button>
+    </form>
+  </ResponsiveOverlay>
 
   <div
     v-if="isProfileDetailsModalOpen"
@@ -1692,15 +2154,10 @@ const editModalTitle = computed(() => {
       <div class="flex items-center justify-between gap-4 border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
         <div>
           <h3 class="text-lg font-semibold text-[var(--text-primary)]">{{ profileModalTitle }}</h3>
-          <p class="mt-1 text-sm text-[var(--text-secondary)]">
-            <span v-if="profileModal === 'score'">Your post scores across communities and shared content.</span>
-            <span v-else-if="profileModal === 'followers'">People currently following your profile.</span>
-            <span v-else>Accounts you are following will appear here.</span>
-          </p>
         </div>
         <button
           type="button"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+          class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
           @click="closeProfileModal"
         >
           <X class="h-4 w-4" />
@@ -1728,10 +2185,8 @@ const editModalTitle = computed(() => {
 
           <div
             v-if="scoreEntries.length === 0"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
-          >
-            No scored posts yet. Your community post scores will show here.
-          </div>
+            class="min-h-28 rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)]"
+          />
         </template>
 
         <template v-else-if="profileModal === 'followers'">
@@ -1740,7 +2195,7 @@ const editModalTitle = computed(() => {
             class="space-y-3"
           >
             <div v-for="item in 3" :key="item" class="flex animate-pulse items-center gap-3 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-              <div class="h-10 w-10 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-10 w-10 rounded-[0.75rem] bg-[var(--surface-muted)]" />
               <div class="min-w-0 flex-1 space-y-2">
                 <div class="h-3 w-32 rounded-full bg-[var(--surface-muted)]" />
                 <div class="h-3 w-20 rounded-full bg-[var(--surface-muted)]" />
@@ -1749,30 +2204,51 @@ const editModalTitle = computed(() => {
           </div>
           <template v-else>
             <div
-              v-for="follower in followers"
-              :key="follower.id || follower.followerId"
+              v-for="account in followerAccounts"
+              :key="account.id"
               class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
             >
               <div class="flex items-center gap-3">
-                <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
-                  {{ (follower.followerId?.charAt(0) || 'U').toUpperCase() }}
+                <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+                  <img
+                    v-if="account.avatar"
+                    :src="account.avatar"
+                    :alt="`${account.name} profile image`"
+                    class="h-full w-full object-cover"
+                  />
+                  <span
+                    v-else
+                    class="flex h-full w-full items-center justify-center text-sm font-semibold text-[var(--accent-strong)]"
+                  >
+                    {{ account.initials }}
+                  </span>
                 </div>
                 <div>
-                  <p class="text-sm font-semibold text-[var(--text-primary)]">User {{ follower.followerId }}</p>
-                  <p class="text-xs text-[var(--text-secondary)]">
-                    {{ follower.createdAt ? new Date(follower.createdAt).toLocaleDateString() : 'Recently followed' }}
-                  </p>
+                  <p class="text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
                 </div>
               </div>
-              <Users class="h-5 w-5 text-[var(--text-tertiary)]" />
+              <button
+                v-if="!account.isCurrentUser"
+                type="button"
+                :disabled="followToggles[account.id]"
+                class="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-[0.75rem] px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                :class="
+                  account.isFollowing
+                    ? 'border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-primary)] hover:border-red-200 hover:text-red-500'
+                    : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+                "
+                :title="account.isFollowing ? 'Unfollow' : 'Follow'"
+                @click="toggleFollowFromModal(account.id)"
+              >
+                <component :is="account.isFollowing ? UserCheck : UserPlus" class="h-4 w-4" />
+                {{ account.isFollowing ? 'Unfollow' : 'Follow' }}
+              </button>
             </div>
           </template>
           <div
-            v-if="!isLoadingFollowers && followers.length === 0"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
-          >
-            No followers yet.
-          </div>
+            v-if="!isLoadingFollowers && followerAccounts.length === 0"
+            class="min-h-28 rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)]"
+          />
         </template>
 
         <template v-else>
@@ -1781,22 +2257,39 @@ const editModalTitle = computed(() => {
             :key="account.id"
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
-            <div class="flex items-center gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
-                {{ account.initials }}
+            <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
+              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+                <img
+                  v-if="account.avatar"
+                  :src="account.avatar"
+                  :alt="`${account.name} profile image`"
+                  class="h-full w-full object-cover"
+                />
+                <span
+                  v-else
+                  class="flex h-full w-full items-center justify-center text-sm font-semibold text-[var(--accent-strong)]"
+                >
+                  {{ account.initials }}
+                </span>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
-                <p class="text-xs text-[var(--text-secondary)]">{{ account.subtitle }}</p>
-              </div>
-            </div>
-            <UserRound class="h-5 w-5 text-[var(--text-tertiary)]" />
+              <p class="truncate text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
+            </RouterLink>
+            <button
+              type="button"
+              :disabled="followToggles[account.id]"
+              class="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-red-200 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+              title="Unfollow"
+              @click="toggleFollowFromModal(account.id)"
+            >
+              <UserCheck class="h-4 w-4" />
+              Unfollow
+            </button>
           </div>
           <div
             v-if="following.length === 0"
             class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
           >
-            Following data is not available from the current API yet. This modal is ready and will populate as soon as that endpoint is connected.
+            You are not following anyone yet.
           </div>
         </template>
       </div>

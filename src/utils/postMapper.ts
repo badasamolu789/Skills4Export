@@ -1,8 +1,9 @@
 import { slugify } from '@/utils/slugify'
-import { getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
+import type { PageRecord } from '@/services/pages'
 import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
+import { getDisplayName } from '@/utils/displayName'
 
 const formatPostTime = (value: string) => {
   const date = new Date(value)
@@ -28,19 +29,109 @@ const getInitials = (value: string) => {
     .toUpperCase() || 'CM'
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const getStringValue = (source: unknown, keys: string[]) => {
+  if (!isRecord(source)) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const getNestedRecord = (source: unknown, key: string) => {
+  if (!isRecord(source)) {
+    return null
+  }
+
+  const value = source[key]
+  return isRecord(value) ? value : null
+}
+
 const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
-  return getProfileDisplayName(author) || (post.user_id ? 'Community member' : 'Member')
+  const authorRecord = isRecord(author) ? author : null
+  const authorUser = getNestedRecord(author, 'user')
+  const authorProfile = getNestedRecord(author, 'profile') ?? authorRecord
+  const postUser = isRecord(post.user) ? post.user : null
+
+  return (
+    getDisplayName(
+      getStringValue(authorUser, ['name', 'displayName', 'display_name']),
+      getStringValue(authorProfile, ['displayName', 'display_name', 'name']),
+      getStringValue(authorRecord, ['displayName', 'display_name', 'name']),
+      getStringValue(postUser, ['name', 'displayName', 'display_name']),
+      getStringValue(authorUser, ['username']),
+      getStringValue(authorProfile, ['username']),
+      getStringValue(authorRecord, ['username']),
+      getStringValue(postUser, ['username']),
+    ) ||
+    (post.user_id ? 'Community member' : 'Member')
+  )
 }
 
 const getAuthorTag = (author?: MyProfileData | null) => {
-  const title = author?.experiences?.find((item) => item.title?.trim())?.title?.trim()
-  const skills = author?.skills
-    ?.map((skill) => (skill.name || skill.skill || '').trim())
-    .filter(Boolean)
-    .slice(0, 3) ?? []
-  const parts = [title, ...skills].filter(Boolean)
+  const authorRecord = isRecord(author) ? author : null
+  const profileRecord = getNestedRecord(author, 'profile') ?? authorRecord
+  const rawSkills = Array.isArray(author?.skills)
+    ? author.skills
+    : Array.isArray(profileRecord?.skills)
+      ? profileRecord.skills
+      : []
 
-  return parts.length ? parts.join(' | ') : 'Skills4Export member'
+  const skills = rawSkills
+    .map((skill) => {
+      if (typeof skill === 'string') {
+        return skill.trim()
+      }
+
+      return getStringValue(skill, ['name', 'skill', 'skillName', 'skill_name', 'title', 'label'])
+    })
+    .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
+    .slice(0, 3)
+
+  return skills.join(' | ')
+}
+
+const getAuthorAvatar = (author?: MyProfileData | null) => {
+  const authorRecord = isRecord(author) ? author : null
+  const profileRecord = getNestedRecord(author, 'profile') ?? authorRecord
+
+  return (
+    getStringValue(profileRecord, [
+      'avatar',
+      'avatarUrl',
+      'avatar_url',
+      'profileImage',
+      'profile_image',
+      'profilePhoto',
+      'profile_photo',
+    ]) ||
+    null
+  )
+}
+
+const getPageTag = (page?: PostRecord['page'] | PageRecord | null) => {
+  if (!page) {
+    return 'Page'
+  }
+
+  const pageRecord = isRecord(page) ? page : null
+  const pageType = getStringValue(pageRecord, ['type', 'pageType', 'page_type']).toLowerCase()
+
+  if (pageType === 'business' || pageType === 'student') {
+    return `${pageType[0]?.toUpperCase()}${pageType.slice(1)} page`
+  }
+
+  return 'Page'
 }
 
 export const getOptionalCount = (...values: unknown[]) => {
@@ -67,26 +158,39 @@ export const mapApiPostToFeedPost = (
   post: PostRecord,
   media: PostMediaRecord[] = [],
   author?: MyProfileData | null,
+  communityName?: string,
+  page?: PostRecord['page'] | PageRecord | null,
 ): FeedPost => {
   const imageMedia = media
     .filter((item) => item.url)
     .sort((a, b) => a.display_order - b.display_order)
 
   const authorName = getAuthorName(post, author)
+  const resolvedCommunityName = communityName || post.community?.name || ''
+  const postPageId = post.pageId || post.page_id
+  const resolvedPage = page || post.page
+  const pageAuthorName = resolvedPage?.name?.trim() || ''
+  const resolvedAuthorName = postPageId ? pageAuthorName || 'Page' : authorName
   const authorProfile = {
-    name: authorName,
-    to: `/profile/view/${post.user_id}`,
-    avatarText: getInitials(authorName),
-    avatarSrc: author?.profile?.avatar ?? null,
+    name: resolvedAuthorName,
+    to: postPageId ? `/pages/${resolvedPage?.slug || postPageId}/public` : `/profile/view/${post.user_id}`,
+    avatarText: getInitials(resolvedAuthorName),
+    avatarSrc: postPageId
+      ? getStringValue(resolvedPage, ['avatar', 'logo']) || null
+      : getAuthorAvatar(author),
   }
+  const authorTag = postPageId ? getPageTag(resolvedPage) : getAuthorTag(author)
+  const isFollowingAuthor = postPageId
+    ? Boolean(resolvedPage?.is_follow ?? resolvedPage?.isFollow)
+    : Boolean(post.is_follow)
 
   const basePost = {
     type: getPostCommunityId(post) ? 'community' : 'personal',
     apiId: post.id,
     userId: post.user_id,
     communityId: getPostCommunityId(post),
-    communityName: getPostCommunityId(post) ? 'Community post' : undefined,
-    pageId: post.page_id,
+    communityName: getPostCommunityId(post) ? resolvedCommunityName || 'Community' : undefined,
+    pageId: postPageId,
     originalPostId: post.originalPostId || post.parent_post_id || null,
     createdAt: post.created_at,
     updatedAt: post.updated_at,
@@ -107,7 +211,7 @@ export const mapApiPostToFeedPost = (
     comments: getOptionalCount(post.comments_count, post.comment_count, post.commentsCount),
     isSaved: Boolean(post.is_saved),
     isScored: Boolean(post.is_liked),
-    isFollowing: Boolean(post.is_follow),
+    isFollowing: isFollowingAuthor,
   }
 
   if (getPostCommunityId(post)) {
@@ -116,7 +220,7 @@ export const mapApiPostToFeedPost = (
       type: 'community',
       author: {
         ...authorProfile,
-        tag: getAuthorTag(author),
+        tag: authorTag,
       },
     }
   }
@@ -126,7 +230,7 @@ export const mapApiPostToFeedPost = (
     type: 'personal',
     author: {
       ...authorProfile,
-      tag: getAuthorTag(author),
+      tag: authorTag,
     },
   }
 }
