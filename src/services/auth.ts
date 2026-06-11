@@ -49,6 +49,7 @@ export type AuthSuccessResponse = {
   success?: boolean
   accessToken?: string
   refreshToken?: string
+  refresh_token?: string
   message?: string
   token?: string
   otpId?: string
@@ -64,6 +65,8 @@ export type AuthSuccessResponse = {
     message?: string
     token?: string
     accessToken?: string
+    refreshToken?: string
+    refresh_token?: string
     tokenType?: string
     expiresIn?: number
     user?: Record<string, unknown>
@@ -75,6 +78,8 @@ export type AuthSuccessResponse = {
     session?: {
       token?: string
       accessToken?: string
+      refreshToken?: string
+      refresh_token?: string
       tokenType?: string
       expiresIn?: number
       user?: Record<string, unknown>
@@ -83,6 +88,8 @@ export type AuthSuccessResponse = {
   session?: {
     token?: string
     accessToken?: string
+    refreshToken?: string
+    refresh_token?: string
     tokenType?: string
     expiresIn?: number
     user?: Record<string, unknown>
@@ -104,6 +111,7 @@ export type GoogleTokenRequest = {
 export type AuthSession = {
   token: string
   userId?: string
+  refreshToken?: string
   tokenType?: string
   expiresIn?: number
   user?: Record<string, unknown>
@@ -155,6 +163,7 @@ const AUTH_ROUTES = {
   forgotPassword: '/forgot-password',
   resetPassword: '/reset-password',
   logout: '/logout',
+  refreshToken: '/refresh-token',
   changePassword: '/user/change-password',
   changeEmail: '/user/change-email',
   googleRedirect: '/auth/google',
@@ -202,6 +211,15 @@ export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthS
   return {
     token,
     userId,
+    refreshToken:
+      response.data?.refreshToken ||
+      response.data?.refresh_token ||
+      response.refreshToken ||
+      response.refresh_token ||
+      response.data?.session?.refreshToken ||
+      response.data?.session?.refresh_token ||
+      response.session?.refreshToken ||
+      response.session?.refresh_token,
     tokenType:
       response.data?.tokenType ||
       response.tokenType ||
@@ -257,6 +275,9 @@ export const authService = {
   },
   logout(token?: string | null) {
     return api.post<AuthMessageResponse>(AUTH_ROUTES.logout, undefined, { token })
+  },
+  refreshToken(token?: string | null) {
+    return api.post<AuthSuccessResponse>(AUTH_ROUTES.refreshToken, undefined, { token })
   },
   changePassword(payload: {
     current_password: string

@@ -28,6 +28,7 @@ const PublicProfileView = () => import('@/views/PublicProfileView.vue')
 const PrivacyPolicyView = () => import('@/views/PrivacyPolicyView.vue')
 const FollowersView = () => import('@/views/FollowersView.vue')
 const LoginHistoryView = () => import('@/views/LoginHistoryView.vue')
+const ManageActivitiesView = () => import('@/views/ManageActivitiesView.vue')
 const QuestionAnswerView = () => import('@/views/QuestionAnswerView.vue')
 const ReferralsView = () => import('@/views/ReferralsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
@@ -257,6 +258,18 @@ const router = createRouter({
       },
     },
     {
+      path: '/activities',
+      name: 'manage-activities',
+      component: ManageActivitiesView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
+        hideRightRailAdverts: true,
+      },
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: SettingsView,
@@ -405,7 +418,7 @@ router.beforeEach((to) => {
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     return {
-      name: 'landing',
+      name: 'login',
       query: {
         redirect: to.fullPath,
       },

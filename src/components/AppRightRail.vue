@@ -12,10 +12,12 @@ const props = withDefaults(
   defineProps<{
     pinnedLayout?: boolean
     hideTrendingQuestions?: boolean
+    hideAdverts?: boolean
   }>(),
   {
     pinnedLayout: false,
     hideTrendingQuestions: false,
+    hideAdverts: false,
   },
 )
 
@@ -216,7 +218,9 @@ const loadAdverts = async () => {
 
 onMounted(() => {
   void loadTrendingQuestions()
-  void loadAdverts()
+  if (!props.hideAdverts) {
+    void loadAdverts()
+  }
   realtimeTimer = window.setInterval(() => {
     if (!isLoadingQuestions.value) {
       void loadTrendingQuestions({ background: true })
@@ -302,7 +306,7 @@ onBeforeUnmount(() => {
         </RouterLink>
       </section>
 
-      <section>
+      <section v-if="!props.hideAdverts">
         <div
           v-if="isLoadingAdverts && !rightRailAdvert"
           class="aspect-[4/5] w-full animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"

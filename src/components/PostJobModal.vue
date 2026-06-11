@@ -429,14 +429,6 @@ watch(
 
           <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 sm:px-5">
           <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              class="inline-flex items-center justify-center rounded-[0.8rem] border border-[color:var(--border-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-              @click="closeModal"
-            >
-              Cancel
-            </button>
-
               <button
               type="submit"
               :disabled="isSubmitting"

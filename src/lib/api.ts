@@ -11,6 +11,7 @@ export type ApiRequestOptions = {
   token?: string | null
   suppressErrorModal?: boolean
   retry?: boolean
+  timeoutMs?: number
 }
 
 export type ApiErrorPayload = {
@@ -38,6 +39,16 @@ export class ApiError extends Error {
   }
 }
 
+export const SESSION_EXPIRED_EVENT = 'skills4export:session-expired'
+
+export type SessionExpiredEventDetail = {
+  method: ApiMethod
+  path: string
+  url: string
+  status: number
+  message: string
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.trim() ?? ''
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30000)
 
@@ -59,6 +70,7 @@ const HIGH_PRIORITY_ENDPOINTS = [
 const MAX_RETRIES = 3
 const RETRY_BASE_DELAY = 1000 // 1 second
 const RETRY_MAX_DELAY = 10000 // 10 seconds
+const AUTH_EXPIRED_STATUSES = new Set([401, 419])
 
 // Temporary API debug modal toggle.
 const SHOW_API_DEBUG_MODAL =
@@ -249,6 +261,14 @@ const reportNetworkIssue = ({ offline }: { offline: boolean }) => {
   }
 }
 
+const reportExpiredSession = (detail: SessionExpiredEventDetail) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.dispatchEvent(new CustomEvent<SessionExpiredEventDetail>(SESSION_EXPIRED_EVENT, { detail }))
+}
+
 const logApiRequest = ({
   method,
   url,
@@ -381,10 +401,18 @@ const getRequestPriority = (path: string) => {
   return HIGH_PRIORITY_ENDPOINTS.some(endpoint => path.includes(endpoint)) ? 'high' : 'normal'
 }
 
-const getTimeoutForEndpoint = (path: string) => {
+const getTimeoutForEndpoint = (path: string, timeoutOverride?: number) => {
+  if (typeof timeoutOverride === 'number' && Number.isFinite(timeoutOverride) && timeoutOverride > 0) {
+    return timeoutOverride
+  }
+
   // Shorter timeout for high-priority endpoints
   if (getRequestPriority(path) === 'high') {
     return 10000
+  }
+
+  if (path === '/media/upload' || path.includes('/media/upload')) {
+    return 180000
   }
 
   if (path.startsWith('/posts')) {
@@ -466,6 +494,7 @@ export const apiRequest = async <T>(
     token,
     suppressErrorModal = false,
     retry,
+    timeoutMs,
   }: ApiRequestOptions = {},
 ): Promise<T> => {
   const requestKey = getRequestKey(method, path, body, token)
@@ -508,7 +537,7 @@ export const apiRequest = async <T>(
   }
 
   const makeRequest = async (): Promise<T> => {
-    const endpointTimeout = getTimeoutForEndpoint(path)
+    const endpointTimeout = getTimeoutForEndpoint(path, timeoutMs)
     const { signal: requestSignal, cleanup } = mergeSignals(signal, endpointTimeout)
 
     try {
@@ -539,6 +568,25 @@ export const apiRequest = async <T>(
       const payload = await parseResponse<T | ApiErrorPayload>(response)
 
       if (!response.ok) {
+        const isExpiredAuthenticatedSession = Boolean(token && AUTH_EXPIRED_STATUSES.has(response.status))
+        const message = getErrorMessage(
+          payload as ApiErrorPayload | null,
+          response.status,
+          isExpiredAuthenticatedSession
+            ? 'Your session has expired. Please log in again.'
+            : 'Something went wrong while contacting the server.',
+        )
+
+        if (isExpiredAuthenticatedSession) {
+          reportExpiredSession({
+            method,
+            path,
+            url: requestUrl,
+            status: response.status,
+            message,
+          })
+        }
+
         if (!suppressErrorModal) {
           reportApiError({
             method,
@@ -550,7 +598,7 @@ export const apiRequest = async <T>(
         }
 
         throw new ApiError(
-          getErrorMessage(payload as ApiErrorPayload | null, response.status, 'Something went wrong while contacting the server.'),
+          message,
           response.status,
           (payload as ApiErrorPayload | null) ?? null,
         )

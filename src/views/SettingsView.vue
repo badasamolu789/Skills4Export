@@ -23,7 +23,7 @@ import { postsService, type PostRecord } from '@/services/posts'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore } from '@/stores/pages'
-import { mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 
 type SettingsTab =
   | 'theme'
@@ -166,10 +166,11 @@ const requireAuthToken = () => {
 }
 
 const mapSavedPost = async (post: PostRecord) => {
+  const postUserId = getPostUserId(post)
   const [mediaResponse, authorResponse] = await Promise.all([
     postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
-    post.user_id
-      ? usersService.getUserProfile(post.user_id, authStore.authToken).catch(() => null)
+    postUserId
+      ? usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
       : Promise.resolve(null),
   ])
 

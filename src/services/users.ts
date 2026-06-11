@@ -17,6 +17,10 @@ export type UserProfile = {
   username?: string
   displayName?: string
   bio?: string
+  description?: string
+  about?: string
+  aboutMe?: string
+  about_me?: string
   location?: string
   avatar?: string | null
   avatarUrl?: string | null
@@ -31,9 +35,15 @@ export type UserProfile = {
   website?: string
   linkedin?: string
   github?: string
+  currentJobTitle?: string | null
+  current_job_title?: string | null
+  currentWorkspace?: string | null
+  current_workspace?: string | null
   createdAt?: string
   [key: string]: unknown
 }
+
+export type UserSkillLevel = 'beginner' | 'intermediate' | 'expert'
 
 export type UserSkill = {
   id?: string
@@ -41,7 +51,7 @@ export type UserSkill = {
   name?: string
   skillName?: string
   skill_name?: string
-  level?: 'beginner' | 'intermediate' | 'expert' | string
+  level?: UserSkillLevel | string
   [key: string]: unknown
 }
 
@@ -197,18 +207,72 @@ const normalizeUserProfile = (profile?: UserProfile | null): UserProfile | null 
     'headerImage',
     'header_image',
   ])
+  const bio = getStringFromRecord(record, [
+    'bio',
+    'description',
+    'about',
+    'aboutMe',
+    'about_me',
+  ])
 
   return {
     ...profile,
+    bio,
     avatar: avatar || profile.avatar || null,
     banner: banner || profile.banner || null,
   }
 }
 
-const normalizeUserSkill = (skill: UserSkill): UserSkill => {
+const normalizeSkillLevel = (value: unknown): UserSkillLevel | string | undefined => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+
+  if (normalized === 'advanced') {
+    return 'expert'
+  }
+
+  return normalized
+}
+
+const toApiSkillLevel = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return undefined
+  }
+
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'expert' ? 'advanced' : normalized
+}
+
+export const normalizeUserSkill = (skill: unknown): UserSkill => {
+  if (typeof skill === 'string') {
+    const name = skill.trim()
+
+    return {
+      name,
+      skill: name,
+    }
+  }
+
+  if (!isRecord(skill)) {
+    return {
+      name: '',
+      skill: '',
+    }
+  }
+
   const record = skill as Record<string, unknown>
   const nestedSkill = isRecord(record.skill) ? record.skill : null
-  const nestedName = nestedSkill ? getStringFromRecord(nestedSkill, ['name', 'skill', 'title']) : ''
+  const nestedName = nestedSkill
+    ? getStringFromRecord(nestedSkill, ['name', 'skill', 'title'])
+    : typeof record.skill === 'string'
+      ? record.skill.trim()
+      : ''
+  const id =
+    getStringFromRecord(record, ['id', 'skillId', 'skill_id', 'uuid']) ||
+    (nestedSkill ? getStringFromRecord(nestedSkill, ['id', 'skillId', 'skill_id', 'uuid']) : '')
   const name =
     getStringFromRecord(record, ['name', 'skillName', 'skill_name', 'title', 'label']) ||
     (typeof record.skill === 'string' ? record.skill.trim() : '') ||
@@ -216,9 +280,34 @@ const normalizeUserSkill = (skill: UserSkill): UserSkill => {
 
   return {
     ...skill,
+    ...(id ? { id } : {}),
     name,
-    skill: typeof skill.skill === 'string' ? skill.skill : name,
+    skill: typeof record.skill === 'string' ? record.skill : name,
+    level: normalizeSkillLevel(record.level),
   }
+}
+
+export const normalizeUserSkills = (...sources: unknown[]): UserSkill[] => {
+  const merged: UserSkill[] = []
+  const seen = new Set<string>()
+
+  sources.forEach((source) => {
+    getSkillListFromValue(source)
+      .map(normalizeUserSkill)
+      .forEach((skill) => {
+        const name = skill.name || skill.skill || ''
+        const key = (skill.id || name).toLowerCase()
+
+        if (!name || seen.has(key)) {
+          return
+        }
+
+        seen.add(key)
+        merged.push(skill)
+      })
+  })
+
+  return merged
 }
 
 const normalizeUserSkillResponse = <T extends { data?: UserSkill | null }>(response: T): T => ({
@@ -226,9 +315,9 @@ const normalizeUserSkillResponse = <T extends { data?: UserSkill | null }>(respo
   data: response.data ? normalizeUserSkill(response.data) as T['data'] : response.data,
 })
 
-const getSkillListFromValue = (value: unknown): UserSkill[] => {
+const getSkillListFromValue = (value: unknown): unknown[] => {
   if (Array.isArray(value)) {
-    return value as UserSkill[]
+    return value
   }
 
   if (!isRecord(value)) {
@@ -237,7 +326,7 @@ const getSkillListFromValue = (value: unknown): UserSkill[] => {
 
   for (const key of ['skills', 'userSkills', 'user_skills', 'data', 'items', 'records', 'results']) {
     if (Array.isArray(value[key])) {
-      return value[key] as UserSkill[]
+      return value[key] as unknown[]
     }
   }
 
@@ -254,9 +343,7 @@ const getSkillListFromValue = (value: unknown): UserSkill[] => {
 
 export const collectUserSkills = (...sources: unknown[]): UserSkill[] => {
   for (const source of sources) {
-    const skills = getSkillListFromValue(source)
-      .map(normalizeUserSkill)
-      .filter((skill) => skill.name || skill.skill)
+    const skills = normalizeUserSkills(source)
 
     if (skills.length) {
       return skills
@@ -267,7 +354,7 @@ export const collectUserSkills = (...sources: unknown[]): UserSkill[] => {
 }
 
 const normalizeUserSkillsListResponse = <T extends { data?: UserSkill[] }>(response: T): T => {
-  const skills = collectUserSkills(response.data)
+  const skills = normalizeUserSkills(response.data)
 
   if (skills.length || Array.isArray(response.data)) {
     return {
@@ -342,6 +429,10 @@ export type UpsertUserProfileRequest = {
   website?: string
   linkedin?: string
   github?: string
+  currentJobTitle?: string
+  current_job_title?: string
+  currentWorkspace?: string
+  current_workspace?: string
 }
 
 export type UpdateUserRequest = {
@@ -361,7 +452,7 @@ export type UpdateUserResponse = {
 // Skills
 export type AddUserSkillRequest = {
   skill: string
-  level?: string
+  level?: UserSkillLevel | string
 }
 
 export type UserSkillResponse = {
@@ -524,6 +615,7 @@ const USER_ROUTES = {
   userProfile: (id: string) => `/users/${id}/profile`,
   userAvatar: (id: string) => `/users/${id}/profile/avatar`,
   userBanner: (id: string) => `/users/${id}/profile/banner`,
+  legacyExperienceById: (id: string) => `/experience/${id}`,
   // Skills
   userSkills: (id: string) => `/users/${id}/skills`,
   userSkillById: (id: string, skillId: string) => `/users/${id}/skills/${skillId}`,
@@ -600,7 +692,7 @@ export const usersService = {
     options?: UserRequestOptions,
   ) {
     return api
-      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
+      .put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
       .then(normalizeUserProfileResponse)
   },
   uploadUserAvatar(
@@ -664,8 +756,14 @@ export const usersService = {
     token?: string | null,
     options?: UserRequestOptions,
   ) {
+    const apiLevel = toApiSkillLevel(payload.level)
+    const requestPayload = {
+      ...payload,
+      ...(apiLevel ? { level: apiLevel } : {}),
+    }
+
     return api
-      .post<UserSkillResponse>(USER_ROUTES.userSkills(userId), payload, { token, ...options })
+      .post<UserSkillResponse>(USER_ROUTES.userSkills(userId), requestPayload, { token, ...options })
       .then(normalizeUserSkillResponse)
   },
 
@@ -818,7 +916,7 @@ export const usersService = {
 
   updateUserExperience(userId: string, experienceId: string, payload: AddUserExperienceRequest, token?: string | null) {
     return api.put<UserExperienceResponse>(
-      USER_ROUTES.userExperienceById(userId, experienceId),
+      USER_ROUTES.legacyExperienceById(experienceId),
       payload,
       { token },
     )

@@ -391,39 +391,26 @@ const uploadAnswerAttachments = async () => {
   const uploadedUrls: Array<{ url: string; mediaType: string }> = []
 
   for (const file of answerAttachments.value) {
-    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-    const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
-
-    if (!uploadResponse.public_id) {
-      throw new Error('Media upload completed without a public ID.')
-    }
-
     const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
-    const registerResponse = await mediaService.registerMedia(
-      {
-        publicId: uploadResponse.public_id,
-        kind: mediaType,
-      },
-      authStore.authToken,
-    )
+    const uploadResponse = await mediaService.uploadMediaFile(file, {
+      kind: mediaType === 'video' ? 'video' : 'post_image',
+      title: file.name,
+      token: authStore.authToken,
+    })
+    const assetId = uploadResponse.data.assetId || uploadResponse.data.id
+    const url = uploadResponse.data.url || ''
 
-    const result = await mediaService
-      .waitForProcessedMediaResult(registerResponse.data.jobId, {
-        token: authStore.authToken,
-      })
-      .catch(() => null)
-
-    if (result?.assetId) {
-      mediaAssetIds.push(result.assetId)
-      if (result.url || uploadResponse.secure_url) {
+    if (assetId) {
+      mediaAssetIds.push(assetId)
+      if (url) {
         uploadedUrls.push({
-          url: result.url || uploadResponse.secure_url || '',
+          url,
           mediaType,
         })
       }
-    } else if (result?.url || uploadResponse.secure_url) {
+    } else if (url) {
       fallbackMedia.push({
-        url: result?.url || uploadResponse.secure_url || '',
+        url,
         mediaType,
       })
     }
@@ -1316,15 +1303,6 @@ onBeforeUnmount(() => {
         <ArrowUp class="h-4 w-4 rotate-45" />
       </button>
 
-      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          class="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--danger)] px-4 text-sm font-semibold text-white transition hover:opacity-90"
-          @click="closeAnswerModal"
-        >
-          Close
-        </button>
-      </div>
     </div>
   </ResponsiveOverlay>
 </template>

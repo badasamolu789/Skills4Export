@@ -62,8 +62,21 @@ export type UpdatePageRequest = Partial<CreatePageRequest>
 
 export type UploadPageAvatarFileResponse = {
   success: boolean
+  message?: string
   data: {
-    jobId: string
+    jobId?: string
+    assetId?: string
+    id?: string
+    url?: string
+    publicId?: string
+    kind?: string
+    title?: string | null
+    mimeType?: string | null
+    sizeBytes?: number | null
+    avatar?: string | null
+    coverImage?: string | null
+    cover_image?: string | null
+    page?: Partial<PageRecord> | null
   }
 }
 
@@ -185,7 +198,9 @@ const PAGE_ROUTES = {
   myPages: '/me/pages',
   pageById: (id: string) => `/pages/${id}`,
   pageFollow: (id: string) => `/pages/${id}/follow`,
+  pageFollowers: (id: string) => `/pages/${id}/followers`,
   pageAvatarFile: (id: string) => `/pages/${id}/avatar-file`,
+  pageCoverFile: (id: string) => `/pages/${id}/cover-file`,
   pageUploads: (id: string) => `/page/${id}/uploads`,
 } as const
 
@@ -380,6 +395,16 @@ export const pagesService = {
     })
   },
 
+  uploadPageCoverFile(id: string, file: File, token?: string | null) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageCoverFile(id), formData, {
+      token,
+      retry: false,
+    })
+  },
+
   listPageUploads(id: string, token?: string | null) {
     return api.get<PaginatorPayload<Record<string, unknown>>>(withQuery(PAGE_ROUTES.pageUploads(id), {
       per_page: 100,
@@ -397,5 +422,12 @@ export const pagesService = {
 
   unfollowPage(id: string, token?: string | null) {
     return api.delete<ApiSuccessResponse<Record<string, unknown>>>(PAGE_ROUTES.pageFollow(id), { token })
+  },
+
+  listPageFollowers(id: string, params: PageListParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<Record<string, unknown>>>(
+      withQuery(PAGE_ROUTES.pageFollowers(id), params),
+      { token },
+    )
   },
 }

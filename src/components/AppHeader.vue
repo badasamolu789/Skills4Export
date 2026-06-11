@@ -25,7 +25,7 @@ import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import type { NotificationItem } from '@/services/notifications'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
-import { postsService } from '@/services/posts'
+import { postsService, type CreatePostRequest, type PostMediaRecord, type PostRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
@@ -43,6 +43,16 @@ type MenuItem = {
   label: string
   to: string
   action?: 'logout'
+}
+
+const POST_CREATED_EVENT = 'skills4export:post-created'
+const RECENT_CREATED_POSTS_KEY = 'skills4export:recent-created-posts'
+const MAX_RECENT_CREATED_POSTS = 10
+
+type RecentCreatedPost = {
+  storedAt: string
+  post: PostRecord
+  media: PostMediaRecord[]
 }
 
 const props = withDefaults(
@@ -189,6 +199,27 @@ const clearPostFile = () => {
   if (postFileInput.value) {
     postFileInput.value.value = ''
   }
+}
+
+const rememberCreatedPost = (item: RecentCreatedPost) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  let existing: RecentCreatedPost[] = []
+
+  try {
+    existing = JSON.parse(window.sessionStorage.getItem(RECENT_CREATED_POSTS_KEY) || '[]') as RecentCreatedPost[]
+  } catch {
+    existing = []
+  }
+
+  const nextItems = [
+    item,
+    ...existing.filter((entry) => entry.post.id !== item.post.id),
+  ].slice(0, MAX_RECENT_CREATED_POSTS)
+
+  window.sessionStorage.setItem(RECENT_CREATED_POSTS_KEY, JSON.stringify(nextItems))
 }
 
 const getPlainTextFromHtml = (value: string) => {
@@ -405,6 +436,7 @@ const submitQuestion = async () => {
 type UploadedPostMedia = {
   mediaAssetIds: string[]
   fallbackUrl?: string
+  uploadedUrl?: string
   mediaType?: string
 }
 
@@ -415,50 +447,32 @@ const uploadSelectedPostMedia = async () => {
     } satisfies UploadedPostMedia
   }
 
-  const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-  const uploadResponse = await mediaService.uploadCloudinaryFile(postFile.value, signatureResponse.data)
-
-  if (!uploadResponse.public_id) {
-    throw new Error('Media upload completed without a public ID.')
-  }
-
-  const registerResponse = await mediaService.registerMedia(
-    {
-      publicId: uploadResponse.public_id,
-      kind: postFile.value.type.startsWith('video/') ? 'video' : 'image',
-    },
-    authStore.authToken,
-  )
-
   const mediaType = postFile.value.type.startsWith('video/') ? 'video' : 'image'
+  const uploadResponse = await mediaService.uploadMediaFile(postFile.value, {
+    kind: mediaType === 'video' ? 'video' : 'post_image',
+    title: postFile.value.name,
+    token: authStore.authToken,
+  })
+  const assetId = uploadResponse.data.assetId || uploadResponse.data.id
+  const url = uploadResponse.data.url
 
-  try {
-    const assetId = await mediaService.waitForProcessedMediaAsset(
-      registerResponse.data.jobId,
-      {
-        token: authStore.authToken,
-      },
-    )
-
+  if (assetId) {
     return {
       mediaAssetIds: [assetId],
+      uploadedUrl: url,
       mediaType,
     } satisfies UploadedPostMedia
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === 'Media processing completed without an asset ID.' &&
-      uploadResponse.secure_url
-    ) {
-      return {
-        mediaAssetIds: [],
-        fallbackUrl: uploadResponse.secure_url,
-        mediaType,
-      } satisfies UploadedPostMedia
-    }
-
-    throw error
   }
+
+  if (url) {
+    return {
+      mediaAssetIds: [],
+      fallbackUrl: url,
+      mediaType,
+    } satisfies UploadedPostMedia
+  }
+
+  throw new Error('Media upload completed without an asset ID or URL.')
 }
 
 const submitPost = async () => {
@@ -476,6 +490,13 @@ const submitPost = async () => {
     return
   }
 
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before creating posts.',
+    })
+    return
+  }
+
   isSubmittingPost.value = true
   const loadingToastId = toast.loading(postFile.value ? 'Uploading media...' : 'Creating post...')
 
@@ -487,14 +508,44 @@ const submitPost = async () => {
     }
 
     const selectedCommunityId = postAudienceId.value || null
-    const postPayload = {
+    const mediaAssetIds = uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined
+    const postPayload: CreatePostRequest = {
+      userId: authStore.userId,
       communityId: selectedCommunityId,
+      community_id: selectedCommunityId,
       title,
       content,
-      mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
+      visibility: selectedCommunityId ? 'community' : 'public',
+      mediaAssetIds,
+      media_asset_ids: mediaAssetIds,
     }
 
     const response = await postsService.createPost(postPayload, authStore.authToken)
+    const createdAt = response.data.created_at || (response.data as PostRecord & { createdAt?: string }).createdAt || new Date().toISOString()
+    const updatedAt = response.data.updated_at || (response.data as PostRecord & { updatedAt?: string }).updatedAt || createdAt
+    const createdPost = {
+      ...response.data,
+      user_id: response.data.user_id || authStore.userId,
+      community_id: response.data.community_id ?? selectedCommunityId,
+      page_id: response.data.page_id ?? null,
+      title: response.data.title || title,
+      content: response.data.content || content,
+      created_at: createdAt,
+      updated_at: updatedAt,
+    } satisfies PostRecord
+    const immediateMediaUrl = uploadedMedia.uploadedUrl || uploadedMedia.fallbackUrl
+    const fallbackMedia: PostMediaRecord[] = immediateMediaUrl
+      ? [
+          {
+            id: `immediate-${response.data.id}`,
+            post_id: response.data.id,
+            media_type: uploadedMedia.mediaType || 'image',
+            url: immediateMediaUrl,
+            thumbnail_url: uploadedMedia.mediaType === 'image' ? immediateMediaUrl : '',
+            display_order: 0,
+          },
+        ]
+      : []
 
     if (uploadedMedia.fallbackUrl) {
       await postsService.attachPostMedia(
@@ -513,6 +564,12 @@ const submitPost = async () => {
       description: title,
     })
 
+    rememberCreatedPost({
+      storedAt: new Date().toISOString(),
+      post: createdPost,
+      media: fallbackMedia,
+    })
+    window.dispatchEvent(new CustomEvent(POST_CREATED_EVENT, { detail: { postId: response.data.id } }))
     await router.push(`/posts/${response.data.id}`)
   } catch (error) {
     const message =
@@ -968,7 +1025,7 @@ onMounted(() => {
 
     <ResponsiveOverlay
       :model-value="activeComposer === 'ask'"
-      label="Composer"
+      label="Ask"
       title="Ask Question"
       max-width-class="sm:max-w-2xl"
       @update:model-value="(value) => { if (!value) closeComposer() }"
@@ -1024,7 +1081,7 @@ onMounted(() => {
 
     <ResponsiveOverlay
       :model-value="activeComposer === 'post'"
-      label="Composer"
+      label="Post"
       title="Create Post"
       max-width-class="sm:max-w-4xl"
       @update:model-value="(value) => { if (!value) closeComposer() }"

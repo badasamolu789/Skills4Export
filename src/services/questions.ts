@@ -107,6 +107,17 @@ export type CreateQuestionRequest = {
   visibility?: 'public' | 'community_only' | 'community_public'
 }
 
+export type UpdateQuestionRequest = {
+  title?: string
+  body: string
+  communityId?: string | null
+  visibility?: 'public' | 'community_only' | 'community_public' | string
+}
+
+export type DeleteQuestionRequest = {
+  userId?: string
+}
+
 export type CreateAnswerRequest = {
   content: string
   parentAnswerId?: string | null
@@ -137,6 +148,10 @@ export type ListQuestionsParams = {
   sort?: string
   communityId?: string | null
   visibility?: string
+  'filters[search]'?: string
+  'filters[community_id]'?: string | null
+  'sort[field]'?: string
+  'sort[direction]'?: 'asc' | 'desc' | string
 }
 
 type QuestionRequestOptions = Pick<ApiRequestOptions, 'suppressErrorModal' | 'signal'>
@@ -151,8 +166,8 @@ const QUESTION_ROUTES = {
   questionReport: (questionId: string) => `/question/${questionId}/report`,
   answerReactions: (answerId: string) => `/answers/${answerId}/reactions`,
   answerComments: (answerId: string) => `/answers/${answerId}/comments`,
-  answerSave: (answerId: string) => `/answers/${answerId}/save`,
-  answerReport: (answerId: string) => `/answers/${answerId}/report`,
+  answerSave: (answerId: string) => `/answer/${answerId}/save`,
+  answerReport: (answerId: string) => `/answer/${answerId}/report`,
   answerShares: (answerId: string) => `/answers/${answerId}/shares`,
 } as const
 
@@ -171,13 +186,54 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
   return value ? `${path}?${value}` : path
 }
 
+const SORT_FIELD_ALIASES: Record<string, string> = {
+  createdAt: 'created_at',
+  created_at: 'created_at',
+  updatedAt: 'updated_at',
+  updated_at: 'updated_at',
+  commentsCount: 'comment_count',
+  commentCount: 'comment_count',
+  comment_count: 'comment_count',
+  title: 'title',
+  score: 'score',
+}
+
+const normalizeSortField = (field: string) => SORT_FIELD_ALIASES[field] || field
+
+const normalizeFeedQueryParams = (params: ListQuestionsParams = {}) => {
+  const normalized: Record<string, unknown> = { ...params }
+
+  if (params.q && !normalized['filters[search]']) {
+    normalized['filters[search]'] = params.q
+  }
+
+  if (params.communityId && !normalized['filters[community_id]']) {
+    normalized['filters[community_id]'] = params.communityId
+    normalized.community_id = params.communityId
+  }
+
+  if (params.sort && !normalized['sort[field]']) {
+    const descending = params.sort.startsWith('-')
+    const field = descending ? params.sort.slice(1) : params.sort
+    normalized['sort[field]'] = normalizeSortField(field)
+    normalized['sort[direction]'] = descending ? 'desc' : 'asc'
+  }
+
+  if (typeof normalized['sort[field]'] === 'string') {
+    normalized['sort[field]'] = normalizeSortField(normalized['sort[field]'])
+    delete normalized.sort
+  }
+
+  return normalized
+}
+
 export const questionsService = {
   createQuestion(payload: CreateQuestionRequest, token?: string | null) {
     return api.post<ApiSuccessResponse<QuestionRecord>>(QUESTION_ROUTES.questions, payload, { token })
   },
 
   listQuestions(params: ListQuestionsParams = {}, token?: string | null, options?: QuestionRequestOptions) {
-    return api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, params), {
+    return api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, normalizeFeedQueryParams(params)), {
       token,
       ...options,
     })
@@ -187,6 +243,21 @@ export const questionsService = {
     return api.get<ApiSuccessResponse<QuestionRecord>>(
       QUESTION_ROUTES.questionById(id, includeAnswers),
       { token },
+    )
+  },
+
+  updateQuestion(id: string, payload: UpdateQuestionRequest, token?: string | null) {
+    return api.put<ApiSuccessResponse<QuestionRecord>>(
+      QUESTION_ROUTES.questionById(id),
+      payload,
+      { token },
+    )
+  },
+
+  deleteQuestion(id: string, payload: DeleteQuestionRequest, token?: string | null) {
+    return api.delete<ApiSuccessResponse<unknown[]>>(
+      QUESTION_ROUTES.questionById(id),
+      { body: payload, token },
     )
   },
 
@@ -246,7 +317,7 @@ export const questionsService = {
   },
 
   toggleAnswerSave(answerId: string, payload: { userId?: string }, token?: string | null) {
-    return api.post<ApiSuccessResponse<{ answerId?: string; userId?: string; saved: boolean }>>(
+    return api.put<ApiSuccessResponse<{ answerId?: string; userId?: string; saved: boolean }>>(
       QUESTION_ROUTES.answerSave(answerId),
       payload,
       { token },

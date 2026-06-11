@@ -519,15 +519,6 @@ watch(
           </button>
         </div>
 
-        <div class="flex justify-end border-t border-[color:var(--border-soft)] px-4 py-5 sm:px-5">
-          <button
-            type="button"
-            class="inline-flex h-11 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90"
-            @click="isApplyModalOpen = false"
-          >
-            Close
-          </button>
-        </div>
       </form>
     </ResponsiveOverlay>
 
@@ -584,15 +575,6 @@ watch(
         </div>
         </div>
 
-        <div class="flex justify-end border-t border-[color:var(--border-soft)] px-4 py-5 sm:px-5">
-          <button
-            type="button"
-            class="inline-flex h-11 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90"
-            @click="isReferralModalOpen = false"
-          >
-            Close
-          </button>
-        </div>
       </div>
     </ResponsiveOverlay>
   </section>

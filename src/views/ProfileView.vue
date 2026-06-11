@@ -5,14 +5,14 @@ import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, Graduat
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
-import { collectUserSkills, usersService } from '@/services/users'
+import { normalizeUserSkills, usersService } from '@/services/users'
 import { mediaService } from '@/services/media'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount } from '@/utils/postMapper'
+import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
 import { getQuestionUserId } from '@/utils/questionMapper'
-import { getDisplayName } from '@/utils/displayName'
+import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower } from '@/services/users'
 
 type ProfileUploadItem = {
@@ -34,6 +34,7 @@ const isLoadingCertifications = ref(false)
 const isLoadingEducations = ref(false)
 const isLoadingExperiences = ref(false)
 const isLoadingActivity = ref(false)
+const skillsLoadError = ref('')
 const isProfileDetailsModalOpen = ref(false)
 const isLoadingProfileDetails = ref(false)
 const isSavingProfileDetails = ref(false)
@@ -209,32 +210,16 @@ const submitProfileUpload = async () => {
   isUploadingProfileMedia.value = true
 
   try {
-    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-    const uploadResponse = await mediaService.uploadCloudinaryFile(selectedFile, signatureResponse.data)
-
-    if (!uploadResponse.public_id) {
-      throw new Error('Media upload completed without a public ID.')
-    }
-
-    const registerResponse = await mediaService.registerMedia(
-      {
-        publicId: uploadResponse.public_id,
-        title,
-        ...(externalUrl ? { externalUrl } : {}),
-        kind: mediaType,
-        userId: authStore.userId,
-      },
-      authStore.authToken,
-    )
-
-    const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+    const uploadResponse = await mediaService.uploadMediaFile(selectedFile, {
+      kind: mediaType,
+      title,
       token: authStore.authToken,
     })
-    const remoteUrl = processed.url || uploadResponse.secure_url || uploadPreviewUrl.value
+    const remoteUrl = uploadResponse.data.url || uploadPreviewUrl.value
     const shouldKeepPreview = remoteUrl === uploadPreviewUrl.value
 
     profileUploads.value.unshift({
-      id: processed.assetId || makeUploadClientId(),
+      id: uploadResponse.data.assetId || uploadResponse.data.id || makeUploadClientId(),
       title,
       ...(externalUrl ? { externalUrl } : {}),
       url: remoteUrl,
@@ -256,48 +241,54 @@ const submitProfileUpload = async () => {
 
 const toDateInputValue = (value?: string | null) => optionalField(value)?.slice(0, 10) || ''
 
-const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown }) => {
-  const record = skill as Record<string, unknown>
-  const directValue = [record.name, record.skillName, record.skill_name, record.title, record.skill]
-    .find((value) => typeof value === 'string' && value.trim())
+const getSkillDisplayName = (skill: UserSkill) => skill.name || skill.skill || ''
 
-  if (typeof directValue === 'string') {
-    return directValue.trim()
+const getProfileUserId = (data?: MyProfileData | null) =>
+  data?.user?.id || data?.profile?.userId || authStore.userId
+
+let skillsRequestId = 0
+
+const toSkillViewItem = (skill: UserSkill, index = 0): UserSkill => {
+  const name = getSkillDisplayName(skill)
+
+  return {
+    ...skill,
+    id: skill.id || `skill-${name.toLowerCase().replace(/\s+/g, '-') || index}`,
+    name,
+    skill: typeof skill.skill === 'string' ? skill.skill : name,
   }
-
-  const nestedSkill = record.skill
-
-  if (nestedSkill && typeof nestedSkill === 'object') {
-    const nestedRecord = nestedSkill as Record<string, unknown>
-    const nestedValue = [nestedRecord.name, nestedRecord.skill, nestedRecord.title, nestedRecord.label]
-      .find((value) => typeof value === 'string' && value.trim())
-
-    if (typeof nestedValue === 'string') {
-      return nestedValue.trim()
-    }
-  }
-
-  return ''
 }
 
-const toSkillArray = (value: unknown): UserSkill[] => {
-  if (Array.isArray(value)) {
-    return value as UserSkill[]
-  }
+const loadUserSkills = async (userId: string) => {
+  const requestId = ++skillsRequestId
+  isLoadingSkills.value = true
+  skillsLoadError.value = ''
 
-  if (!value || typeof value !== 'object') {
-    return []
-  }
+  try {
+    const response = await usersService.listUserSkills(userId, authStore.authToken)
 
-  const record = value as Record<string, unknown>
+    if (requestId !== skillsRequestId) {
+      return
+    }
 
-  for (const key of ['data', 'skills', 'items', 'records', 'results']) {
-    if (Array.isArray(record[key])) {
-      return record[key] as UserSkill[]
+    skills.value = normalizeUserSkills(response.data)
+      .map(toSkillViewItem)
+      .filter((skill) => skill.name)
+  } catch (error) {
+    if (requestId !== skillsRequestId) {
+      return
+    }
+
+    skills.value = []
+    skillsLoadError.value =
+      error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'Unable to load skills.'
+  } finally {
+    if (requestId === skillsRequestId) {
+      isLoadingSkills.value = false
     }
   }
-
-  return []
 }
 
 const toggleActionMenu = (type: 'skill' | 'portfolio' | 'certification' | 'education' | 'experience', id: string | undefined) => {
@@ -525,6 +516,7 @@ const handleDelete = async (
 
 const profileDetailsForm = ref({
   displayName: '',
+  bio: '',
   location: '',
   currentWorkplace: '',
   currentJobTitle: '',
@@ -540,7 +532,7 @@ const loadRecentActivity = async (userId: string) => {
     ])
     const allPosts = postsResult.status === 'fulfilled' ? postsResult.value.data : []
     const allQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data : []
-    const userPosts = allPosts.filter((post: PostRecord) => post.user_id === userId)
+    const userPosts = allPosts.filter((post: PostRecord) => getPostUserId(post) === userId)
     const userQuestions = allQuestions.filter((question: QuestionRecord) => getQuestionUserId(question) === userId)
     const [postCommentResults, questionAnswerResults] = await Promise.all([
       Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),
@@ -615,8 +607,10 @@ const loadProfile = async () => {
     authStore.setCurrentUser(profileResponse.data?.user ?? null)
     authStore.setUserProfile(profileResponse.data?.profile ?? null)
 
-    if (profileResponse.data?.user?.id) {
-      authStore.setUserId(profileResponse.data.user.id)
+    const loadedUserId = getProfileUserId(profileResponse.data)
+
+    if (loadedUserId) {
+      authStore.setUserId(loadedUserId)
     }
 
     if (profileResponse.data?.user?.email && typeof profileResponse.data.user.email === 'string') {
@@ -665,12 +659,16 @@ const loadProfile = async () => {
       }
     }
 
-    const loadedUserId = profileResponse.data?.user?.id || authStore.userId
+    if (loadedUserId) {
+      await loadUserSkills(loadedUserId)
+    } else {
+      skills.value = []
+      skillsLoadError.value = 'Unable to load skills because the profile response did not include a user id.'
+    }
 
-    const [skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
+    const [portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
       loadedUserId
         ? await Promise.allSettled([
-            usersService.listUserSkills(loadedUserId, authStore.authToken),
             usersService.listUserPortfolios(loadedUserId, authStore.authToken),
             usersService.listUserCertifications(loadedUserId, authStore.authToken),
             usersService.listUserEducations(loadedUserId, authStore.authToken),
@@ -678,9 +676,6 @@ const loadProfile = async () => {
           ])
         : []
 
-    const sourceSkills = skillsResult?.status === 'fulfilled'
-      ? collectUserSkills(skillsResult.value.data, profileResponse.data?.skills, profileResponse.data)
-      : collectUserSkills(profileResponse.data?.skills, profileResponse.data)
     const sourcePortfolios = portfoliosResult?.status === 'fulfilled'
       ? portfoliosResult.value.data
       : profileResponse.data?.portfolios ?? []
@@ -694,19 +689,6 @@ const loadProfile = async () => {
       ? experiencesResult.value.data
       : profileResponse.data?.experiences ?? []
 
-    const profileSkills = sourceSkills.length
-      ? sourceSkills
-      : authStore.signUpDraft.interests.map((name, index) => ({
-          id: `draft-skill-${index}`,
-          name,
-        }))
-
-    skills.value = profileSkills.map((skill) => ({
-      id: skill.id || '',
-      name: getSkillDisplayName(skill),
-      level: 'level' in skill ? skill.level : undefined,
-    })).filter((skill) => skill.name)
-
     portfolios.value = sourcePortfolios
 
     certifications.value = sourceCertifications
@@ -714,6 +696,17 @@ const loadProfile = async () => {
     educations.value = sourceEducations
 
     experiences.value = sourceExperiences
+    const currentExperience = sourceExperiences.find((experience) => Boolean(experience.isCurrent)) || sourceExperiences[0]
+    const currentTitle = currentExperience?.title?.trim()
+    const currentWorkplace = currentExperience?.company?.trim()
+
+    if (currentTitle) {
+      authStore.signUpDraft.jobTitle = currentTitle
+    }
+
+    if (currentWorkplace) {
+      authStore.signUpDraft.workplace = currentWorkplace
+    }
 
     // Load followers data separately
     if (profileResponse.data?.user?.id) {
@@ -721,6 +714,7 @@ const loadProfile = async () => {
       await loadRecentActivity(profileResponse.data.user.id)
     }
   } catch (error) {
+    isLoadingSkills.value = false
     if (error instanceof ApiError && error.status === 404) {
       authStore.setUserProfile(null)
       return
@@ -833,6 +827,13 @@ const toggleFollowFromModal = async (targetUserId: string) => {
     return
   }
 
+  if (authStore.userId && targetUserId === authStore.userId) {
+    toast.info('This is your profile', {
+      description: 'You cannot follow your own account.',
+    })
+    return
+  }
+
   if (!authStore.isAuthenticated) {
     return
   }
@@ -887,15 +888,22 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
 
   profileDetailsForm.value = {
     displayName:
-      getDisplayName(
+      toInitialCaps(getDisplayName(
         profileData?.displayName,
         userData?.name,
         authStore.signUpDraft.name,
         profileData?.username,
-      ),
-    location: profileData?.location || '',
-    currentWorkplace: currentExperience?.company || '',
-    currentJobTitle: currentExperience?.title || '',
+      )),
+    bio: profileData?.bio || authStore.signUpDraft.headline || '',
+    location: toInitialCaps(profileData?.location || ''),
+    currentWorkplace: toInitialCaps(
+      currentExperience?.company || profileData?.currentWorkspace || profileData?.current_workspace || '',
+      { keepSmallWords: true },
+    ),
+    currentJobTitle: toInitialCaps(
+      currentExperience?.title || profileData?.currentJobTitle || profileData?.current_job_title || '',
+      { keepSmallWords: true },
+    ),
   }
 }
 
@@ -941,8 +949,8 @@ const upsertCurrentExperience = async () => {
     return
   }
 
-  const company = profileDetailsForm.value.currentWorkplace.trim()
-  const title = profileDetailsForm.value.currentJobTitle.trim()
+  const company = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
+  const title = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
 
   if (!company && !title) {
     return
@@ -998,15 +1006,21 @@ const saveProfileDetails = async () => {
   isSavingProfileDetails.value = true
 
   try {
-    const displayName = profileDetailsForm.value.displayName.trim()
+    const displayName = toInitialCaps(profileDetailsForm.value.displayName)
+    const bio = profileDetailsForm.value.bio.trim()
+    const location = toInitialCaps(profileDetailsForm.value.location)
+    const currentWorkspace = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
+    const currentJobTitle = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
     const profilePayload = {
       username: authStore.userProfile?.username || authStore.signUpDraft.username,
       displayName,
-      bio: authStore.userProfile?.bio || authStore.signUpDraft.headline,
-      location: profileDetailsForm.value.location.trim(),
+      bio,
+      location,
       website: authStore.userProfile?.website || authStore.signUpDraft.website || '',
       linkedin: authStore.userProfile?.linkedin || authStore.signUpDraft.linkedin || '',
       github: authStore.userProfile?.github || authStore.signUpDraft.github || '',
+      ...(currentJobTitle ? { currentJobTitle } : {}),
+      ...(currentWorkspace ? { currentWorkspace } : {}),
     }
 
     const userResponse = displayName
@@ -1050,8 +1064,8 @@ const saveProfileDetails = async () => {
     try {
       await upsertCurrentExperience()
     } catch {
-      const company = profileDetailsForm.value.currentWorkplace.trim()
-      const title = profileDetailsForm.value.currentJobTitle.trim()
+      const company = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
+      const title = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
 
       if (company && title) {
         experiences.value = [
@@ -1072,14 +1086,18 @@ const saveProfileDetails = async () => {
     }
 
     authStore.signUpDraft.name = displayName
-    authStore.signUpDraft.location = profileDetailsForm.value.location.trim()
+    authStore.signUpDraft.headline = bio
+    authStore.signUpDraft.location = location
     if (userResponse?.data?.user) {
       authStore.setCurrentUser(userResponse.data.user)
     }
     authStore.setUserProfileOverride({
       ...(userResponse?.data?.profile ?? savedProfile ?? {}),
       displayName,
-      location: profileDetailsForm.value.location.trim(),
+      bio,
+      location,
+      ...(currentJobTitle ? { currentJobTitle } : {}),
+      ...(currentWorkspace ? { currentWorkspace } : {}),
     })
 
     isProfileDetailsModalOpen.value = false
@@ -1122,11 +1140,12 @@ const replaceSectionItem = async () => {
       await usersService.deleteUserSkill(authStore.userId, id, authStore.authToken)
       skills.value = skills.value.map((skill) =>
         skill.id === id
-          ? {
+          ? toSkillViewItem({
+              ...response.data,
               id: response.data.id || id,
               name: response.data.name || response.data.skill || editSkillForm.value.skill.trim(),
               level: response.data.level || editSkillForm.value.level,
-            }
+            })
           : skill,
       )
     }
@@ -1213,8 +1232,8 @@ const replaceSectionItem = async () => {
       const response = await usersService.addUserExperience(
         authStore.userId,
         {
-          company: editExperienceForm.value.company.trim(),
-          title: editExperienceForm.value.title.trim(),
+          company: toInitialCaps(editExperienceForm.value.company, { keepSmallWords: true }),
+          title: toInitialCaps(editExperienceForm.value.title, { keepSmallWords: true }),
           isCurrent: editExperienceForm.value.isCurrent,
           ...(employmentType ? { employmentType } : {}),
           ...(startDate ? { startDate } : {}),
@@ -1278,7 +1297,7 @@ const profile = computed(() => {
   const draft = authStore.signUpDraft
   const apiProfile = authStore.userProfile
   const apiUser = authStore.currentUser
-  const name = getDisplayName(
+  const name = toInitialCaps(getDisplayName(
     apiProfile?.displayName ||
       '',
     getStringField(apiUser, ['name', 'displayName', 'fullName', 'full_name']),
@@ -1286,11 +1305,11 @@ const profile = computed(() => {
     apiProfile?.username,
     getStringField(apiUser, ['username']),
     draft.username,
-  )
+  ))
   const username = apiProfile?.username || getStringField(apiUser, ['username']) || draft.username
   const email = getStringField(apiUser, ['email']) || draft.email
   const phone = getStringField(apiProfile, ['phone', 'phoneNumber', 'phone_number']) || getStringField(apiUser, ['phone', 'phoneNumber', 'phone_number']) || draft.phone
-  const location = apiProfile?.location || ''
+  const location = toInitialCaps(apiProfile?.location || '')
   const bio = apiProfile?.bio || ''
   const initialsSource = name || username || 'Member'
 
@@ -1315,11 +1334,11 @@ const profile = computed(() => {
 
 const featuredExperience = computed(() => experiences.value[0] ?? null)
 
-const featuredSkill = computed(() => skills.value[0]?.name || authStore.signUpDraft.interests[0] || '')
+const featuredSkill = computed(() => skills.value[0]?.name || '')
 
-const profileSkillLabel = computed(() => featuredExperience.value?.title || featuredSkill.value || '')
-const profileCompanyLabel = computed(() => featuredExperience.value?.company || '')
-const profileCountryLabel = computed(() => profile.value.location || '')
+const profileSkillLabel = computed(() => toInitialCaps(featuredExperience.value?.title || featuredSkill.value || '', { keepSmallWords: true }))
+const profileCompanyLabel = computed(() => toInitialCaps(featuredExperience.value?.company || '', { keepSmallWords: true }))
+const profileCountryLabel = computed(() => toInitialCaps(profile.value.location || ''))
 const profileHeadlineParts = computed(() =>
   [profileSkillLabel.value, profileCompanyLabel.value, profileCountryLabel.value].filter(Boolean),
 )
@@ -1588,6 +1607,17 @@ const editModalTitle = computed(() => {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div v-else-if="skillsLoadError" class="text-center py-8 text-sm text-[var(--danger)]">
+            <p class="mb-3">{{ skillsLoadError }}</p>
+            <button
+              type="button"
+              class="text-sm font-semibold text-[var(--accent-strong)] hover:text-[var(--accent)] transition"
+              @click="authStore.userId && loadUserSkills(authStore.userId)"
+            >
+              Retry loading skills →
+            </button>
           </div>
 
           <div v-else class="text-center py-8 text-sm text-[var(--text-secondary)]">
@@ -1878,8 +1908,8 @@ const editModalTitle = computed(() => {
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
-                  <p class="font-semibold text-[var(--text-primary)]">{{ experience.title }}</p>
-                  <p class="text-sm text-[var(--text-secondary)]">{{ experience.company }}</p>
+                  <p class="font-semibold text-[var(--text-primary)]">{{ toInitialCaps(experience.title, { keepSmallWords: true }) }}</p>
+                  <p class="text-sm text-[var(--text-secondary)]">{{ toInitialCaps(experience.company, { keepSmallWords: true }) }}</p>
                   <p v-if="experience.employmentType" class="text-xs text-[var(--text-tertiary)]">{{ experience.employmentType }}</p>
                   <p class="text-xs text-[var(--text-tertiary)] mt-1">
                     {{ experience.startDate ? new Date(experience.startDate).toLocaleDateString() : '' }}
@@ -2113,6 +2143,16 @@ const editModalTitle = computed(() => {
             v-model="profileDetailsForm.location"
             type="text"
             class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">About me</span>
+          <textarea
+            v-model="profileDetailsForm.bio"
+            rows="5"
+            class="w-full resize-y rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
+            placeholder="Tell people about your work, background, and interests."
           />
         </label>
 
@@ -2427,18 +2467,11 @@ const editModalTitle = computed(() => {
         </label>
       </div>
 
-      <div class="mt-6 flex gap-3 border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          class="flex-1 inline-flex items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-          @click="closeEditModal"
-        >
-          Cancel
-        </button>
+      <div class="mt-6 flex justify-end gap-3 border-t border-[color:var(--border-soft)] pt-4">
         <button
           type="submit"
           :disabled="isSavingSectionEdit"
-          class="flex-1 inline-flex items-center justify-center rounded-[1rem] bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+          class="inline-flex items-center justify-center rounded-[1rem] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
         >
           {{ isSavingSectionEdit ? 'Saving...' : 'Save' }}
         </button>
@@ -2450,25 +2483,28 @@ const editModalTitle = computed(() => {
   <div v-if="deleteModal.isOpen" class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
     <div class="w-full max-w-sm overflow-hidden rounded-t-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)] sm:rounded-[1.5rem]">
       <div class="p-6">
-        <h3 class="text-lg font-semibold text-[var(--text-primary)]">Delete {{ deleteModal.label }}?</h3>
+        <div class="flex items-start justify-between gap-3">
+          <h3 class="text-lg font-semibold text-[var(--text-primary)]">Delete {{ deleteModal.label }}?</h3>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+            aria-label="Close modal"
+            @click="closeDeleteModal"
+          >
+            <X class="h-4 w-4" />
+          </button>
+        </div>
         <p class="mt-3 text-sm text-[var(--text-secondary)]">
           This action cannot be undone. Are you sure you want to delete this {{ deleteModal.label }}?
         </p>
       </div>
 
-      <div class="flex gap-3 border-t border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-        <button
-          type="button"
-          @click="closeDeleteModal"
-          class="flex-1 inline-flex items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-        >
-          Cancel
-        </button>
+      <div class="flex justify-end gap-3 border-t border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
         <button
           type="button"
           @click="confirmDelete"
           :disabled="deletingItem !== null"
-          class="flex-1 inline-flex items-center justify-center rounded-[1rem] bg-red-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-400"
+          class="inline-flex items-center justify-center rounded-[1rem] bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:bg-red-400"
         >
           {{ deletingItem ? 'Deleting...' : 'Delete' }}
         </button>

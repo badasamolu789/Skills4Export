@@ -6,10 +6,10 @@ import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
-import { collectUserSkills, usersService } from '@/services/users'
-import type { UserPortfolio, UserSkill, UserCertification, UserEducation, UserExperience } from '@/services/users'
+import { normalizeUserSkills, usersService } from '@/services/users'
+import type { UserPortfolio, UserProfile, UserSkill, UserCertification, UserEducation, UserExperience } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getDisplayName } from '@/utils/displayName'
+import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 
 type ProfileUploadItem = {
   id: string
@@ -135,12 +135,12 @@ const profileInitials = computed(() =>
 )
 
 const displayName = computed(() => {
-  return getDisplayName(
+  return toInitialCaps(getDisplayName(
     form.value.name,
     authStore.currentUser?.name,
     form.value.username,
     authStore.currentUser?.username,
-  ) || 'Profile'
+  ) || 'Profile')
 })
 
 const avatarPreviewUrl = computed(() => avatarObjectUrl.value || form.value.avatar || authStore.userProfile?.avatar || '')
@@ -150,6 +150,24 @@ const bannerPreviewUrl = computed(() => bannerObjectUrl.value || form.value.bann
 const optionalField = (value?: string | null) => {
   const trimmed = value?.trim()
   return trimmed || undefined
+}
+
+const getProfileBio = (profile?: UserProfile | null) => {
+  if (!profile) {
+    return ''
+  }
+
+  const record = profile as Record<string, unknown>
+
+  for (const key of ['bio', 'description', 'about', 'aboutMe', 'about_me']) {
+    const value = record[key]
+
+    if (typeof value === 'string') {
+      return value
+    }
+  }
+
+  return ''
 }
 
 const getProfileUsernameValue = () => {
@@ -183,28 +201,25 @@ const getStringField = (record: Record<string, unknown> | null | undefined, keys
   return ''
 }
 
-const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown }) => {
-  const record = skill as Record<string, unknown>
-  const directValue = [record.name, record.skillName, record.skill_name, record.title, record.skill]
-    .find((value) => typeof value === 'string' && value.trim())
+const getSkillDisplayName = (skill: UserSkill) => skill.name || skill.skill || ''
 
-  if (typeof directValue === 'string') {
-    return directValue.trim()
+const getProfileUserId = (data?: { user?: { id?: string } | null; profile?: { userId?: string } | null } | null) =>
+  data?.user?.id || data?.profile?.userId || authStore.userId
+
+const getProfileCurrentWorkspace = (profile?: UserProfile | null) =>
+  profile?.currentWorkspace || profile?.current_workspace || ''
+
+const getProfileCurrentJobTitle = (profile?: UserProfile | null) =>
+  profile?.currentJobTitle || profile?.current_job_title || ''
+
+const toSkillViewItem = (skill: UserSkill, index = 0) => {
+  const name = getSkillDisplayName(skill)
+
+  return {
+    id: skill.id || `skill-${name.toLowerCase().replace(/\s+/g, '-') || index}`,
+    name,
+    level: skill.level,
   }
-
-  const nestedSkill = record.skill
-
-  if (nestedSkill && typeof nestedSkill === 'object') {
-    const nestedRecord = nestedSkill as Record<string, unknown>
-    const nestedValue = [nestedRecord.name, nestedRecord.skill, nestedRecord.title, nestedRecord.label]
-      .find((value) => typeof value === 'string' && value.trim())
-
-    if (typeof nestedValue === 'string') {
-      return nestedValue.trim()
-    }
-  }
-
-  return ''
 }
 
 const syncProfileImage = (kind: 'avatar' | 'banner', url: string) => {
@@ -252,54 +267,20 @@ type ProfileImageUploadResult = {
 }
 
 const queueProfileImageUpload = async (kind: 'avatar' | 'banner', file: File) => {
-  try {
-    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-    const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
-    const publicId = uploadResponse.public_id
-    const uploadedUrl = uploadResponse.secure_url
+  const response = await mediaService.uploadAvatarFile(authStore.userId, file, {
+    kind,
+    replace: true,
+    token: authStore.authToken,
+  })
+  const uploadedUrl =
+    kind === 'banner'
+      ? response.data?.banner || response.data?.url
+      : response.data?.avatar || response.data?.url
 
-    if (!publicId && !uploadedUrl) {
-      throw new Error('Cloudinary did not return an uploaded image identifier.')
-    }
-
-    const uploadPayload = publicId
-      ? { publicId, ...(uploadedUrl ? { imageUrl: uploadedUrl } : {}) }
-      : { imageUrl: uploadedUrl as string }
-
-    const response =
-      kind === 'avatar'
-        ? await usersService.uploadUserAvatar(
-            authStore.userId,
-            uploadPayload,
-            authStore.authToken,
-            { replace: true, suppressErrorModal: true },
-          )
-        : await usersService.uploadUserBanner(
-            authStore.userId,
-            uploadPayload,
-            authStore.authToken,
-            { replace: true, suppressErrorModal: true },
-          )
-
-    return {
-      jobId: response.data?.jobId,
-      url: uploadedUrl,
-    } satisfies ProfileImageUploadResult
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.info('[profile] direct image upload failed, falling back to multipart upload', error)
-    }
-
-    const response = await mediaService.uploadAvatarFile(authStore.userId, file, {
-      kind,
-      replace: true,
-      token: authStore.authToken,
-    })
-
-    return {
-      jobId: response.data?.jobId,
-    } satisfies ProfileImageUploadResult
-  }
+  return {
+    jobId: response.data?.jobId,
+    url: uploadedUrl || undefined,
+  } satisfies ProfileImageUploadResult
 }
 
 const loadProfile = async () => {
@@ -315,7 +296,7 @@ const loadProfile = async () => {
     authStore.setCurrentUser(response.data?.user ?? null)
     authStore.setUserProfile(profile)
 
-    const loadedUserId = response.data?.user?.id || authStore.userId
+    const loadedUserId = getProfileUserId(response.data)
 
     if (response.data?.user?.id) {
       authStore.setUserId(response.data.user.id)
@@ -347,7 +328,7 @@ const loadProfile = async () => {
       form.value.name = profile.displayName || form.value.name
       form.value.username = profile.username || form.value.username
       form.value.location = authStore.userProfile?.location || ''
-      form.value.bio = profile.bio || form.value.bio
+      form.value.bio = getProfileBio(profile)
       form.value.website = profile.website || form.value.website
       form.value.linkedin = profile.linkedin || form.value.linkedin
       form.value.github = profile.github || form.value.github
@@ -377,8 +358,8 @@ const loadProfile = async () => {
         ])
 
       const sourceSkills = skillsResult.status === 'fulfilled'
-        ? collectUserSkills(skillsResult.value.data, response.data?.skills, response.data)
-        : collectUserSkills(response.data?.skills, response.data)
+        ? normalizeUserSkills(skillsResult.value.data)
+        : []
       const sourcePortfolios = portfoliosResult.status === 'fulfilled'
         ? portfoliosResult.value.data
         : response.data?.portfolios ?? []
@@ -392,11 +373,7 @@ const loadProfile = async () => {
         ? experiencesResult.value.data
         : response.data?.experiences ?? []
 
-      skills.value = sourceSkills.map((skill: UserSkill) => ({
-        id: skill.id || '',
-        name: getSkillDisplayName(skill),
-        level: skill.level,
-      })).filter((skill) => skill.name)
+      skills.value = sourceSkills.map(toSkillViewItem).filter((skill) => skill.name)
 
       portfolios.value = sourcePortfolios.map((portfolio: UserPortfolio) => ({
         id: portfolio.id || '',
@@ -424,8 +401,8 @@ const loadProfile = async () => {
 
       experiences.value = sourceExperiences.map((experience: UserExperience) => ({
         id: experience.id || '',
-        company: experience.company || 'Unnamed company',
-        title: experience.title || 'Unnamed title',
+        company: toInitialCaps(experience.company || 'Unnamed company', { keepSmallWords: true }),
+        title: toInitialCaps(experience.title || 'Unnamed title', { keepSmallWords: true }),
         employmentType: experience.employmentType,
         startDate: experience.startDate || '',
         endDate: experience.endDate,
@@ -434,9 +411,10 @@ const loadProfile = async () => {
       }))
 
       const primaryExperience = experiences.value.find((experience) => experience.isCurrent) || experiences.value[0]
-      currentWorkplace.value = primaryExperience?.company || ''
-      currentJobTitle.value = primaryExperience?.title || ''
+      currentWorkplace.value = primaryExperience?.company || toInitialCaps(getProfileCurrentWorkspace(profile), { keepSmallWords: true })
+      currentJobTitle.value = primaryExperience?.title || toInitialCaps(getProfileCurrentJobTitle(profile), { keepSmallWords: true })
       authStore.signUpDraft.jobTitle = primaryExperience?.title || authStore.signUpDraft.jobTitle
+      authStore.signUpDraft.workplace = primaryExperience?.company || authStore.signUpDraft.workplace
     }
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
@@ -459,10 +437,6 @@ const uploadAvatarFile = async () => {
 
   try {
     const uploadResult = await queueProfileImageUpload('avatar', avatarFile.value)
-
-    if (!uploadResult.jobId) {
-      throw new Error('The server did not return a media processing job ID.')
-    }
 
     if (uploadResult.url) {
       syncProfileImage('avatar', uploadResult.url)
@@ -501,10 +475,6 @@ const uploadBannerFile = async () => {
 
   try {
     const uploadResult = await queueProfileImageUpload('banner', bannerFile.value)
-
-    if (!uploadResult.jobId) {
-      throw new Error('The server did not return a media processing job ID.')
-    }
 
     if (uploadResult.url) {
       syncProfileImage('banner', uploadResult.url)
@@ -608,27 +578,14 @@ const uploadProjectMedia = async () => {
   }
 
   const file = projectMediaFile.value
-  const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-  const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
-
-  if (!uploadResponse.public_id) {
-    throw new Error('Media upload completed without a public ID.')
-  }
-
-  const registerResponse = await mediaService.registerMedia(
-    {
-      publicId: uploadResponse.public_id,
-      title: newPortfolio.value.title.trim(),
-      kind: file.type.startsWith('video/') ? 'video' : 'image',
-      userId: authStore.userId,
-    },
-    authStore.authToken,
-  )
-  const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+  const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+  const uploadResponse = await mediaService.uploadMediaFile(file, {
+    kind: mediaType,
+    title: newPortfolio.value.title.trim() || file.name,
     token: authStore.authToken,
   })
 
-  return processed.url || uploadResponse.secure_url || ''
+  return uploadResponse.data.url || ''
 }
 
 const selectProfileUploadFile = (file?: File | null) => {
@@ -686,32 +643,16 @@ const submitProfileUpload = async () => {
   isUploadingProfileMedia.value = true
 
   try {
-    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-    const uploadResponse = await mediaService.uploadCloudinaryFile(selectedFile, signatureResponse.data)
-
-    if (!uploadResponse.public_id) {
-      throw new Error('Media upload completed without a public ID.')
-    }
-
-    const registerResponse = await mediaService.registerMedia(
-      {
-        publicId: uploadResponse.public_id,
-        title,
-        ...(externalUrl ? { externalUrl } : {}),
-        kind: mediaType,
-        userId: authStore.userId,
-      },
-      authStore.authToken,
-    )
-
-    const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+    const uploadResponse = await mediaService.uploadMediaFile(selectedFile, {
+      kind: mediaType,
+      title,
       token: authStore.authToken,
     })
-    const remoteUrl = processed.url || uploadResponse.secure_url || profileUploadPreviewUrl.value
+    const remoteUrl = uploadResponse.data.url || profileUploadPreviewUrl.value
     const shouldKeepPreview = remoteUrl === profileUploadPreviewUrl.value
 
     profileUploads.value.unshift({
-      id: processed.assetId || makeUploadClientId(),
+      id: uploadResponse.data.assetId || uploadResponse.data.id || makeUploadClientId(),
       title,
       ...(externalUrl ? { externalUrl } : {}),
       url: remoteUrl,
@@ -780,11 +721,9 @@ const loadSkills = async () => {
 
   try {
     const response = await usersService.listUserSkills(authStore.userId, authStore.authToken)
-    skills.value = collectUserSkills(response.data).map((skill) => ({
-      id: skill.id || '',
-      name: getSkillDisplayName(skill),
-      level: skill.level,
-    })).filter((skill) => skill.name)
+    skills.value = normalizeUserSkills(response.data)
+      .map(toSkillViewItem)
+      .filter((skill) => skill.name)
   } catch (error) {
     if (!(error instanceof ApiError && error.status === 404)) {
       toast.error('Unable to load skills.')
@@ -855,8 +794,8 @@ const loadExperiences = async () => {
     const response = await usersService.listUserExperiences(authStore.userId, authStore.authToken)
     experiences.value = response.data.map((experience) => ({
       id: experience.id || '',
-      company: experience.company || '',
-      title: experience.title || '',
+      company: toInitialCaps(experience.company || '', { keepSmallWords: true }),
+      title: toInitialCaps(experience.title || '', { keepSmallWords: true }),
       employmentType: experience.employmentType,
       startDate: experience.startDate || '',
       endDate: experience.endDate,
@@ -938,19 +877,16 @@ const addSkill = async () => {
       ),
     )
 
+    const createdSkillRecords = normalizeUserSkills(createdSkills.map((response) => response.data))
     skills.value = [
-      ...createdSkills.map((response, index) => {
-        const createdSkill = response.data
-        const createdSkillName = getSkillDisplayName(createdSkill) || nextSkills[index]
-
-        return {
-          id: createdSkill.id || `skill-${Date.now()}-${index}`,
-          name: createdSkillName,
-          level: createdSkill.level || newSkill.value.level,
-        }
-      }),
+      ...createdSkillRecords.map((skill, index) => toSkillViewItem(skill, index)),
       ...skills.value,
     ]
+    authStore.signUpDraft.interests = Array.from(new Set([
+      ...createdSkillRecords.map(getSkillDisplayName).filter(Boolean),
+      ...authStore.signUpDraft.interests,
+    ]))
+
     toast.success(nextSkills.length > 1 ? 'Skills added successfully!' : 'Skill added successfully!')
     newSkill.value = { skill: '', level: 'intermediate' }
     await loadSkills()
@@ -1232,8 +1168,8 @@ const addExperience = async () => {
     const endDate = optionalField(newExperience.value.endDate)
     const description = optionalField(newExperience.value.description)
     const payload = {
-      company: newExperience.value.company.trim(),
-      title: newExperience.value.title.trim(),
+      company: toInitialCaps(newExperience.value.company, { keepSmallWords: true }),
+      title: toInitialCaps(newExperience.value.title, { keepSmallWords: true }),
       isCurrent: newExperience.value.isCurrent,
       ...(employmentType ? { employmentType } : {}),
       ...(startDate ? { startDate } : {}),
@@ -1246,8 +1182,8 @@ const addExperience = async () => {
       experiences.value = [
         {
           id: response.data.id || `experience-${Date.now()}`,
-          company: response.data.company || newExperience.value.company,
-          title: response.data.title || newExperience.value.title,
+          company: toInitialCaps(response.data.company || newExperience.value.company, { keepSmallWords: true }),
+          title: toInitialCaps(response.data.title || newExperience.value.title, { keepSmallWords: true }),
           employmentType: response.data.employmentType,
           startDate: response.data.startDate || newExperience.value.startDate,
           endDate: response.data.endDate,
@@ -1308,6 +1244,8 @@ const upsertProfile = async (payload: {
   website?: string
   linkedin?: string
   github?: string
+  currentJobTitle?: string
+  currentWorkspace?: string
 }) => {
   const id = authStore.userId
 
@@ -1330,7 +1268,7 @@ const upsertProfile = async (payload: {
         throw error
       }
 
-      return usersService.getUserProfile(id, authStore.authToken)
+      return usersService.updateUserProfile(id, payload, authStore.authToken, { suppressErrorModal: true })
     }
   }
 
@@ -1358,6 +1296,16 @@ const upsertProfile = async (payload: {
   }
 }
 
+const getCurrentProfileFieldPayload = () => {
+  const currentJobTitleValue = toInitialCaps(currentJobTitle.value, { keepSmallWords: true })
+  const currentWorkspaceValue = toInitialCaps(currentWorkplace.value, { keepSmallWords: true })
+
+  return {
+    ...(currentJobTitleValue ? { currentJobTitle: currentJobTitleValue } : {}),
+    ...(currentWorkspaceValue ? { currentWorkspace: currentWorkspaceValue } : {}),
+  }
+}
+
 const getSavedProfileData = (value: unknown) => {
   if (!value || typeof value !== 'object') {
     return {}
@@ -1378,7 +1326,7 @@ const saveDisplayName = async () => {
     throw new Error('No authenticated user ID is available for this profile update.')
   }
 
-  const displayName = form.value.name.trim()
+  const displayName = toInitialCaps(form.value.name)
 
   if (!displayName) {
     throw new Error('Display name is required.')
@@ -1409,9 +1357,10 @@ const saveCurrentExperience = async () => {
     throw new Error('No authenticated user ID is available for this experience update.')
   }
 
-  const company = currentWorkplace.value.trim()
-  const title = currentJobTitle.value.trim()
+  const company = toInitialCaps(currentWorkplace.value, { keepSmallWords: true })
+  const title = toInitialCaps(currentJobTitle.value, { keepSmallWords: true })
   authStore.signUpDraft.jobTitle = title || authStore.signUpDraft.jobTitle
+  authStore.signUpDraft.workplace = company || authStore.signUpDraft.workplace
 
   if (!company && !title) {
     return
@@ -1448,8 +1397,8 @@ const saveCurrentExperience = async () => {
       experience.id === existingExperience.id
         ? {
             id: response.data.id || existingExperience.id,
-            company: response.data.company || company,
-            title: response.data.title || title,
+            company: toInitialCaps(response.data.company || company, { keepSmallWords: true }),
+            title: toInitialCaps(response.data.title || title, { keepSmallWords: true }),
             employmentType: response.data.employmentType,
             startDate: response.data.startDate || payload.startDate,
             endDate: response.data.endDate,
@@ -1464,8 +1413,8 @@ const saveCurrentExperience = async () => {
   experiences.value = [
     {
       id: response.data.id || '',
-      company: response.data.company || company,
-      title: response.data.title || title,
+      company: toInitialCaps(response.data.company || company, { keepSmallWords: true }),
+      title: toInitialCaps(response.data.title || title, { keepSmallWords: true }),
       employmentType: response.data.employmentType,
       startDate: response.data.startDate || payload.startDate,
       endDate: response.data.endDate,
@@ -1490,12 +1439,13 @@ const saveContactSection = async () => {
   try {
     const profileResponse = await upsertProfile({
       username: getProfileUsernameValue(),
-      displayName: form.value.name.trim(),
-      location: form.value.location,
+      displayName: toInitialCaps(form.value.name),
+      location: toInitialCaps(form.value.location),
       bio: authStore.userProfile?.bio || form.value.bio,
       website: authStore.userProfile?.website || form.value.website,
       linkedin: authStore.userProfile?.linkedin || form.value.linkedin,
       github: authStore.userProfile?.github || form.value.github,
+      ...getCurrentProfileFieldPayload(),
     })
 
     await saveDisplayName()
@@ -1504,10 +1454,10 @@ const saveContactSection = async () => {
     authStore.signUpDraft.phone = form.value.phone
     const savedProfile = {
       ...getSavedProfileData(profileResponse.data),
-      location: form.value.location.trim(),
+      location: toInitialCaps(form.value.location),
       bio: form.value.bio,
     }
-    authStore.signUpDraft.location = form.value.location.trim()
+    authStore.signUpDraft.location = toInitialCaps(form.value.location)
     authStore.setUserProfileOverride(savedProfile)
     await loadProfile()
 
@@ -1540,12 +1490,13 @@ const saveProfessionalSection = async () => {
   try {
     const profileResponse = await upsertProfile({
       username: getProfileUsernameValue(),
-      displayName: form.value.name.trim(),
+      displayName: toInitialCaps(form.value.name),
       bio: form.value.bio,
-      location: form.value.location,
+      location: toInitialCaps(form.value.location),
       website: form.value.website,
       linkedin: form.value.linkedin,
       github: form.value.github,
+      ...getCurrentProfileFieldPayload(),
     })
 
     await saveDisplayName()
@@ -1554,15 +1505,16 @@ const saveProfessionalSection = async () => {
     authStore.signUpDraft.username = form.value.username
     const savedProfile = {
       ...getSavedProfileData(profileResponse.data),
-      location: form.value.location.trim(),
+      location: toInitialCaps(form.value.location),
       bio: form.value.bio,
-      displayName: form.value.name.trim(),
+      displayName: toInitialCaps(form.value.name),
       username: getProfileUsernameValue(),
       website: form.value.website,
       linkedin: form.value.linkedin,
       github: form.value.github,
+      ...getCurrentProfileFieldPayload(),
     }
-    authStore.signUpDraft.location = form.value.location.trim()
+    authStore.signUpDraft.location = toInitialCaps(form.value.location)
     authStore.signUpDraft.headline = form.value.bio
     authStore.setUserProfileOverride(savedProfile)
     await loadProfile()
@@ -1742,7 +1694,7 @@ const addExperienceFromModal = async () => {
           <div class="min-w-0">
             <h2 class="text-xl font-semibold text-[var(--text-primary)] sm:text-2xl">{{ displayName }}</h2>
             <p class="mt-1 text-sm text-[var(--text-secondary)]">
-              {{ currentJobTitle || 'Add your role' }} <span class="text-[var(--border-strong,var(--border-soft))]">-</span> {{ currentWorkplace || 'Add your workplace' }}
+              {{ toInitialCaps(currentJobTitle, { keepSmallWords: true }) || 'Add your role' }} <span class="text-[var(--border-strong,var(--border-soft))]">-</span> {{ toInitialCaps(currentWorkplace, { keepSmallWords: true }) || 'Add your workplace' }}
             </p>
             <p v-if="avatarFile" class="mt-2 text-xs font-semibold text-[var(--accent-strong)]">
               Preview updated. Save the selected image to publish it.

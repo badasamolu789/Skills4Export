@@ -5,6 +5,7 @@ import {
   Bookmark,
   Check,
   ChevronDown,
+  CloudUpload,
   Copy,
   Edit2,
   Flag,
@@ -20,14 +21,17 @@ import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import PostCommentThread from '@/components/PostCommentThread.vue'
 import RichTextContent from '@/components/RichTextContent.vue'
+import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { pagesService } from '@/services/pages'
 import { postsService, type PostCommentRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
+import { mediaService } from '@/services/media'
 import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
   id: number | string
   parentId?: string | null
@@ -62,11 +66,18 @@ const currentScore = ref('score' in props.post ? props.post.score || 0 : 0)
 const isCommentsOpen = ref(false)
 const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
+const isAnswerModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
 const postMenuRoot = ref<HTMLElement | null>(null)
 const isEditModalOpen = ref(false)
 const editPostTitle = ref('')
 const editPostContent = ref('')
+const answerInput = ref('')
+const answerAttachments = ref<File[]>([])
+const answerAttachmentPreviews = ref<Array<{ key: string; name: string; url: string; kind: 'image' | 'video' }>>([])
+const answererProfile = ref<MyProfileData | null>(null)
+const isLoadingAnswererProfile = ref(false)
+const isContentExpanded = ref(false)
 const commentInput = ref('')
 const visibleCommentCount = ref(3)
 const shareCommunity = ref('')
@@ -78,6 +89,7 @@ const selectedReportReason = ref('')
 const reportTargetLabel = ref('this post')
 const isSavingPost = ref(false)
 const isReactingToPost = ref(false)
+const isSubmittingAnswer = ref(false)
 const isSubmittingComment = ref(false)
 const isSubmittingReport = ref(false)
 const isUpdatingPost = ref(false)
@@ -144,10 +156,40 @@ const reportReasonDescriptions: Record<string, string> = {
 
 const commentList = ref<PostComment[]>([])
 const currentComments = ref('comments' in props.post ? props.post.comments : 0)
+const currentAnswers = ref(props.post.type === 'question' ? props.post.answers : 0)
 const visibleComments = computed(() => commentList.value.slice(0, visibleCommentCount.value))
 const hiddenCommentCount = computed(() =>
   Math.max(commentList.value.length - visibleCommentCount.value, 0),
 )
+const answererName = computed(
+  () =>
+    currentUser.displayName.value ||
+    answererProfile.value?.user?.name ||
+    answererProfile.value?.profile?.displayName ||
+    answererProfile.value?.profile?.username ||
+    answererProfile.value?.user?.username ||
+    'Member',
+)
+const answererAvatar = computed(
+  () => answererProfile.value?.profile?.avatar || currentUser.avatarSrc.value || '',
+)
+const answererInitials = computed(() => getInitials(answererName.value))
+const answererProfilePath = computed(() => currentUser.profilePath.value)
+const answererSkills = computed(() => {
+  const profileSkills =
+    answererProfile.value?.skills
+      ?.map((skill) => (skill.name || skill.skill || '').trim())
+      .filter(Boolean)
+      .slice(0, 3) ?? []
+
+  if (profileSkills.length) {
+    return profileSkills
+  }
+
+  return currentUser.skills.value.length
+    ? currentUser.skills.value
+    : ['Skills4Export member']
+})
 
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
   const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
@@ -171,11 +213,22 @@ const authorUserId = computed(() => {
 const isOwnPost = computed(() => Boolean(authStore.userId && authorUserId.value === authStore.userId))
 const isCommunityQuestion = computed(() => props.post.type === 'question' && Boolean(props.post.communityId))
 const showFollowAction = computed(() =>
-  isCommunityQuestion.value || Boolean(!isOwnPost.value && (props.post.pageId || authorUserId.value)),
+  Boolean(!isOwnPost.value && (isCommunityQuestion.value || props.post.pageId || authorUserId.value)),
 )
+const canScorePost = computed(() => Boolean(!isOwnPost.value))
 const canEditPost = computed(() => Boolean(props.allowEdit && isOwnPost.value && apiPostId.value && props.post.type !== 'question'))
 const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const contentLabel = computed(() => (props.post.type === 'question' ? 'Question' : 'Post'))
+const postPlainDescription = computed(() =>
+  props.post.type === 'question' ? '' : richTextToPlainText(props.post.description),
+)
+const isPostContentCollapsible = computed(() => {
+  const text = postPlainDescription.value
+  return text.length > 360 || text.split(/\r?\n/).filter((line) => line.trim()).length > 4
+})
+const shouldClampPostContent = computed(() =>
+  Boolean(!props.expanded && isPostContentCollapsible.value && !isContentExpanded.value),
+)
 
 const getStoredCommunityFollows = () => {
   if (typeof window === 'undefined') {
@@ -374,16 +427,17 @@ const loadSharedOriginalPost = async () => {
   try {
     const originalResponse = await postsService.getPost(props.post.originalPostId, authStore.authToken)
     const original = originalResponse.data
+    const originalUserId = getPostUserId(original)
     const [mediaResponse, authorResponse, userResponse, skillsResponse] = await Promise.all([
       postsService.listPostMedia(original.id, authStore.authToken).catch(() => null),
-      original.user_id
-        ? usersService.getUserProfile(original.user_id, authStore.authToken).catch(() => null)
+      originalUserId
+        ? usersService.getUserProfile(originalUserId, authStore.authToken).catch(() => null)
         : Promise.resolve(null),
-      original.user_id
-        ? usersService.getUser(original.user_id, authStore.authToken).catch(() => null)
+      originalUserId
+        ? usersService.getUser(originalUserId, authStore.authToken).catch(() => null)
         : Promise.resolve(null),
-      original.user_id
-        ? usersService.listUserSkills(original.user_id, authStore.authToken).catch(() => null)
+      originalUserId
+        ? usersService.listUserSkills(originalUserId, authStore.authToken).catch(() => null)
         : Promise.resolve(null),
     ])
     const authorData = authorResponse?.data
@@ -414,6 +468,7 @@ const loadSharedOriginalPost = async () => {
 const syncPostCounters = () => {
   currentScore.value = 'score' in props.post ? props.post.score || 0 : 0
   currentComments.value = 'comments' in props.post ? props.post.comments : 0
+  currentAnswers.value = props.post.type === 'question' ? props.post.answers : 0
 }
 
 const syncFollowState = () => {
@@ -450,6 +505,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
 })
 
 watch(
@@ -463,12 +519,26 @@ watch(
     void loadSharedOriginalPost()
     commentList.value = []
     hasLoadedComments.value = false
+    answerInput.value = ''
+    answerAttachments.value = []
+    isAnswerModalOpen.value = false
+    isContentExpanded.value = false
 
     if (props.post.type !== 'question') {
       void loadComments()
     }
   },
 )
+
+watch(answerAttachments, (files) => {
+  answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
+  answerAttachmentPreviews.value = files.map((file) => ({
+    key: `${file.name}-${file.size}-${file.lastModified}`,
+    name: file.name,
+    url: URL.createObjectURL(file),
+    kind: file.type.startsWith('video/') ? 'video' : 'image',
+  }))
+})
 
 const openEditModal = () => {
   if (!canEditPost.value) {
@@ -529,9 +599,9 @@ const submitPostEdit = async () => {
 }
 
 const toggleFollow = async () => {
-  if (isOwnPost.value && !isCommunityQuestion.value) {
-    toast.info('This is your post', {
-      description: 'You cannot follow your own account.',
+  if (isOwnPost.value) {
+    toast.info(`This is your ${contentLabel.value.toLowerCase()}`, {
+      description: 'You cannot follow yourself from your own content.',
     })
     return
   }
@@ -577,9 +647,9 @@ const toggleFollow = async () => {
 }
 
 const toggleScore = async () => {
-  if (isOwnPost.value) {
-    toast.info('This is your post', {
-      description: 'You cannot score your own post.',
+  if (!canScorePost.value) {
+    toast.info(`This is your ${contentLabel.value.toLowerCase()}`, {
+      description: `You cannot score your own ${contentLabel.value.toLowerCase()}.`,
     })
     return
   }
@@ -772,6 +842,138 @@ const closeShareModal = () => {
   isShareModalOpen.value = false
 }
 
+const openAnswerModal = () => {
+  if (props.post.type !== 'question') {
+    return
+  }
+
+  answerInput.value = ''
+  answerAttachments.value = []
+  isAnswerModalOpen.value = true
+  isPostMenuOpen.value = false
+  void loadAnswererProfile()
+}
+
+const closeAnswerModal = () => {
+  isAnswerModalOpen.value = false
+  answerInput.value = ''
+  clearAnswerAttachments()
+}
+
+const handleAnswerAttachmentChange = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  answerAttachments.value = Array.from(input.files ?? [])
+}
+
+const clearAnswerAttachments = () => {
+  answerAttachments.value = []
+}
+
+const removeAnswerAttachment = (index: number) => {
+  answerAttachments.value = answerAttachments.value.filter((_, itemIndex) => itemIndex !== index)
+}
+
+const loadAnswererProfile = async () => {
+  if (!authStore.authToken || isLoadingAnswererProfile.value || answererProfile.value) {
+    return
+  }
+
+  isLoadingAnswererProfile.value = true
+
+  try {
+    const response = await usersService.getMyProfile(authStore.authToken)
+    answererProfile.value = response.data ?? null
+  } catch {
+    answererProfile.value = null
+  } finally {
+    isLoadingAnswererProfile.value = false
+  }
+}
+
+const uploadAnswerAttachments = async () => {
+  const mediaAssetIds: string[] = []
+  const fallbackMedia: Array<{ url: string; mediaType: string }> = []
+  const uploadedUrls: Array<{ url: string; mediaType: string }> = []
+
+  for (const file of answerAttachments.value) {
+    const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+    const uploadResponse = await mediaService.uploadMediaFile(file, {
+      kind: mediaType === 'video' ? 'video' : 'post_image',
+      title: file.name,
+      token: authStore.authToken,
+    })
+    const assetId = uploadResponse.data.assetId || uploadResponse.data.id
+    const url = uploadResponse.data.url || ''
+
+    if (assetId) {
+      mediaAssetIds.push(assetId)
+      if (url) {
+        uploadedUrls.push({
+          url,
+          mediaType,
+        })
+      }
+    } else if (url) {
+      fallbackMedia.push({
+        url,
+        mediaType,
+      })
+    }
+  }
+
+  return { mediaAssetIds, fallbackMedia, uploadedUrls }
+}
+
+const submitAnswer = async () => {
+  const value = answerInput.value.trim()
+
+  if (!value) {
+    return
+  }
+
+  if (!apiPostId.value) {
+    toast.error('Answer needs a question ID', {
+      description: 'Only questions loaded from the API can receive live answers.',
+    })
+    return
+  }
+
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before answering questions.',
+    })
+    return
+  }
+
+  if (isSubmittingAnswer.value) {
+    return
+  }
+
+  isSubmittingAnswer.value = true
+
+  try {
+    const uploadedMedia = await uploadAnswerAttachments()
+    await questionsService.createAnswer(
+      apiPostId.value,
+      {
+        content: value,
+        parentAnswerId: null,
+        mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
+      },
+      authStore.authToken,
+    )
+
+    currentAnswers.value += 1
+    closeAnswerModal()
+    toast.success('Answer posted')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to post your answer.'
+    toast.error('Answer failed', { description: message })
+  } finally {
+    isSubmittingAnswer.value = false
+  }
+}
+
 const copyShareLink = async () => {
   try {
     await navigator.clipboard.writeText(shareLink.value)
@@ -891,6 +1093,10 @@ const openReportModal = () => {
 
 const togglePostMenu = () => {
   isPostMenuOpen.value = !isPostMenuOpen.value
+}
+
+const closePostMenu = () => {
+  isPostMenuOpen.value = false
 }
 
 const handleMobileSave = () => {
@@ -1132,6 +1338,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               <button
                 type="button"
                 class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                @click="openAnswerModal"
+              >
+                <Reply class="h-4 w-4" />
+                Answer
+              </button>
+              <button
+                type="button"
+                class="mt-1 flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
                 @click="handleMobileSave"
               >
                 <Bookmark class="h-4 w-4" />
@@ -1145,18 +1359,21 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 <Flag class="h-4 w-4" />
                 Report
               </button>
+              <slot name="question-menu-actions" :close-menu="closePostMenu" />
             </div>
           </div>
         </div>
       </div>
 
       <div class="mt-5 flex flex-wrap gap-1.5 sm:gap-2">
-        <RouterLink
-          :to="detailPath"
+        <button
+          type="button"
           class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+          @click="openAnswerModal"
         >
-          View details
-        </RouterLink>
+          <Reply class="mr-1 h-3.5 w-3.5" />
+          Answer
+        </button>
         <button
           v-if="showFollowAction"
           type="button"
@@ -1170,23 +1387,10 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         >
           {{ followLabel }}
         </button>
-        <button
-          type="button"
-          class="inline-flex h-9 items-center rounded-[1rem] border px-3 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
-          :class="
-            isScored
-              ? activeActionClass
-              : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
-          "
-          @click="toggleScore"
-        >
-          <ArrowUp class="mr-1 h-3.5 w-3.5" />
-          {{ currentScore }} score
-        </button>
         <span
           class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
         >
-          {{ post.answers }} Answers
+          {{ currentAnswers }} Answers
         </span>
       </div>
     </template>
@@ -1311,9 +1515,17 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           </RouterLink>
           <RichTextContent
             :content="post.description"
-            :clamp="!props.expanded"
+            :clamp="shouldClampPostContent"
             class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)] sm:text-[0.9rem] sm:leading-7"
           />
+          <button
+            v-if="isPostContentCollapsible && !props.expanded"
+            type="button"
+            class="mt-1 inline-flex text-[0.82rem] font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]"
+            @click="isContentExpanded = !isContentExpanded"
+          >
+            {{ isContentExpanded ? 'Read less...' : 'Read more...' }}
+          </button>
 
           <div
             v-if="isSharedPost"
@@ -1366,10 +1578,13 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               type="button"
               class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border px-2 text-[0.78rem] font-medium transition sm:h-8 sm:px-2.5"
               :class="
-                isScored
+                !canScorePost
+                  ? 'cursor-not-allowed border-[color:var(--border-soft)] text-[var(--text-tertiary)] opacity-70'
+                  : isScored
                   ? activeActionClass
                   : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
               "
+              :disabled="!canScorePost || isReactingToPost"
               @click="toggleScore"
             >
               <ArrowUp class="h-3 w-3" />
@@ -1691,6 +1906,127 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
     </template>
   </article>
 
+  <ResponsiveOverlay
+    v-if="post.type === 'question'"
+    v-model="isAnswerModalOpen"
+    label="Answer question"
+    title="Answer question"
+    max-width-class="sm:max-w-4xl"
+    :show-header-text="false"
+  >
+    <div class="space-y-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <RouterLink
+            :to="answererProfilePath"
+            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
+          >
+            <img
+              v-if="answererAvatar"
+              :src="answererAvatar"
+              :alt="answererName"
+              class="h-full w-full object-cover"
+            />
+            <span v-else>{{ answererInitials }}</span>
+          </RouterLink>
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <RouterLink
+                :to="answererProfilePath"
+                class="text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+              >
+                {{ answererName }}
+              </RouterLink>
+              <span
+                v-for="skill in answererSkills"
+                :key="skill"
+                class="text-xs font-semibold text-[var(--text-secondary)]"
+              >
+                {{ skill }}
+              </span>
+            </div>
+            <h2 class="mt-3 text-xl font-semibold leading-tight text-[var(--text-primary)]">
+              {{ post.title }}
+            </h2>
+          </div>
+        </div>
+      </div>
+
+      <textarea
+        v-model="answerInput"
+        rows="12"
+        placeholder="Your answer here..."
+        class="min-h-[18rem] w-full resize-y rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-[0.95rem] leading-7 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[var(--accent-soft)]"
+      />
+
+      <div class="space-y-2">
+        <p class="text-sm font-semibold text-[var(--text-primary)]">Images or Video</p>
+        <label class="flex min-h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-6 text-center text-sm font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]">
+          <CloudUpload class="h-5 w-5" />
+          <span>images, videos, click to upload.</span>
+          <input
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            class="sr-only"
+            @change="handleAnswerAttachmentChange"
+          />
+        </label>
+        <div v-if="answerAttachmentPreviews.length" class="space-y-3">
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div
+              v-for="(file, index) in answerAttachmentPreviews"
+              :key="file.key"
+              class="overflow-hidden rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
+            >
+              <img
+                v-if="file.kind === 'image'"
+                :src="file.url"
+                :alt="file.name"
+                class="mx-auto aspect-[4/3] max-h-72 w-full object-contain"
+              />
+              <video
+                v-else
+                :src="file.url"
+                class="mx-auto aspect-[4/3] max-h-72 w-full bg-black object-contain"
+                controls
+                playsinline
+              />
+              <div class="flex items-center justify-between gap-2 px-3 py-2">
+                <p class="truncate text-xs font-semibold text-[var(--text-primary)]">{{ file.name }}</p>
+                <button
+                  type="button"
+                  class="inline-flex h-8 items-center justify-center rounded-lg border border-[color:var(--border-soft)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
+                  @click="removeAnswerAttachment(index)"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="inline-flex h-9 items-center justify-center rounded-lg border border-[color:var(--border-soft)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
+            @click="clearAnswerAttachments"
+          >
+            Clear all
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        :disabled="isSubmittingAnswer || !answerInput.trim()"
+        class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
+        @click="submitAnswer"
+      >
+        {{ isSubmittingAnswer ? 'Replying...' : 'Reply' }}
+        <ArrowUp class="h-4 w-4 rotate-45" />
+      </button>
+
+    </div>
+  </ResponsiveOverlay>
+
   <Teleport to="body">
     <div
       v-if="isShareModalOpen"
@@ -1931,13 +2267,6 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
         <div class="shrink-0 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 sm:px-5">
           <div class="flex justify-end gap-2">
-            <button
-              type="button"
-              class="inline-flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-              @click="closeEditModal"
-            >
-              Cancel
-            </button>
             <button
               type="submit"
               :disabled="isUpdatingPost"

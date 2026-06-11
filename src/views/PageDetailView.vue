@@ -29,7 +29,7 @@ import { pagesService } from '@/services/pages'
 import { postsService, type PostMediaRecord, type PostRecord } from '@/services/posts'
 import { usePagesStore } from '@/stores/pages'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount } from '@/utils/postMapper'
+import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
 
 type PageTab = 'about' | 'posts' | 'photos' | 'jobs' | 'dates'
 
@@ -293,7 +293,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
     return {
       type: 'personal',
       apiId: item.record.id,
-      userId: item.record.user_id,
+      userId: getPostUserId(item.record),
       pageId: page.value?.id || item.record.page_id || null,
       communityId: item.record.community_id || null,
       communityName: item.record.community?.name || undefined,
@@ -475,50 +475,31 @@ const uploadSelectedPagePostMedia = async () => {
     } satisfies UploadedPagePostMedia
   }
 
-  const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-  const uploadResponse = await mediaService.uploadCloudinaryFile(pagePostFile.value, signatureResponse.data)
-
-  if (!uploadResponse.public_id) {
-    throw new Error('Media upload completed without a public ID.')
-  }
-
   const mediaType = pagePostFile.value.type.startsWith('video/') ? 'video' : 'image'
-  const registerResponse = await mediaService.registerMedia(
-    {
-      publicId: uploadResponse.public_id,
-      kind: mediaType,
-      pageId: page.value?.id,
-    },
-    authStore.authToken,
-  )
+  const uploadResponse = await mediaService.uploadMediaFile(pagePostFile.value, {
+    kind: mediaType === 'video' ? 'video' : 'post_image',
+    title: pagePostFile.value.name,
+    token: authStore.authToken,
+  })
+  const assetId = uploadResponse.data.assetId || uploadResponse.data.id
+  const url = uploadResponse.data.url
 
-  try {
-    const assetId = await mediaService.waitForProcessedMediaAsset(
-      registerResponse.data.jobId,
-      {
-        token: authStore.authToken,
-      },
-    )
-
+  if (assetId) {
     return {
       mediaAssetIds: [assetId],
       mediaType,
     } satisfies UploadedPagePostMedia
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === 'Media processing completed without an asset ID.' &&
-      uploadResponse.secure_url
-    ) {
-      return {
-        mediaAssetIds: [],
-        fallbackUrl: uploadResponse.secure_url,
-        mediaType,
-      } satisfies UploadedPagePostMedia
-    }
-
-    throw error
   }
+
+  if (url) {
+    return {
+      mediaAssetIds: [],
+      fallbackUrl: url,
+      mediaType,
+    } satisfies UploadedPagePostMedia
+  }
+
+  throw new Error('Media upload completed without an asset ID or URL.')
 }
 
 const openUploadModal = () => {
@@ -580,32 +561,17 @@ const submitPageUpload = async () => {
   isUploadingPageMedia.value = true
 
   try {
-    const signatureResponse = await mediaService.getCloudinarySignature(authStore.authToken)
-    const uploadResponse = await mediaService.uploadCloudinaryFile(selectedFile, signatureResponse.data)
-
-    if (!uploadResponse.public_id) {
-      throw new Error('Media upload completed without a public ID.')
-    }
-
-    const registerResponse = await mediaService.registerMedia(
-      {
-        publicId: uploadResponse.public_id,
-        title,
-        kind: mediaType,
-        pageId: page.value.id,
-      },
-      authStore.authToken,
-    )
-
-    const processed = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+    const uploadResponse = await mediaService.uploadMediaFile(selectedFile, {
+      kind: mediaType,
+      title,
       token: authStore.authToken,
     })
 
-    const remoteUrl = processed.url || uploadResponse.secure_url || uploadPreviewUrl.value
+    const remoteUrl = uploadResponse.data.url || uploadPreviewUrl.value
     const shouldKeepPreview = remoteUrl === uploadPreviewUrl.value
 
     pageUploads.value.unshift({
-      id: processed.assetId || makeClientId(),
+      id: uploadResponse.data.assetId || uploadResponse.data.id || makeClientId(),
       title,
       url: remoteUrl,
       mediaType,
@@ -754,7 +720,6 @@ const savePageEdit = async () => {
       name,
       slug: page.value.slug,
       description,
-      ...metadata,
       metadata: {
         ...page.value.metadata,
         ...metadata,
@@ -764,11 +729,12 @@ const savePageEdit = async () => {
     if (editAvatarFile.value) {
       toast.loading('Uploading page image...', { id: toastId })
       const uploadResponse = await pagesService.uploadPageAvatarFile(pageId, editAvatarFile.value, authStore.authToken)
-      const processed = await mediaService.waitForProcessedMediaResult(uploadResponse.data.jobId, {
-        token: authStore.authToken,
-      })
       const refreshedPage = await pagesStore.loadPage(pageId)
-      const processedUrl = processed.url || ''
+      const processedUrl =
+        uploadResponse.data.avatar ||
+        uploadResponse.data.page?.avatar ||
+        uploadResponse.data.url ||
+        ''
 
       if (!refreshedPage?.avatar || (processedUrl && refreshedPage.avatar !== processedUrl)) {
         avatarPersistenceWarning = 'The page image upload finished, but the saved page record did not return the uploaded image.'
@@ -1484,15 +1450,6 @@ watch(pagePostFile, (file, previousFile) => {
         </button>
       </div>
 
-      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          class="inline-flex h-11 items-center rounded-[0.75rem] bg-red-500 px-5 text-sm font-semibold text-white transition hover:bg-red-600"
-          @click="isInternshipModalOpen = false"
-        >
-          Close
-        </button>
-      </div>
     </form>
   </ResponsiveOverlay>
 
@@ -1604,14 +1561,6 @@ watch(pagePostFile, (file, previousFile) => {
       </div>
 
       <div class="flex justify-end gap-2 border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          :disabled="isSavingPage"
-          class="inline-flex h-10 items-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-          @click="isEditPageModalOpen = false"
-        >
-          Cancel
-        </button>
         <button
           type="submit"
           :disabled="isSavingPage"

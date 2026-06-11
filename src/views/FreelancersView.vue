@@ -926,21 +926,13 @@ const clearPassportUpload = () => {
           By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.
         </span>
       </label>
-      <div class="flex justify-between gap-2 border-t border-[color:var(--border-soft)] pt-4">
+      <div class="flex justify-end gap-2 border-t border-[color:var(--border-soft)] pt-4">
         <button
           type="submit"
           :disabled="isSubmittingFreelanceJob"
           class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
         >
           {{ isSubmittingFreelanceJob ? 'Submitting...' : 'Submit' }}
-        </button>
-        <button
-          type="button"
-          :disabled="isSubmittingFreelanceJob"
-          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          @click="isPostJobModalOpen = false"
-        >
-          Close
         </button>
       </div>
     </form>
@@ -1036,16 +1028,6 @@ const clearPassportUpload = () => {
         </button>
       </div>
 
-      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          :disabled="isSubmittingFreelancerRegistration"
-          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          @click="isRegisterModalOpen = false"
-        >
-          Close
-        </button>
-      </div>
     </form>
   </ResponsiveOverlay>
 
@@ -1095,16 +1077,6 @@ const clearPassportUpload = () => {
         {{ isSendingEmail ? 'Sending...' : 'Send' }}
       </button>
 
-      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          :disabled="isSendingEmail"
-          class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          @click="closeEmailModal"
-        >
-          Close
-        </button>
-      </div>
     </form>
   </ResponsiveOverlay>
 

@@ -10,7 +10,7 @@ import AppRightRail from '@/components/AppRightRail.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
-import { ApiError } from '@/lib/api'
+import { ApiError, SESSION_EXPIRED_EVENT, type SessionExpiredEventDetail } from '@/lib/api'
 import { authService } from '@/services/auth'
 import { usersService } from '@/services/users'
 import { useAppStore } from '@/stores/app'
@@ -50,7 +50,7 @@ const notifications = computed(() => notificationsStore.visibleNotifications)
 const userMenu = computed(() => [
   { label: 'Profile', to: '/profile' },
   { label: 'Create Alerts', to: '/jobs/alerts' },
-  { label: 'Manage activities', to: '/' },
+  { label: 'Manage activities', to: '/activities' },
   { label: 'Manage Jobs', to: '/jobs' },
   { label: 'Referrals', to: '/referrals' },
   ...(authStore.isAuthenticated
@@ -79,6 +79,7 @@ const hideSidebar = computed(() => Boolean(route.meta.hideSidebar))
 const hideRightRail = computed(() => Boolean(route.meta.hideRightRail))
 const forceRightRail = computed(() => Boolean(route.meta.showRightRail))
 const hideRightRailQuestions = computed(() => route.path.startsWith('/communities/'))
+const hideRightRailAdverts = computed(() => Boolean(route.meta.hideRightRailAdverts))
 const usesWorkspaceShell = computed(
   () =>
     showHeader.value &&
@@ -155,6 +156,34 @@ const handleOnline = () => {
   }
 }
 
+const handleSessionExpired = (event: Event) => {
+  if (!authStore.authToken && !authStore.isAuthenticated) {
+    return
+  }
+
+  const detail = (event as CustomEvent<SessionExpiredEventDetail>).detail
+  const redirectTarget =
+    route.meta.requiresAuth && route.fullPath.startsWith('/')
+      ? route.fullPath
+      : '/feed'
+
+  authStore.clearAuthenticatedSession()
+  notificationsStore.reset()
+
+  toast.warning('Session expired', {
+    description: detail?.message || 'Please log in again to continue.',
+  })
+
+  if (route.name !== 'login') {
+    void router.push({
+      name: 'login',
+      query: {
+        redirect: redirectTarget,
+      },
+    })
+  }
+}
+
 const reloadCurrentRoute = async () => {
   await router.replace({
     path: route.fullPath,
@@ -169,11 +198,13 @@ onMounted(() => {
   syncBrowserNetworkState()
   window.addEventListener('offline', handleOffline)
   window.addEventListener('online', handleOnline)
+  window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('offline', handleOffline)
   window.removeEventListener('online', handleOnline)
+  window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
   notificationsStore.stopBackgroundSync()
 })
 
@@ -202,9 +233,14 @@ const hydrateCurrentUserProfile = async () => {
 
     const currentExperience = profileData?.experiences?.find((experience) => Boolean(experience.isCurrent)) || profileData?.experiences?.[0]
     const currentTitle = currentExperience?.title?.trim()
+    const currentWorkplace = currentExperience?.company?.trim()
 
     if (currentTitle) {
       authStore.signUpDraft.jobTitle = currentTitle
+    }
+
+    if (currentWorkplace) {
+      authStore.signUpDraft.workplace = currentWorkplace
     }
   } catch {
     return
@@ -324,7 +360,11 @@ const handleMenuAction = async (action: 'logout') => {
           class="app-scroll hidden lg:block lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain"
         >
           <div class="lg:pt-3">
-            <AppRightRail :pinned-layout="true" :hide-trending-questions="hideRightRailQuestions" />
+            <AppRightRail
+              :pinned-layout="true"
+              :hide-trending-questions="hideRightRailQuestions"
+              :hide-adverts="hideRightRailAdverts"
+            />
           </div>
         </div>
       </div>

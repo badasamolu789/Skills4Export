@@ -15,7 +15,6 @@ import { ApiError } from '@/lib/api'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
 import { pagesService } from '@/services/pages'
-import { mediaService } from '@/services/media'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore, type PageCategory } from '@/stores/pages'
 import { slugify } from '@/utils/slugify'
@@ -256,7 +255,6 @@ const submitPage = async () => {
         name,
         slug,
         description,
-        ...metadata,
         metadata,
       })
     } catch (error) {
@@ -279,11 +277,12 @@ const submitPage = async () => {
 
       try {
         const uploadResponse = await pagesService.uploadPageAvatarFile(page.id, avatarFile.value, authStore.authToken)
-        const processed = await mediaService.waitForProcessedMediaResult(uploadResponse.data.jobId, {
-          token: authStore.authToken,
-        })
         const refreshedPage = await pagesStore.loadPage(page.id)
-        const processedUrl = processed.url || ''
+        const processedUrl =
+          uploadResponse.data.avatar ||
+          uploadResponse.data.page?.avatar ||
+          uploadResponse.data.url ||
+          ''
 
         if (refreshedPage) page = refreshedPage
         if (!refreshedPage?.avatar || (processedUrl && refreshedPage.avatar !== processedUrl)) {

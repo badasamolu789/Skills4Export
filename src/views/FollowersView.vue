@@ -54,6 +54,13 @@ const followUser = async (targetUserId: string) => {
     return
   }
 
+  if (authStore.userId && targetUserId === authStore.userId) {
+    toast.info('This is your profile', {
+      description: 'You cannot follow your own account.',
+    })
+    return
+  }
+
   isToggling.value[targetUserId] = true
 
   try {

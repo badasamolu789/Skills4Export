@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import type { FeedPost } from '@/data/feedPosts'
+import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { ClipboardList, Plus } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
 import {
@@ -11,16 +12,17 @@ import {
   type CommunityMemberRecord,
   type CommunityRecord,
 } from '@/services/communities'
-import { postsService, type PostRecord } from '@/services/posts'
+import { postsService, type PostMediaRecord, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
-import { getPostCommunityId, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getPostCommunityId, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionCommunityId, getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const currentUser = useCurrentUserIdentity()
 const community = ref<CommunityRecord | null>(null)
 const members = ref<CommunityMemberRecord[]>([])
 const isLoadingCommunity = ref(false)
@@ -31,6 +33,14 @@ const communityFeedError = ref('')
 const communityFeed = ref<FeedPost[]>([])
 
 const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
+const RECENT_CREATED_POSTS_KEY = 'skills4export:recent-created-posts'
+const RECENT_CREATED_POST_TTL_MS = 30 * 60 * 1000
+
+type RecentCreatedPost = {
+  storedAt: string
+  post: PostRecord
+  media: PostMediaRecord[]
+}
 
 const getMemberUserId = (member: CommunityMemberRecord) => member.userId || member.user_id || member.user?.id || ''
 
@@ -89,10 +99,11 @@ const sortedCommunityFeed = computed(() =>
 )
 
 const loadCommunityPost = async (post: PostRecord) => {
+  const postUserId = getPostUserId(post)
   const [mediaResponse, authorResponse] = await Promise.all([
     postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
-    post.user_id
-      ? usersService.getUserProfile(post.user_id, authStore.authToken).catch(() => null)
+    postUserId
+      ? usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
       : Promise.resolve(null),
   ])
 
@@ -114,6 +125,30 @@ const loadCommunityQuestion = async (question: QuestionRecord) => {
   } satisfies FeedPost
 }
 
+const getRecentCreatedPosts = (communityId: string) => {
+  if (typeof window === 'undefined') {
+    return [] as RecentCreatedPost[]
+  }
+
+  try {
+    const now = Date.now()
+    const items = JSON.parse(window.sessionStorage.getItem(RECENT_CREATED_POSTS_KEY) || '[]') as RecentCreatedPost[]
+    const freshItems = items.filter((item) => {
+      const storedTime = new Date(item.storedAt).getTime()
+      return item.post?.id && Number.isFinite(storedTime) && now - storedTime < RECENT_CREATED_POST_TTL_MS
+    })
+
+    if (freshItems.length !== items.length) {
+      window.sessionStorage.setItem(RECENT_CREATED_POSTS_KEY, JSON.stringify(freshItems))
+    }
+
+    return freshItems.filter((item) => getPostCommunityId(item.post) === communityId)
+  } catch {
+    window.sessionStorage.removeItem(RECENT_CREATED_POSTS_KEY)
+    return []
+  }
+}
+
 const loadCommunityFeed = async (communityId: string) => {
   isLoadingCommunityFeed.value = true
   communityFeedError.value = ''
@@ -121,9 +156,9 @@ const loadCommunityFeed = async (communityId: string) => {
 
   try {
     const [postsResult, questionsResult] = await Promise.allSettled([
-      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      postsService.listPosts({ per_page: 100, sort: '-createdAt', communityId }, authStore.authToken),
       questionsService.listQuestions(
-        { per_page: 100, sort: '-createdAt' },
+        { per_page: 100, sort: '-createdAt', communityId },
         authStore.authToken,
         { suppressErrorModal: true },
       ),
@@ -142,8 +177,20 @@ const loadCommunityFeed = async (communityId: string) => {
       Promise.all(communityPosts.map((post) => loadCommunityPost(post))),
       Promise.all(communityQuestions.map((question) => loadCommunityQuestion(question))),
     ])
+    const apiPostIds = new Set(mappedPosts.map((post) => post.apiId || post.slug))
+    const recentPosts = getRecentCreatedPosts(communityId)
+      .filter((item) => !apiPostIds.has(item.post.id))
+      .map((item) => ({
+        ...mapApiPostToFeedPost(
+          item.post,
+          item.media ?? [],
+          currentUser.profileData.value,
+          community.value?.name || 'Community post',
+        ),
+        communityName: community.value?.name || 'Community post',
+      }) satisfies FeedPost)
 
-    communityFeed.value = [...mappedPosts, ...mappedQuestions]
+    communityFeed.value = [...recentPosts, ...mappedPosts, ...mappedQuestions]
   } catch (error) {
     communityFeedError.value = error instanceof ApiError ? error.message : 'Unable to load community feed.'
   } finally {

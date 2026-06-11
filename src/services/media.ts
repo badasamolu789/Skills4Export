@@ -1,4 +1,4 @@
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 
 // ============================================================================
 // Types
@@ -18,6 +18,22 @@ export type MediaRegisterResponse = {
     success: boolean
     data: {
         jobId: string
+    }
+}
+
+export type MediaUploadFileResponse = {
+    success: boolean
+    message?: string
+    data: {
+        assetId?: string
+        id?: string
+        url?: string
+        publicId?: string
+        kind?: string
+        title?: string | null
+        mimeType?: string | null
+        sizeBytes?: number | null
+        asset?: Record<string, unknown>
     }
 }
 
@@ -54,8 +70,20 @@ export type CloudinaryUploadResponse = {
 
 export type UploadAvatarFileResponse = {
     success: boolean
+    message?: string
     data: {
-        jobId: string
+        jobId?: string
+        assetId?: string
+        id?: string
+        url?: string
+        publicId?: string
+        kind?: string
+        title?: string | null
+        mimeType?: string | null
+        sizeBytes?: number | null
+        avatar?: string | null
+        banner?: string | null
+        profile?: Record<string, unknown> | null
     }
 }
 
@@ -325,6 +353,133 @@ export const mediaService = {
         return api.get<MediaJobStatusResponse>(`/media/jobs/${jobId}`, { token })
     },
 
+    /**
+     * Upload a file through the backend. This is the API-documented upload path
+     * for post/advert media when the browser should not upload directly to Cloudinary.
+     *
+     * @param file - The file to upload
+     * @param options.kind - Optional media kind, e.g. post_image or advert_image
+     * @param options.title - Optional display title for the media
+     * @param options.token - Optional authorization token
+     * @returns Promise with a persisted asset ID and URL
+     */
+    uploadMediaFile: async (
+        file: File,
+        options?: {
+            kind?: string
+            title?: string
+            token?: string | null
+            timeoutMs?: number
+            fallbackToDirectUpload?: boolean
+        },
+    ) => {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        if (options?.kind) {
+            formData.append('kind', options.kind)
+        }
+
+        if (options?.title) {
+            formData.append('title', options.title)
+        }
+
+        try {
+            return await api.post<MediaUploadFileResponse>('/media/upload', formData, {
+                token: options?.token,
+                retry: false,
+                timeoutMs: options?.timeoutMs ?? 180000,
+            })
+        } catch (error) {
+            const canFallback =
+                options?.fallbackToDirectUpload !== false &&
+                error instanceof ApiError &&
+                (error.status === 0 || error.status === 408 || error.status === 502 || error.status === 503 || error.status === 504)
+
+            if (!canFallback) {
+                throw error
+            }
+
+            const signatureResponse = await mediaService.getCloudinarySignature(options?.token)
+            const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
+            const publicId = uploadResponse.public_id
+
+            if (!publicId) {
+                throw error
+            }
+
+            const registerResponse = await mediaService.registerMedia(
+                {
+                    publicId,
+                    title: options?.title || file.name,
+                    kind: options?.kind ?? (file.type.startsWith('video/') ? 'video' : 'post_image'),
+                },
+                options?.token,
+            )
+            const immediateAssetId = extractMediaAssetId(registerResponse.data)
+            const immediateUrl = extractMediaUrl(registerResponse.data) || uploadResponse.secure_url
+
+            if (immediateAssetId) {
+                return {
+                    success: true,
+                    message: 'Media uploaded successfully',
+                    data: {
+                        assetId: immediateAssetId,
+                        id: immediateAssetId,
+                        url: immediateUrl || uploadResponse.secure_url,
+                        publicId,
+                        kind: options?.kind,
+                        title: options?.title || file.name,
+                        mimeType: file.type,
+                        sizeBytes: file.size,
+                    },
+                }
+            }
+
+            if (registerResponse.data.jobId) {
+                const result = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
+                    token: options?.token,
+                    attempts: 45,
+                    intervalMs: 1000,
+                })
+
+                if (result.assetId) {
+                    return {
+                        success: true,
+                        message: 'Media uploaded successfully',
+                        data: {
+                            assetId: result.assetId,
+                            id: result.assetId,
+                            url: result.url || immediateUrl || uploadResponse.secure_url,
+                            publicId,
+                            kind: options?.kind,
+                            title: options?.title || file.name,
+                            mimeType: file.type,
+                            sizeBytes: file.size,
+                        },
+                    }
+                }
+            }
+
+            if (immediateUrl || uploadResponse.secure_url) {
+                return {
+                    success: true,
+                    message: 'Media uploaded successfully',
+                    data: {
+                        url: immediateUrl || uploadResponse.secure_url,
+                        publicId,
+                        kind: options?.kind,
+                        title: options?.title || file.name,
+                        mimeType: file.type,
+                        sizeBytes: file.size,
+                    },
+                }
+            }
+
+            throw error
+        }
+    },
+
     uploadCloudinaryFile: async (
         file: File,
         signatureData: Record<string, unknown>,
@@ -442,17 +597,16 @@ export const mediaService = {
     },
 
     /**
-     * Upload avatar file (multipart) - server accepts file and enqueues background
-     * validation and Cloudinary upload. Use kind=banner to upload a banner.
-     * If image already exists, pass ?replace=true or clear it first using
-     * PUT /users/:id/profile with { avatar: null } or { banner: null }.
+     * Upload avatar or banner file (multipart) through the backend to the
+     * platform Cloudinary account. The updated endpoint returns the uploaded
+     * asset and profile image URL immediately.
      *
      * @param userId - The user ID to upload avatar for
      * @param file - The file to upload
      * @param kind - Optional kind ('avatar' or 'banner')
      * @param replace - Optional boolean to replace existing file
      * @param token - Optional authorization token
-     * @returns Promise with job ID
+     * @returns Promise with the uploaded asset and updated profile image URL
      */
     uploadAvatarFile: async (
         userId: string,
@@ -474,7 +628,7 @@ export const mediaService = {
             queryParams.append('replace', 'true')
         }
 
-        const endpoint = `users/${userId}/profile/avatar-file`
+        const endpoint = `/users/${userId}/profile/avatar-file`
 
         const fullEndpoint = queryParams.toString()
             ? `${endpoint}?${queryParams.toString()}`

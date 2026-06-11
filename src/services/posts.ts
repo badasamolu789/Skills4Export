@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 export type PostRecord = {
   id: string
   user_id: string
+  userId?: string
   community_id: string | null
   communityId?: string | null
   community?: {
@@ -22,9 +23,18 @@ export type PostRecord = {
   page?: {
     id?: string
     name?: string | null
+    displayName?: string | null
+    display_name?: string | null
+    title?: string | null
+    pageName?: string | null
+    page_name?: string | null
     slug?: string | null
     avatar?: string | null
+    avatarUrl?: string | null
+    avatar_url?: string | null
     logo?: string | null
+    logoUrl?: string | null
+    logo_url?: string | null
     is_follow?: boolean
     isFollow?: boolean
   } | null
@@ -58,10 +68,16 @@ export type PostMediaRecord = {
 export type PostCommentRecord = {
   id: string
   post_id: string
+  postId?: string
   user_id: string
+  userId?: string
   parent_comment_id: string | null
+  parentCommentId?: string | null
   content: string
   created_at: string
+  createdAt?: string
+  updated_at?: string
+  updatedAt?: string
   reactions_count?: number | string
   reaction_count?: number | string
   reactionsCount?: number | string
@@ -94,6 +110,10 @@ export type ListPostsParams = {
   communityId?: string | null
   pageId?: string | null
   type?: string
+  'filters[search]'?: string
+  'filters[community_id]'?: string | null
+  'sort[field]'?: string
+  'sort[direction]'?: 'asc' | 'desc' | string
 }
 
 export type ApiSuccessResponse<T> = {
@@ -104,10 +124,14 @@ export type ApiSuccessResponse<T> = {
 export type CreatePostRequest = {
   userId?: string
   communityId?: string | null
+  community_id?: string | null
   pageId?: string | null
+  page_id?: string | null
   title: string
   content: string
+  visibility?: 'public' | 'connections' | 'community' | null
   mediaAssetIds?: string[]
+  media_asset_ids?: string[]
 }
 
 export type UpdatePostRequest = {
@@ -130,6 +154,15 @@ export type CreateCommentRequest = {
   userId?: string
   content: string
   parentCommentId?: string | null
+}
+
+export type UpdateCommentRequest = {
+  userId?: string
+  content: string
+}
+
+export type DeleteCommentRequest = {
+  userId?: string
 }
 
 export type ToggleReactionRequest = {
@@ -212,6 +245,7 @@ const POST_ROUTES = {
   postSave: (id: string) => `/posts/${id}/save`,
   postReport: (id: string) => `/posts/${id}/report`,
   commentReactions: (id: string) => `/comments/${id}/reactions`,
+  commentById: (id: string) => `/comments/${id}`,
   commentReport: (id: string) => `/comments/${id}/report`,
   postMediaById: (id: string) => `/posts/media/${id}`,
   pagePosts: (id: string) => `/page/${id}/post`,
@@ -232,21 +266,62 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
   return value ? `${path}?${value}` : path
 }
 
+const SORT_FIELD_ALIASES: Record<string, string> = {
+  createdAt: 'created_at',
+  created_at: 'created_at',
+  updatedAt: 'updated_at',
+  updated_at: 'updated_at',
+  commentsCount: 'comment_count',
+  commentCount: 'comment_count',
+  comment_count: 'comment_count',
+  title: 'title',
+  score: 'score',
+}
+
+const normalizeSortField = (field: string) => SORT_FIELD_ALIASES[field] || field
+
+const normalizeFeedQueryParams = (params: ListPostsParams = {}) => {
+  const normalized: Record<string, unknown> = { ...params }
+
+  if (params.q && !normalized['filters[search]']) {
+    normalized['filters[search]'] = params.q
+  }
+
+  if (params.communityId && !normalized['filters[community_id]']) {
+    normalized['filters[community_id]'] = params.communityId
+    normalized.community_id = params.communityId
+  }
+
+  if (params.sort && !normalized['sort[field]']) {
+    const descending = params.sort.startsWith('-')
+    const field = descending ? params.sort.slice(1) : params.sort
+    normalized['sort[field]'] = normalizeSortField(field)
+    normalized['sort[direction]'] = descending ? 'desc' : 'asc'
+  }
+
+  if (typeof normalized['sort[field]'] === 'string') {
+    normalized['sort[field]'] = normalizeSortField(normalized['sort[field]'])
+    delete normalized.sort
+  }
+
+  return normalized
+}
+
 export const postsService = {
   createPost(payload: CreatePostRequest, token?: string | null) {
     return api.post<ApiSuccessResponse<PostRecord>>(POST_ROUTES.posts, payload, { token })
   },
 
   listPosts(params: ListPostsParams = {}, token?: string | null) {
-    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.posts, params), { token })
+    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.posts, normalizeFeedQueryParams(params)), { token })
   },
 
   listPagePosts(id: string, params: Omit<ListPostsParams, 'pageId'> = {}, token?: string | null) {
-    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.pagePosts(id), params), { token })
+    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.pagePosts(id), normalizeFeedQueryParams(params)), { token })
   },
 
   listSavedPosts(params: ListPostsParams = {}, token?: string | null) {
-    return api.get<PaginatorPayload<PostRecord>>(withQuery('/posts/saved', params), { token })
+    return api.get<PaginatorPayload<PostRecord>>(withQuery('/user/saved-posts', normalizeFeedQueryParams(params)), { token })
   },
 
   getPost(id: string, token?: string | null) {
@@ -299,6 +374,14 @@ export const postsService = {
 
   toggleCommentReaction(id: string, payload: ToggleReactionRequest, token?: string | null) {
     return api.post<ToggleReactionResponse>(POST_ROUTES.commentReactions(id), payload, { token })
+  },
+
+  updateComment(id: string, payload: UpdateCommentRequest, token?: string | null) {
+    return api.put<ApiSuccessResponse<PostCommentRecord>>(POST_ROUTES.commentById(id), payload, { token })
+  },
+
+  deleteComment(id: string, payload: DeleteCommentRequest, token?: string | null) {
+    return api.delete<DeletePostResponse>(POST_ROUTES.commentById(id), { body: payload, token })
   },
 
   reportComment(id: string, payload: ReportPostRequest, token?: string | null) {

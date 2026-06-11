@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import FeedAdvertCard from '@/components/FeedAdvertCard.vue'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
@@ -8,12 +9,12 @@ import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { pagesService, type PageRecord } from '@/services/pages'
-import { postsService, type PostRecord } from '@/services/posts'
+import { postsService, type PostMediaRecord, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { mapWithConcurrency } from '@/utils/async'
-import { mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
@@ -40,6 +41,15 @@ const INITIAL_POST_COUNT = 4
 const LOAD_BATCH_SIZE = 3
 const FEED_PAGE_SIZE = 20
 const ENRICHMENT_CONCURRENCY = 4
+const POST_CREATED_EVENT = 'skills4export:post-created'
+const RECENT_CREATED_POSTS_KEY = 'skills4export:recent-created-posts'
+const RECENT_CREATED_POST_TTL_MS = 30 * 60 * 1000
+
+type RecentCreatedPost = {
+  storedAt: string
+  post: PostRecord
+  media: PostMediaRecord[]
+}
 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 const visiblePostCount = ref(INITIAL_POST_COUNT)
@@ -51,6 +61,12 @@ const adverts = ref<AdvertRecord[]>([])
 const communitiesById = ref(new Map<string, CommunityRecord>())
 const authStore = useAuthStore()
 const currentUser = useCurrentUserIdentity()
+const route = useRoute()
+const activeFeedMode = computed(() => {
+  const value = route.query.feed
+  return (Array.isArray(value) ? value[0] : value) === 'latest' ? 'latest' : 'popular'
+})
+const activeFeedSort = computed(() => (activeFeedMode.value === 'latest' ? '-createdAt' : '-score'))
 
 const shuffleFeedPosts = (items: FeedPost[]) => {
   const shuffled = [...items]
@@ -142,6 +158,56 @@ const getFeedSignature = (items: FeedPost[]) =>
     ].join(':'))
     .join('|')
 
+const getFeedItemTimestamp = (item: FeedPost) =>
+  new Date(item.createdAt || item.updatedAt || '').getTime() || 0
+
+const getFeedItemEngagement = (item: FeedPost) =>
+  (item.score ?? 0) + ('comments' in item ? item.comments ?? 0 : item.answers ?? 0)
+
+const sortFeedItems = (items: FeedPost[]) => {
+  if (activeFeedMode.value === 'latest') {
+    return [...items].sort((first, second) => getFeedItemTimestamp(second) - getFeedItemTimestamp(first))
+  }
+
+  return [...items].sort((first, second) => {
+    const scoreDifference = (second.score ?? 0) - (first.score ?? 0)
+    if (scoreDifference) {
+      return scoreDifference
+    }
+
+    const engagementDifference = getFeedItemEngagement(second) - getFeedItemEngagement(first)
+    if (engagementDifference) {
+      return engagementDifference
+    }
+
+    return getFeedItemTimestamp(second) - getFeedItemTimestamp(first)
+  })
+}
+
+const getRecentCreatedPosts = () => {
+  if (typeof window === 'undefined') {
+    return [] as RecentCreatedPost[]
+  }
+
+  try {
+    const now = Date.now()
+    const items = JSON.parse(window.sessionStorage.getItem(RECENT_CREATED_POSTS_KEY) || '[]') as RecentCreatedPost[]
+    const freshItems = items.filter((item) => {
+      const storedTime = new Date(item.storedAt).getTime()
+      return item.post?.id && Number.isFinite(storedTime) && now - storedTime < RECENT_CREATED_POST_TTL_MS
+    })
+
+    if (freshItems.length !== items.length) {
+      window.sessionStorage.setItem(RECENT_CREATED_POSTS_KEY, JSON.stringify(freshItems))
+    }
+
+    return freshItems
+  } catch {
+    window.sessionStorage.removeItem(RECENT_CREATED_POSTS_KEY)
+    return []
+  }
+}
+
 const loadMorePosts = async () => {
   if (isLoadingMore.value || !hasMorePosts.value) {
     return
@@ -161,7 +227,7 @@ const loadMorePosts = async () => {
 
 const buildAuthorLookup = async (posts: PostRecord[], questions: QuestionRecord[]) => {
   const userIds = Array.from(new Set([
-    ...posts.filter((post) => !(post.pageId || post.page_id)).map((post) => post.user_id),
+    ...posts.filter((post) => !(post.pageId || post.page_id)).map(getPostUserId),
     ...questions.map(getQuestionUserId),
   ].filter(Boolean)))
   const entries = await mapWithConcurrency(
@@ -226,7 +292,7 @@ const loadFeedPost = async (post: PostRecord, authorLookup: AuthorLookup, pageLo
   return mapApiPostToFeedPost(
     post,
     mediaResponse?.data ?? [],
-    authorLookup.get(post.user_id) ?? null,
+    authorLookup.get(getPostUserId(post)) ?? null,
     communitiesById.value.get(post.community_id || post.communityId || '')?.name,
     pageId ? pageLookup.get(pageId) ?? null : null,
   )
@@ -276,9 +342,10 @@ const loadFeed = async (options: { background?: boolean } = {}) => {
   feedError.value = ''
 
   try {
+    const feedSort = activeFeedSort.value
     const [postsResult, questionsResult, advertsResult, communitiesResult] = await Promise.allSettled([
-      postsService.listPosts({ per_page: FEED_PAGE_SIZE, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: FEED_PAGE_SIZE, sort: '-createdAt' }, authStore.authToken),
+      postsService.listPosts({ per_page: FEED_PAGE_SIZE, sort: feedSort }, authStore.authToken),
+      questionsService.listQuestions({ per_page: FEED_PAGE_SIZE, sort: feedSort }, authStore.authToken),
       advertsService.listAdverts(
         {
           per_page: 20,
@@ -310,11 +377,19 @@ const loadFeed = async (options: { background?: boolean } = {}) => {
     const questions = await Promise.all(rawQuestions.map((question) => loadFeedQuestion(question, authorLookup)))
 
     adverts.value = advertsResult.status === 'fulfilled' ? advertsResult.value.data ?? [] : []
-    const nextPosts = [...posts, ...questions].sort(
-      (first, second) =>
-        new Date(second.createdAt || second.updatedAt || '').getTime() -
-        new Date(first.createdAt || first.updatedAt || '').getTime(),
-    )
+    const apiPostIds = new Set(posts.map((post) => post.apiId || post.slug))
+    const recentPosts = getRecentCreatedPosts()
+      .filter((item) => !apiPostIds.has(item.post.id))
+      .map((item) =>
+        mapApiPostToFeedPost(
+          item.post,
+          item.media ?? [],
+          currentUser.profileData.value,
+          communitiesById.value.get(item.post.community_id || item.post.communityId || '')?.name,
+        ),
+      )
+
+    const nextPosts = sortFeedItems([...recentPosts, ...posts, ...questions])
     if (getFeedSignature(apiPosts.value) !== getFeedSignature(nextPosts)) {
       apiPosts.value = nextPosts
     }
@@ -352,9 +427,15 @@ const loadFeed = async (options: { background?: boolean } = {}) => {
   }
 }
 
+const handlePostCreated = () => {
+  visiblePostCount.value = INITIAL_POST_COUNT
+  void loadFeed({ background: true })
+}
+
 onMounted(() => {
   void loadFeed()
   setupObserver()
+  window.addEventListener(POST_CREATED_EVENT, handlePostCreated)
   realtimeTimer = window.setInterval(() => {
     if (!isLoadingFeed.value) {
       void loadFeed({ background: true })
@@ -367,8 +448,14 @@ watch(loadMoreTrigger, async () => {
   setupObserver()
 })
 
+watch(activeFeedMode, () => {
+  visiblePostCount.value = INITIAL_POST_COUNT
+  void loadFeed()
+})
+
 onBeforeUnmount(() => {
   observer?.disconnect()
+  window.removeEventListener(POST_CREATED_EVENT, handlePostCreated)
   if (realtimeTimer) {
     window.clearInterval(realtimeTimer)
   }

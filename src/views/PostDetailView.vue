@@ -30,7 +30,7 @@ import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/se
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
 import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
 
@@ -57,6 +57,7 @@ const postAuthorRoute = computed(() => {
 const postAuthorUserId = computed(() => post.value?.userId || getPublicProfileIdFromRoute(postAuthorRoute.value))
 const isOwnPost = computed(() => Boolean(authStore.userId && postAuthorUserId.value === authStore.userId))
 const showFollowAction = computed(() => Boolean(!isOwnPost.value && (post.value?.pageId || postAuthorUserId.value)))
+const canScorePost = computed(() => Boolean(!isOwnPost.value))
 const isQuestionRoute = computed(() => route.path.startsWith('/questions/'))
 const isFollowing = ref(false)
 const isSaved = ref(false)
@@ -528,7 +529,7 @@ watch(
 
       const response = await postsService.getPost(String(slug), authStore.authToken)
       let media: PostMediaRecord[] = []
-      const postUserId = response.data.user_id
+      const postUserId = getPostUserId(response.data)
 
       try {
         const mediaResponse = await postsService.listPostMedia(response.data.id, authStore.authToken)
@@ -653,9 +654,9 @@ const toggleFollow = async () => {
 }
 
 const toggleScore = async () => {
-  if (isOwnPost.value) {
-    toast.info('This is your post', {
-      description: 'You cannot score your own post.',
+  if (!canScorePost.value) {
+    toast.info(`This is your ${isQuestionRoute.value ? 'question' : 'post'}`, {
+      description: `You cannot score your own ${isQuestionRoute.value ? 'question' : 'post'}.`,
     })
     return
   }
@@ -1278,7 +1279,14 @@ const submitAnswer = async () => {
           <button
             type="button"
             class="inline-flex h-9 items-center gap-1.5 rounded-[0.8rem] border px-3 text-[0.82rem] font-semibold transition"
-            :class="isScored ? 'border-[color:var(--accent)] bg-[var(--accent)] text-white' : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
+            :class="
+              !canScorePost
+                ? 'cursor-not-allowed border-[color:var(--border-soft)] text-[var(--text-tertiary)] opacity-70'
+                : isScored
+                  ? 'border-[color:var(--accent)] bg-[var(--accent)] text-white'
+                  : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
+            "
+            :disabled="!canScorePost || isReactingToPost"
             @click="toggleScore"
           >
             <ArrowUp class="h-3.5 w-3.5" />
@@ -1751,15 +1759,6 @@ const submitAnswer = async () => {
         <ArrowUp class="h-4 w-4 rotate-45" />
       </button>
 
-      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
-        <button
-          type="button"
-          class="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--danger)] px-4 text-sm font-semibold text-white transition hover:opacity-90"
-          @click="closeAnswerModal"
-        >
-          Close
-        </button>
-      </div>
     </div>
   </ResponsiveOverlay>
 

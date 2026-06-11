@@ -143,7 +143,10 @@ onBeforeUnmount(() => {
             :class="panelClasses"
           >
             <div v-if="!props.mobileAside" class="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
-            <div class="flex items-start justify-between gap-3">
+            <div
+              class="flex items-start gap-3"
+              :class="props.showHeaderText ? 'justify-between' : 'justify-end'"
+            >
               <div v-if="props.showHeaderText">
                 <p class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
                   {{ label }}
@@ -156,7 +159,7 @@ onBeforeUnmount(() => {
 
               <button
                 type="button"
-                class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border-soft)] text-[var(--accent-strong)] transition hover:border-[var(--accent-soft)] hover:bg-[var(--surface-muted)]"
+                class="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--border-soft)] text-[var(--accent-strong)] transition hover:border-[var(--accent-soft)] hover:bg-[var(--surface-muted)]"
                 aria-label="Close panel"
                 @click="close"
               >

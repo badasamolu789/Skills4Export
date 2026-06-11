@@ -34,7 +34,7 @@ import {
   type UserSkill,
 } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
 
@@ -122,7 +122,7 @@ const loadRecentActivity = async () => {
     ])
     const allPosts = postsResult.status === 'fulfilled' ? postsResult.value.data : []
     const allQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data : []
-    const userPosts = allPosts.filter((post: PostRecord) => post.user_id === userId.value)
+    const userPosts = allPosts.filter((post: PostRecord) => getPostUserId(post) === userId.value)
     const userQuestions = allQuestions.filter((question: QuestionRecord) => getQuestionUserId(question) === userId.value)
     const [postCommentResults, questionAnswerResults] = await Promise.all([
       Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),

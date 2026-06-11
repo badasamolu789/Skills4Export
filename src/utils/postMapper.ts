@@ -57,6 +57,10 @@ const getNestedRecord = (source: unknown, key: string) => {
   return isRecord(value) ? value : null
 }
 
+export const getPostUserId = (post: PostRecord) =>
+  getStringValue(post, ['user_id', 'userId', 'authorId', 'author_id']) ||
+  getStringValue(post.user, ['id', 'userId', 'user_id'])
+
 const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
   const authorRecord = isRecord(author) ? author : null
   const authorUser = getNestedRecord(author, 'user')
@@ -69,12 +73,14 @@ const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
       getStringValue(authorProfile, ['displayName', 'display_name', 'name']),
       getStringValue(authorRecord, ['displayName', 'display_name', 'name']),
       getStringValue(postUser, ['name', 'displayName', 'display_name']),
+      getStringValue(post, ['authorName', 'author_name', 'userName', 'user_name', 'displayName', 'display_name']),
       getStringValue(authorUser, ['username']),
       getStringValue(authorProfile, ['username']),
       getStringValue(authorRecord, ['username']),
       getStringValue(postUser, ['username']),
+      getStringValue(post, ['username']),
     ) ||
-    (post.user_id ? 'Community member' : 'Member')
+    (getPostUserId(post) ? 'Community member' : 'Member')
   )
 }
 
@@ -166,17 +172,25 @@ export const mapApiPostToFeedPost = (
     .sort((a, b) => a.display_order - b.display_order)
 
   const authorName = getAuthorName(post, author)
+  const postUserId = getPostUserId(post)
   const resolvedCommunityName = communityName || post.community?.name || ''
-  const postPageId = post.pageId || post.page_id
+  const postPageId = post.pageId || post.page_id || getStringValue(post.page, ['id'])
   const resolvedPage = page || post.page
-  const pageAuthorName = resolvedPage?.name?.trim() || ''
+  const pageAuthorName = getStringValue(resolvedPage, [
+    'name',
+    'displayName',
+    'display_name',
+    'title',
+    'pageName',
+    'page_name',
+  ])
   const resolvedAuthorName = postPageId ? pageAuthorName || 'Page' : authorName
   const authorProfile = {
     name: resolvedAuthorName,
-    to: postPageId ? `/pages/${resolvedPage?.slug || postPageId}/public` : `/profile/view/${post.user_id}`,
+    to: postPageId ? `/pages/${resolvedPage?.slug || postPageId}/public` : `/profile/view/${postUserId}`,
     avatarText: getInitials(resolvedAuthorName),
     avatarSrc: postPageId
-      ? getStringValue(resolvedPage, ['avatar', 'logo']) || null
+      ? getStringValue(resolvedPage, ['avatar', 'avatarUrl', 'avatar_url', 'logo', 'logoUrl', 'logo_url']) || null
       : getAuthorAvatar(author),
   }
   const authorTag = postPageId ? getPageTag(resolvedPage) : getAuthorTag(author)
@@ -187,7 +201,7 @@ export const mapApiPostToFeedPost = (
   const basePost = {
     type: getPostCommunityId(post) ? 'community' : 'personal',
     apiId: post.id,
-    userId: post.user_id,
+    userId: postUserId,
     communityId: getPostCommunityId(post),
     communityName: getPostCommunityId(post) ? resolvedCommunityName || 'Community' : undefined,
     pageId: postPageId,

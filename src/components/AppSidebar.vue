@@ -96,6 +96,7 @@ const footerLinks = [
 const pagesStore = usePagesStore()
 const authStore = useAuthStore()
 const route = useRoute()
+const popularLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'popular' } }))
 const latestLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'latest' } }))
 const isJobsRoute = computed(() => route.path.startsWith('/jobs'))
 const isAnswerRoute = computed(() => route.path.startsWith('/answer'))
@@ -181,7 +182,7 @@ const isFeedLinkActive = (label: string) => {
     return route.path === '/feed' && getCurrentQueryValue('feed') === 'latest'
   }
 
-  return route.path === '/feed' && getCurrentQueryValue('feed') !== 'latest'
+  return route.path === '/feed' && (getCurrentQueryValue('feed') === 'popular' || getCurrentQueryValue('feed') !== 'latest')
 }
 
 const getTopLevelLinkClasses = (isActive: boolean) =>
@@ -374,7 +375,7 @@ watch(
               <RouterLink
                 v-for="item in trendingLinks"
                 :key="item.label"
-                :to="item.label === 'Latest' ? latestLinkTarget : item.to"
+                :to="item.label === 'Latest' ? latestLinkTarget : popularLinkTarget"
                 :class="getTopLevelLinkClasses(isFeedLinkActive(item.label))"
                 class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
                 @click="handleNavigation"

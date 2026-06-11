@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import type { MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getDisplayName } from '@/utils/displayName'
+import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 
 const getFirstFilled = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
@@ -30,11 +30,22 @@ const jobTitleKeys = [
   'profession',
   'occupation',
   'title',
-  'headline',
+]
+
+const workplaceKeys = [
+  'workplace',
+  'currentWorkplace',
+  'current_workplace',
+  'company',
+  'companyName',
+  'company_name',
+  'organization',
+  'organisation',
+  'employer',
 ]
 
 export const getProfileDisplayName = (profile?: MyProfileData | null) =>
-  getDisplayName(
+  toInitialCaps(getDisplayName(
     profile?.user?.name,
     profile?.profile?.displayName,
     (profile?.profile as Record<string, unknown> | null | undefined)?.display_name as string | undefined,
@@ -42,7 +53,7 @@ export const getProfileDisplayName = (profile?: MyProfileData | null) =>
     (profile as Record<string, unknown> | null | undefined)?.display_name as string | undefined,
     profile?.profile?.username,
     profile?.user?.username,
-  )
+  ))
 
 export const getProfileSkills = (profile?: MyProfileData | null) =>
   profile?.skills
@@ -62,26 +73,32 @@ export const useCurrentUserIdentity = () => {
   const authStore = useAuthStore()
 
   const displayName = computed(() =>
-    getDisplayName(
+    toInitialCaps(getDisplayName(
       authStore.signUpDraft.name,
       authStore.currentUser?.name,
       authStore.userProfile?.displayName,
       authStore.userProfile?.username,
       authStore.signUpDraft.username,
-    ) || 'Member',
+    ) || 'Member'),
   )
 
   const avatarSrc = computed(() => authStore.userProfile?.avatar || authStore.signUpDraft.avatar || '')
   const initials = computed(() => getInitials(displayName.value))
-  const role = computed(() =>
-    getFirstFilled(
+  const currentTitle = computed(() =>
+    toInitialCaps(getFirstFilled(
       authStore.signUpDraft.jobTitle,
       getRecordString(authStore.userProfile, jobTitleKeys),
       getRecordString(authStore.currentUser, jobTitleKeys),
-      authStore.signUpDraft.headline,
-      'Member',
-    ),
+    ), { keepSmallWords: true }),
   )
+  const currentWorkplace = computed(() =>
+    toInitialCaps(getFirstFilled(
+      authStore.signUpDraft.workplace,
+      getRecordString(authStore.userProfile, workplaceKeys),
+      getRecordString(authStore.currentUser, workplaceKeys),
+    ), { keepSmallWords: true }),
+  )
+  const role = computed(() => [currentTitle.value, currentWorkplace.value].filter(Boolean).join(' - ') || 'Member')
   const profilePath = computed(() => (authStore.userId ? `/profile/view/${authStore.userId}` : '/profile'))
   const skills = computed(() => authStore.signUpDraft.interests.slice(0, 3))
 
@@ -100,6 +117,8 @@ export const useCurrentUserIdentity = () => {
     avatarSrc,
     initials,
     role,
+    currentTitle,
+    currentWorkplace,
     profilePath,
     skills,
     profileData,
