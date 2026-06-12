@@ -4,8 +4,9 @@ import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
-import { authService, extractAuthSession, extractUserIdFromToken } from '@/services/auth'
+import { authService, extractAuthSession, extractUserIdFromToken, type AuthSuccessResponse } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -57,7 +58,7 @@ const finishInPopupIfNeeded = (payload: { success: boolean; token?: string; erro
   return true
 }
 
-const finishSignIn = async () => {
+const finishSignIn = async (): Promise<{ token: string; response?: AuthSuccessResponse | null }> => {
   const error = getHashValue('error') || getQueryValue('error') || getHashValue('message') || getQueryValue('message')
   const errorDescription = getHashValue('error_description') || getQueryValue('error_description')
   const directToken = getHashValue('accessToken') || getQueryValue('accessToken') || getHashValue('token') || getQueryValue('token')
@@ -70,7 +71,7 @@ const finishSignIn = async () => {
   if (directToken) {
     clearAuthFragment()
     authStore.setAuthenticatedSession(directToken, extractUserIdFromToken(directToken))
-    return directToken
+    return { token: directToken }
   }
 
   if (idToken) {
@@ -83,7 +84,7 @@ const finishSignIn = async () => {
     }
 
     authStore.setAuthenticatedSession(session.token, session.userId)
-    return session.token
+    return { token: session.token, response }
   }
 
   const response = await authService.googleCallback()
@@ -94,7 +95,7 @@ const finishSignIn = async () => {
   }
 
   authStore.setAuthenticatedSession(session.token, session.userId)
-  return session.token
+  return { token: session.token, response }
 }
 
 onMounted(async () => {
@@ -103,19 +104,24 @@ onMounted(async () => {
   })
 
   try {
-    const token = await finishSignIn()
-    statusMessage.value = 'Google sign-in complete. Redirecting to your workspace...'
+    const { token, response } = await finishSignIn()
+    const redirectTarget = await resolveGoogleOnboardingRedirect(authStore, response)
+    statusMessage.value = redirectTarget === '/auth/signup/details'
+      ? 'Google sign-in complete. Finish your profile details to continue...'
+      : 'Google sign-in complete. Redirecting to your workspace...'
 
     toast.success('Signed in with Google', {
       id: loadingToastId,
-      description: 'Your account session is ready.',
+      description: redirectTarget === '/auth/signup/details'
+        ? 'Add a few profile details to finish your setup.'
+        : 'Your account session is ready.',
     })
 
     if (finishInPopupIfNeeded({ success: true, token })) {
       return
     }
 
-    await router.replace('/feed')
+    await router.replace(redirectTarget)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

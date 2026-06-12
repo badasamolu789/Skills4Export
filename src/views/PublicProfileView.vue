@@ -8,16 +8,17 @@ import {
   ClipboardList,
   ExternalLink,
   GraduationCap,
+  Image as ImageIcon,
   Rocket,
   Sparkles,
   UserCheck,
   UserPlus,
-  Users,
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import { ApiError } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import type { FeedPost } from '@/data/feedPosts'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
@@ -38,6 +39,14 @@ import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/p
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
 
+type ProfileUploadItem = {
+  id: string
+  title: string
+  externalUrl?: string
+  url: string
+  mediaType: 'image' | 'video'
+}
+
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -50,6 +59,12 @@ const certifications = ref<UserCertification[]>([])
 const educations = ref<UserEducation[]>([])
 const experiences = ref<UserExperience[]>([])
 const followers = ref<UserFollower[]>([])
+const following = ref<Array<{
+  id: string
+  name: string
+  avatar: string
+  initials: string
+}>>([])
 const recentActivities = ref<FeedPost[]>([])
 const scoreEntries = ref<Array<{ id: string; title: string; community: string; score: number; typeLabel: string }>>([])
 const stats = ref({
@@ -61,7 +76,9 @@ const stats = ref({
 const isLoadingProfile = ref(false)
 const isLoadingActivity = ref(false)
 const isTogglingFollow = ref(false)
-const profileModal = ref<null | 'score' | 'followers'>(null)
+const profileModal = ref<null | 'score' | 'followers' | 'following'>(null)
+const followStates = ref<Record<string, boolean>>({})
+const followToggles = ref<Record<string, boolean>>({})
 const loadError = ref('')
 
 const userId = computed(() => {
@@ -71,6 +88,104 @@ const userId = computed(() => {
 
 const readString = (value: unknown) => (typeof value === 'string' ? value : '')
 const isVideoMediaUrl = (url: string) => /\/video\/upload\/|\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url)
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+
+const getStringField = (record: Record<string, unknown> | null | undefined, keys: string[]) => {
+  for (const key of keys) {
+    const value = record?.[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const getBooleanField = (record: Record<string, unknown> | null | undefined, keys: string[]) => {
+  for (const key of keys) {
+    const value = record?.[key]
+
+    if (typeof value === 'boolean') {
+      return value
+    }
+  }
+
+  return undefined
+}
+
+const getAccountInitials = (name: string) =>
+  name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+const getFollowingUsers = (data: unknown) => {
+  const record = asRecord(data)
+  const followingRecord = asRecord(record?.following)
+  const users = followingRecord?.users
+
+  return Array.isArray(users) ? users : []
+}
+
+const getAccountFromUnknown = (value: unknown) => {
+  const record = asRecord(value)
+  const profileRecord = asRecord(record?.profile) || asRecord(record?.followingProfile) || asRecord(record?.userProfile)
+  const userRecord = asRecord(record?.user) || asRecord(record?.following) || record
+  const id =
+    getStringField(record, ['id', 'userId', 'user_id', 'followingId', 'following_id']) ||
+    getStringField(userRecord, ['id', 'userId', 'user_id'])
+  const name = getDisplayName(
+    getStringField(profileRecord, ['displayName', 'display_name', 'name']),
+    getStringField(userRecord, ['name', 'displayName', 'display_name', 'fullName', 'full_name', 'username']),
+    id ? `User ${id.slice(0, 8)}` : 'User',
+  )
+  const avatar =
+    getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
+    getStringField(userRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image'])
+
+  return {
+    id,
+    name,
+    avatar,
+    initials: getAccountInitials(name),
+  }
+}
+
+const getFollowerAccount = (follower: UserFollower) => {
+  const followerRecord = follower as Record<string, unknown>
+  const userRecord =
+    asRecord(followerRecord.follower) ||
+    asRecord(followerRecord.user) ||
+    asRecord(followerRecord.account)
+  const profileRecord =
+    asRecord(followerRecord.followerProfile) ||
+    asRecord(followerRecord.profile) ||
+    asRecord(userRecord?.profile)
+  const id =
+    getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id']) ||
+    getStringField(userRecord, ['id', 'userId', 'user_id'])
+  const name = getDisplayName(
+    getStringField(profileRecord, ['displayName', 'display_name', 'name']),
+    getStringField(userRecord, ['name', 'displayName', 'display_name', 'fullName', 'full_name', 'username']),
+    id ? `User ${id.slice(0, 8)}` : 'User',
+  )
+  const avatar =
+    getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
+    getStringField(userRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image'])
+  const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+
+  return {
+    id,
+    name,
+    avatar,
+    initials: getAccountInitials(name),
+    isCurrentUser: Boolean(id && id === authStore.userId),
+    isFollowing: id ? followStates.value[id] ?? explicitState ?? false : false,
+  }
+}
 const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown; label?: unknown }) => {
   const record = skill as Record<string, unknown>
   const directValue = [record.name, record.skillName, record.skill_name, record.title, record.label, record.skill]
@@ -100,6 +215,34 @@ const displaySkills = computed(() =>
       name: getSkillDisplayName(skill),
     }))
     .filter((skill) => skill.name),
+)
+const followerAccounts = computed(() =>
+  followers.value
+    .map(getFollowerAccount)
+    .filter((account) => account.id),
+)
+
+const getPortfolioUploadUrl = (portfolio: UserPortfolio) =>
+  portfolio.pictures?.find((picture) => /^https?:\/\//i.test(picture)) || ''
+
+const profileUploads = computed<ProfileUploadItem[]>(() =>
+  portfolios.value
+    .map((portfolio) => {
+      const url = getPortfolioUploadUrl(portfolio)
+
+      if (!url) {
+        return null
+      }
+
+      return {
+        id: portfolio.id || `portfolio-upload-${portfolio.title || url}`,
+        title: portfolio.title || 'Profile upload',
+        ...(portfolio.link ? { externalUrl: portfolio.link } : {}),
+        url,
+        mediaType: isVideoMediaUrl(url) ? 'video' : 'image',
+      } satisfies ProfileUploadItem
+    })
+    .filter((item): item is ProfileUploadItem => Boolean(item)),
 )
 
 const publicProfileData = computed(() => ({
@@ -226,6 +369,9 @@ const loadProfile = async () => {
 
   if (profileResult.status === 'fulfilled') {
     userProfile.value = profileResult.value.data?.profile ?? null
+    following.value = getFollowingUsers(profileResult.value.data)
+      .map(getAccountFromUnknown)
+      .filter((account) => account.id)
     if (!user.value && profileResult.value.data?.user) {
       user.value = profileResult.value.data.user
     }
@@ -284,12 +430,12 @@ const profile = computed(() => {
     userProfile.value?.username ||
       '',
     readString((user.value as Record<string, unknown> | null)?.username),
-  ) || 'Community Member'
-  const username = userProfile.value?.username || readString((user.value as Record<string, unknown> | null)?.username) || 'skills4export-member'
+  )
+  const username = userProfile.value?.username || readString((user.value as Record<string, unknown> | null)?.username)
   const email = readString(user.value?.email)
   const phone = readString((user.value as Record<string, unknown> | null)?.phone)
   const location = userProfile.value?.location || readString((user.value as Record<string, unknown> | null)?.location)
-  const bio = userProfile.value?.bio || readString((user.value as Record<string, unknown> | null)?.bio) || 'This member has not added a public bio yet.'
+  const bio = userProfile.value?.bio || readString((user.value as Record<string, unknown> | null)?.bio)
 
   return {
     name,
@@ -313,9 +459,14 @@ const profile = computed(() => {
 
 const featuredExperience = computed(() => experiences.value[0] ?? null)
 const featuredSkill = computed(() => displaySkills.value[0]?.name || '')
-const profileSkillLabel = computed(() => featuredSkill.value || 'Community Member')
-const profileCompanyLabel = computed(() => featuredExperience.value?.company || 'Skills4Export')
-const profileCountryLabel = computed(() => profile.value.location || 'Location not shared')
+const profileMetaItems = computed(() =>
+  [
+    featuredSkill.value,
+    featuredExperience.value?.company,
+    profile.value.location,
+  ].filter((item): item is string => Boolean(item && item.trim())),
+)
+const shouldShowProfileSkeleton = computed(() => isLoadingProfile.value || (!profile.value.name && !loadError.value))
 
 const totalTScore = computed(() =>
   scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
@@ -396,16 +547,74 @@ const handleFollowToggle = async () => {
       toast.success('You are now following this profile')
     }
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Unable to update follow status.'
+    const message = getErrorMessage(error, 'Unable to update follow status.')
 
     toast.error('Follow action failed', {
       description: message,
     })
   } finally {
     isTogglingFollow.value = false
+  }
+}
+
+const toggleFollowFromModal = async (targetUserId: string) => {
+  if (!targetUserId || followToggles.value[targetUserId]) {
+    return
+  }
+
+  if (authStore.userId && targetUserId === authStore.userId) {
+    toast.info('This is your profile', {
+      description: 'You cannot follow your own account.',
+    })
+    return
+  }
+
+  if (!authStore.isAuthenticated) {
+    router.push({
+      name: 'login',
+      query: { redirect: route.fullPath },
+    })
+    return
+  }
+
+  followToggles.value[targetUserId] = true
+
+  try {
+    if (followStates.value[targetUserId]) {
+      await usersService.unfollowUser(targetUserId, authStore.authToken)
+      followStates.value = {
+        ...followStates.value,
+        [targetUserId]: false,
+      }
+      following.value = following.value.filter((account) => account.id !== targetUserId)
+      toast.success('Unfollowed user.')
+      return
+    }
+
+    await usersService.followUser(targetUserId, {}, authStore.authToken)
+    followStates.value = {
+      ...followStates.value,
+      [targetUserId]: true,
+    }
+    const account = followerAccounts.value.find((item) => item.id === targetUserId)
+    if (account && !following.value.some((item) => item.id === targetUserId)) {
+      following.value = [
+        {
+          id: account.id,
+          name: account.name,
+          avatar: account.avatar,
+          initials: account.initials,
+        },
+        ...following.value,
+      ]
+    }
+    toast.success('Following user.')
+  } catch (error) {
+    toast.error('Follow action failed', {
+      description: getErrorMessage(error, 'Unable to update follow status.'),
+    })
+  } finally {
+    followToggles.value[targetUserId] = false
   }
 }
 
@@ -464,25 +673,65 @@ watch(
                   class="h-full w-full object-cover"
                 />
                 <span
-                  v-else
+                  v-else-if="profile.initials"
                   class="flex h-full w-full items-center justify-center bg-[linear-gradient(135deg,color-mix(in_srgb,var(--accent)_84%,white),color-mix(in_srgb,var(--accent-strong)_72%,white))] text-2xl font-semibold text-white"
                 >
                   {{ profile.initials }}
                 </span>
+                <span
+                  v-else
+                  class="block h-full w-full animate-pulse bg-[var(--surface-muted)]"
+                  aria-label="Loading profile avatar"
+                />
               </div>
 
               <div class="min-w-0">
-                <h1 class="text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-[2rem]">
+                <h1
+                  v-if="profile.name"
+                  class="text-2xl font-semibold tracking-tight text-[var(--text-primary)] sm:text-[2rem]"
+                >
                   {{ profile.name }}
                 </h1>
-                <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[0.95rem] leading-5 text-[var(--text-secondary)] sm:justify-start sm:text-[1rem]">
-                  <span>{{ profileSkillLabel }}</span>
-                  <span>-</span>
-                  <span>{{ profileCompanyLabel }}</span>
-                  <span>-</span>
-                  <span>{{ profileCountryLabel }}</span>
+                <div
+                  v-else
+                  class="h-9 w-72 max-w-full animate-pulse rounded-full bg-[var(--surface-muted)]"
+                  aria-label="Loading profile name"
+                />
+
+                <div
+                  v-if="profileMetaItems.length"
+                  class="mt-0.5 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-[0.95rem] leading-5 text-[var(--text-secondary)] sm:justify-start sm:text-[1rem]"
+                >
+                  <template
+                    v-for="(item, index) in profileMetaItems"
+                    :key="item"
+                  >
+                    <span v-if="index > 0">-</span>
+                    <span>{{ item }}</span>
+                  </template>
                 </div>
-                <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm font-semibold leading-5 sm:justify-start sm:text-[1rem]">
+                <div
+                  v-else
+                  class="mt-3 flex flex-col gap-2 sm:flex-row"
+                  aria-label="Loading profile details"
+                >
+                  <span class="h-4 w-28 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                  <span class="h-4 w-32 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                  <span class="h-4 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                </div>
+
+                <div
+                  v-if="!shouldShowProfileSkeleton"
+                  class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm font-semibold leading-5 sm:justify-start sm:text-[1rem]"
+                >
+                  <button
+                    type="button"
+                    class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                    @click="profileModal = 'score'"
+                  >
+                    {{ totalTScore }} T.Scores
+                  </button>
+                  <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
                   <button
                     type="button"
                     class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
@@ -490,6 +739,23 @@ watch(
                   >
                     {{ followers.length }} followers
                   </button>
+                  <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
+                  <button
+                    type="button"
+                    class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
+                    @click="profileModal = 'following'"
+                  >
+                    {{ following.length }} following
+                  </button>
+                </div>
+                <div
+                  v-else
+                  class="mt-3 flex flex-wrap items-center justify-center gap-3 sm:justify-start"
+                  aria-label="Loading profile stats"
+                >
+                  <span class="h-4 w-20 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                  <span class="h-4 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                  <span class="h-4 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]" />
                 </div>
               </div>
             </div>
@@ -507,7 +773,7 @@ watch(
               @click="handleFollowToggle"
             >
               <component :is="isFollowingProfile ? UserCheck : UserPlus" class="h-4 w-4" />
-              {{ isTogglingFollow ? 'Updating...' : isFollowingProfile ? 'Following' : 'Follow' }}
+              {{ isTogglingFollow ? 'Updating...' : isFollowingProfile ? 'Unfollow' : 'Follow' }}
             </button>
           </div>
         </div>
@@ -515,12 +781,14 @@ watch(
         <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
           <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
             <p v-if="profile.bio" class="whitespace-pre-line">{{ profile.bio }}</p>
-            <p
+            <div
               v-else
-              class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-5 text-sm text-[var(--text-secondary)]"
+              class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-5"
+              aria-label="Loading profile bio"
             >
-              No about information added yet.
-            </p>
+              <div class="h-4 w-full max-w-xl animate-pulse rounded-full bg-[var(--surface-muted)]" />
+              <div class="mt-3 h-4 w-2/3 max-w-lg animate-pulse rounded-full bg-[var(--surface-muted)]" />
+            </div>
           </div>
 
         </div>
@@ -531,8 +799,8 @@ watch(
         <div class="mt-3 h-3 w-64 max-w-full rounded-full bg-[var(--surface-muted)]" />
       </div>
 
-      <div class="space-y-6">
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+      <div class="grid gap-6 lg:grid-cols-2">
+        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -550,7 +818,7 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No public skills added yet.</p>
         </section>
 
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Portfolio</h2>
             <BookOpen class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -653,6 +921,54 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No public experience records yet.</p>
         </section>
 
+        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+          <div class="mb-5 flex items-center justify-between gap-3">
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Uploads</h2>
+            <ImageIcon class="h-5 w-5 text-[var(--accent-strong)]" />
+          </div>
+
+          <div v-if="profileUploads.length > 0" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <article
+              v-for="item in profileUploads"
+              :key="item.id"
+              class="overflow-hidden rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]"
+            >
+              <div class="aspect-square bg-[var(--surface-secondary)]">
+                <img
+                  v-if="item.mediaType === 'image'"
+                  :src="item.url"
+                  :alt="item.title"
+                  class="h-full w-full object-cover"
+                />
+                <video
+                  v-else
+                  :src="item.url"
+                  class="h-full w-full object-cover"
+                  controls
+                />
+              </div>
+              <div class="px-4 py-3">
+                <a
+                  v-if="item.externalUrl"
+                  :href="item.externalUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-base font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
+                >
+                  {{ item.title }}
+                </a>
+                <h3 v-else class="text-base font-semibold text-[var(--text-primary)]">{{ item.title }}</h3>
+              </div>
+            </article>
+          </div>
+
+          <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-8 text-center">
+            <ImageIcon class="mx-auto h-9 w-9 text-[var(--text-tertiary)]" />
+            <p class="mt-3 text-base font-semibold text-[var(--text-primary)]">No profile uploads yet</p>
+            <p class="mt-1 text-sm text-[var(--text-secondary)]">Uploaded images and videos will appear here.</p>
+          </div>
+        </section>
+
       </div>
     </template>
   </section>
@@ -666,11 +982,12 @@ watch(
       <div class="flex items-center justify-between gap-4 border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
         <div>
           <h3 class="text-lg font-semibold text-[var(--text-primary)]">
-            {{ profileModal === 'score' ? 'T.Scores' : 'Followers' }}
+            {{ profileModal === 'score' ? 'T.Scores' : profileModal === 'followers' ? 'Followers' : 'Following' }}
           </h3>
           <p class="mt-1 text-sm text-[var(--text-secondary)]">
             <span v-if="profileModal === 'score'">Public post scores across communities and shared content.</span>
-            <span v-else>People currently following this profile.</span>
+            <span v-else-if="profileModal === 'followers'">People currently following this profile.</span>
+            <span v-else>Profiles this member follows.</span>
           </p>
         </div>
         <button
@@ -707,31 +1024,97 @@ watch(
           </div>
         </template>
 
-        <template v-else>
+        <template v-else-if="profileModal === 'followers'">
           <div
-            v-for="follower in followers"
-            :key="follower.id || follower.followerId"
+            v-for="account in followerAccounts"
+            :key="account.id"
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
             <div class="flex items-center gap-3">
-              <div class="flex h-12 w-12 items-center justify-center rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)] text-sm font-semibold text-[var(--accent-strong)]">
-                {{ (follower.followerId?.charAt(0) || 'U').toUpperCase() }}
+              <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+                <img
+                  v-if="account.avatar"
+                  :src="account.avatar"
+                  :alt="`${account.name} profile image`"
+                  class="h-full w-full object-cover"
+                />
+                <span
+                  v-else
+                  class="flex h-full w-full items-center justify-center text-sm font-semibold text-[var(--accent-strong)]"
+                >
+                  {{ account.initials }}
+                </span>
               </div>
               <div>
-                <p class="text-sm font-semibold text-[var(--text-primary)]">User {{ follower.followerId }}</p>
-                <p class="text-xs text-[var(--text-secondary)]">
-                  {{ follower.createdAt ? new Date(follower.createdAt).toLocaleDateString() : 'Recently followed' }}
-                </p>
+                <p class="text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
               </div>
             </div>
-            <Users class="h-5 w-5 text-[var(--text-tertiary)]" />
+            <button
+              v-if="!account.isCurrentUser"
+              type="button"
+              :disabled="followToggles[account.id]"
+              class="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-[0.75rem] px-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+              :class="
+                account.isFollowing
+                  ? 'border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-primary)] hover:border-red-200 hover:text-red-500'
+                  : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+              "
+              :title="account.isFollowing ? 'Unfollow' : 'Follow'"
+              @click="toggleFollowFromModal(account.id)"
+            >
+              <component :is="account.isFollowing ? UserCheck : UserPlus" class="h-4 w-4" />
+              {{ account.isFollowing ? 'Unfollow' : 'Follow' }}
+            </button>
           </div>
 
           <div
-            v-if="followers.length === 0"
+            v-if="followerAccounts.length === 0"
             class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
           >
             No followers yet.
+          </div>
+        </template>
+
+        <template v-else>
+          <div
+            v-for="account in following"
+            :key="account.id"
+            class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          >
+            <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
+              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+                <img
+                  v-if="account.avatar"
+                  :src="account.avatar"
+                  :alt="`${account.name} profile image`"
+                  class="h-full w-full object-cover"
+                />
+                <span
+                  v-else
+                  class="flex h-full w-full items-center justify-center text-sm font-semibold text-[var(--accent-strong)]"
+                >
+                  {{ account.initials }}
+                </span>
+              </div>
+              <p class="truncate text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
+            </RouterLink>
+            <button
+              v-if="authStore.isAuthenticated && authStore.userId !== account.id"
+              type="button"
+              :disabled="followToggles[account.id]"
+              class="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-red-200 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+              title="Unfollow"
+              @click="toggleFollowFromModal(account.id)"
+            >
+              <UserCheck class="h-4 w-4" />
+              Unfollow
+            </button>
+          </div>
+          <div
+            v-if="following.length === 0"
+            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+          >
+            No following profiles yet.
           </div>
         </template>
       </div>

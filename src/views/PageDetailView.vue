@@ -302,7 +302,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
       updatedAt: item.record.updated_at,
       slug: item.record.id,
       author: {
-        name: page.value?.name || 'Page',
+        name: page.value?.name || '',
         to: publicDisplayTarget.value,
         avatarText: pageInitials.value,
         avatarSrc: pageImage.value || null,

@@ -5,6 +5,7 @@ import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
 import { ApiError } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import { mediaService } from '@/services/media'
 import { normalizeUserSkills, usersService } from '@/services/users'
 import type { UserPortfolio, UserProfile, UserSkill, UserCertification, UserEducation, UserExperience } from '@/services/users'
@@ -61,6 +62,33 @@ const profileUploadForm = ref({
   title: '',
   externalUrl: '',
 })
+
+const isVideoMediaUrl = (url: string) => /\/video\/upload\/|\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url)
+
+const getPortfolioUploadUrl = (portfolio: UserPortfolio) =>
+  portfolio.pictures?.find((picture) => /^https?:\/\//i.test(picture)) || ''
+
+const mapPortfolioToUpload = (portfolio: UserPortfolio): ProfileUploadItem | null => {
+  const url = getPortfolioUploadUrl(portfolio)
+
+  if (!url) {
+    return null
+  }
+
+  return {
+    id: portfolio.id || `portfolio-upload-${portfolio.title || url}`,
+    title: portfolio.title || 'Profile upload',
+    ...(portfolio.link ? { externalUrl: portfolio.link } : {}),
+    url,
+    mediaType: isVideoMediaUrl(url) ? 'video' : 'image',
+  }
+}
+
+const syncProfileUploadsFromPortfolios = () => {
+  profileUploads.value = portfolios.value
+    .map(mapPortfolioToUpload)
+    .filter((item): item is ProfileUploadItem => Boolean(item))
+}
 
 // Skills
 const skills = ref<Array<{ id: string; name: string; level?: string }>>([])
@@ -126,12 +154,12 @@ const form = ref({
 })
 
 const profileInitials = computed(() =>
-  (getDisplayName(form.value.name, form.value.username) || 'Profile')
+  getDisplayName(form.value.name, form.value.username)
     .split(' ')
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'U',
+    .toUpperCase(),
 )
 
 const displayName = computed(() => {
@@ -140,7 +168,7 @@ const displayName = computed(() => {
     authStore.currentUser?.name,
     form.value.username,
     authStore.currentUser?.username,
-  ) || 'Profile')
+  ))
 })
 
 const avatarPreviewUrl = computed(() => avatarObjectUrl.value || form.value.avatar || authStore.userProfile?.avatar || '')
@@ -382,6 +410,7 @@ const loadProfile = async () => {
         link: portfolio.link,
         pictures: portfolio.pictures ?? [],
       }))
+      syncProfileUploadsFromPortfolios()
 
       certifications.value = sourceCertifications.map((certification: UserCertification) => ({
         id: certification.id || '',
@@ -454,7 +483,7 @@ const uploadAvatarFile = async () => {
       description: 'The backend accepted the image and will attach it to your profile shortly.',
     })
   } catch (error) {
-    const message = error instanceof ApiError || error instanceof Error ? error.message : 'Avatar upload failed.'
+    const message = getErrorMessage(error, 'Avatar upload failed.')
     toast.error('Avatar upload failed', {
       id: loadingToastId,
       description: message,
@@ -492,7 +521,7 @@ const uploadBannerFile = async () => {
       description: 'The backend accepted the image and will attach it to your profile shortly.',
     })
   } catch (error) {
-    const message = error instanceof ApiError || error instanceof Error ? error.message : 'Banner upload failed.'
+    const message = getErrorMessage(error, 'Banner upload failed.')
     toast.error('Banner upload failed', {
       id: loadingToastId,
       description: message,
@@ -650,22 +679,46 @@ const submitProfileUpload = async () => {
     })
     const remoteUrl = uploadResponse.data.url || profileUploadPreviewUrl.value
     const shouldKeepPreview = remoteUrl === profileUploadPreviewUrl.value
+    const portfolioResponse = authStore.userId
+      ? await usersService.addUserPortfolio(
+          authStore.userId,
+          {
+            title,
+            ...(externalUrl ? { link: externalUrl } : {}),
+            pictures: [remoteUrl],
+          },
+          authStore.authToken,
+        )
+      : null
+    const portfolio = portfolioResponse?.data
 
     profileUploads.value.unshift({
-      id: uploadResponse.data.assetId || uploadResponse.data.id || makeUploadClientId(),
+      id: portfolio?.id || uploadResponse.data.assetId || uploadResponse.data.id || makeUploadClientId(),
       title,
       ...(externalUrl ? { externalUrl } : {}),
       url: remoteUrl,
       mediaType,
       isLocal: shouldKeepPreview,
     })
+    if (portfolio) {
+      portfolios.value = [
+        {
+          id: portfolio.id || '',
+          title: portfolio.title || title,
+          description: portfolio.description,
+          link: portfolio.link,
+          pictures: portfolio.pictures ?? [remoteUrl],
+        },
+        ...portfolios.value,
+      ]
+    }
 
     toast.success('Upload added', { id: toastId })
     activeProfileModal.value = null
     profileUploadForm.value = { title: '', externalUrl: '' }
     clearProfileUploadSelection({ keepPreview: shouldKeepPreview })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to upload this media.'
+    const message = getErrorMessage(error, 'Unable to upload this media.')
     toast.error('Upload failed', { id: toastId, description: message })
   } finally {
     isUploadingProfileMedia.value = false
@@ -892,10 +945,7 @@ const addSkill = async () => {
     await loadSkills()
     await loadProfile()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to add skill.'
+    const message = getErrorMessage(error, 'Failed to add skill.')
 
     toast.error(message)
   } finally {
@@ -917,10 +967,7 @@ const deleteSkill = async (skillId: string) => {
     toast.success('Skill removed!')
     await loadSkills()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to delete skill.'
+    const message = getErrorMessage(error, 'Failed to delete skill.')
 
     toast.error(message)
   } finally {
@@ -969,10 +1016,7 @@ const addPortfolio = async () => {
     await loadPortfolios()
     await loadProfile()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to add portfolio item.'
+    const message = getErrorMessage(error, 'Failed to add portfolio item.')
 
     toast.error(message)
   } finally {
@@ -994,10 +1038,7 @@ const deletePortfolio = async (portfolioId: string) => {
     toast.success('Portfolio item removed!')
     await loadPortfolios()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to delete portfolio item.'
+    const message = getErrorMessage(error, 'Failed to delete portfolio item.')
 
     toast.error(message)
   } finally {
@@ -1042,10 +1083,7 @@ const addCertification = async () => {
     await loadCertifications()
     await loadProfile()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to add certification.'
+    const message = getErrorMessage(error, 'Failed to add certification.')
 
     toast.error(message)
   } finally {
@@ -1067,10 +1105,7 @@ const deleteCertification = async (certificationId: string) => {
     toast.success('Certification removed!')
     await loadCertifications()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to delete certification.'
+    const message = getErrorMessage(error, 'Failed to delete certification.')
 
     toast.error(message)
   } finally {
@@ -1118,10 +1153,7 @@ const addEducation = async () => {
     await loadEducations()
     await loadProfile()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to add education record.'
+    const message = getErrorMessage(error, 'Failed to add education record.')
 
     toast.error(message)
   } finally {
@@ -1143,10 +1175,7 @@ const deleteEducation = async (educationId: string) => {
     toast.success('Education record removed!')
     await loadEducations()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to delete education record.'
+    const message = getErrorMessage(error, 'Failed to delete education record.')
 
     toast.error(message)
   } finally {
@@ -1198,10 +1227,7 @@ const addExperience = async () => {
     await loadExperiences()
     await loadProfile()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to add experience record.'
+    const message = getErrorMessage(error, 'Failed to add experience record.')
 
     toast.error(message)
   } finally {
@@ -1223,10 +1249,7 @@ const deleteExperience = async (experienceId: string) => {
     toast.success('Experience record removed!')
     await loadExperiences()
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Failed to delete experience record.'
+    const message = getErrorMessage(error, 'Failed to delete experience record.')
 
     toast.error(message)
   } finally {
@@ -1288,7 +1311,7 @@ const upsertProfile = async (payload: {
 
     if (error instanceof ApiError && error.status === 404) {
       throw new Error(
-        'The backend does not expose the profile save route documented for /api/users/:id/profile.',
+        'We could not save your profile right now. Please try again later.',
       )
     }
 
@@ -1463,10 +1486,7 @@ const saveContactSection = async () => {
 
     toast.success('Contact details updated successfully.')
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'We could not save your contact details.'
+    const message = getErrorMessage(error, 'We could not save your contact details.')
 
     toast.error('Contact update failed', {
       description: message,
@@ -1521,10 +1541,7 @@ const saveProfessionalSection = async () => {
 
     toast.success('Professional profile updated successfully.')
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'We could not save your professional profile.'
+    const message = getErrorMessage(error, 'We could not save your professional profile.')
 
     toast.error('Professional update failed', {
       description: message,

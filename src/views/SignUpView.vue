@@ -6,6 +6,7 @@ import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
@@ -104,11 +105,14 @@ const signUpWithGoogle = async () => {
     }
 
     authStore.setAuthenticatedSession(session.token, session.userId)
+    const redirectTarget = await resolveGoogleOnboardingRedirect(authStore, response)
     toast.success('Signed in with Google', {
       id: loadingToastId,
-      description: 'Your account session is ready. Redirecting now.',
+      description: redirectTarget === '/auth/signup/details'
+        ? 'Add a few profile details to finish your setup.'
+        : 'Your account session is ready. Redirecting now.',
     })
-    router.push('/feed')
+    router.push(redirectTarget)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

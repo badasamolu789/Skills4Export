@@ -1,5 +1,5 @@
 import { useAppStore } from '@/stores/app'
-import { getUserFriendlyErrorMessage } from '@/lib/errors'
+import { getUserFriendlyErrorMessage, sanitizeUserMessage } from '@/lib/errors'
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -200,18 +200,18 @@ const getErrorMessage = (payload: ApiErrorPayload | null, status: number, fallba
 
   // Fallback to original message extraction
   if (payload.message) {
-    return payload.message
+    return sanitizeUserMessage(payload.message, fallback)
   }
 
   if (typeof payload.error === 'string') {
-    return payload.error
+    return sanitizeUserMessage(payload.error, fallback)
   }
 
   if (payload.error?.message) {
-    return payload.error.message
+    return sanitizeUserMessage(payload.error.message, fallback)
   }
 
-  return fallback
+  return sanitizeUserMessage(fallback)
 }
 
 const reportApiError = ({
@@ -629,8 +629,8 @@ export const apiRequest = async <T>(
         }
         throw new ApiError(
           method === 'GET'
-            ? 'The request timed out. Please try again.'
-            : 'The request timed out, but the server may still have completed it. Refresh or check the result before trying again.',
+            ? 'This is taking longer than expected. Please try again.'
+            : 'This is taking longer than expected. Please check the result before trying again.',
           408,
         )
       }
@@ -648,7 +648,7 @@ export const apiRequest = async <T>(
         })
       }
 
-      throw new ApiError('Unable to reach the server. Check your network connection and try again.', 0)
+      throw new ApiError('Unable to connect. Please check your internet connection and try again.', 0)
     } finally {
       cleanup()
     }

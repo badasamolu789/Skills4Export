@@ -186,9 +186,7 @@ const answererSkills = computed(() => {
     return profileSkills
   }
 
-  return currentUser.skills.value.length
-    ? currentUser.skills.value
-    : ['Skills4Export member']
+  return currentUser.skills.value
 })
 
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
@@ -285,8 +283,42 @@ const feedPostContextDetail = computed(() => {
     return props.post.communityName
   }
 
-  return props.post.communityId ? props.post.communityName || 'Community' : ''
+  return props.post.communityId ? props.post.communityName || '' : ''
 })
+
+const readRecord = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return null
+  }
+
+  const record = source as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>
+    }
+  }
+
+  return null
+}
+
+const readString = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return ''
+  }
+
+  const record = source as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
 
 const syncEditForm = () => {
   editPostTitle.value = props.post.title
@@ -329,16 +361,26 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
     return currentUserCommentProfile()
   }
 
+  const embeddedUser = readRecord(comment, ['user', 'author', 'commenter'])
+  const embeddedProfile =
+    readRecord(comment, ['profile', 'userProfile', 'user_profile']) ??
+    readRecord(embeddedUser, ['profile', 'userProfile', 'user_profile'])
+  const embeddedData = {
+    user: embeddedUser,
+    profile: embeddedProfile,
+  } as MyProfileData
+  const embeddedName = getProfileDisplayName(embeddedData)
+
   const response = comment.user_id
     ? await usersService.getUserProfile(comment.user_id, authStore.authToken).catch(() => null)
     : null
   const profile = response?.data ?? null
-  const name = getProfileDisplayName(profile) || 'Community member'
+  const name = getProfileDisplayName(profile) || embeddedName
 
   return {
     name,
     to: comment.user_id ? `/profile/view/${comment.user_id}` : '/profile',
-    avatarSrc: profile?.profile?.avatar || null,
+    avatarSrc: profile?.profile?.avatar || readString(embeddedProfile, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) || null,
     tag: getProfileSkills(profile),
   }
 }

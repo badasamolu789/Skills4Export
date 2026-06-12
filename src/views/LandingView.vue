@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { authService, extractAuthSession } from '@/services/auth'
+import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 
 const route = useRoute()
@@ -121,11 +122,14 @@ const continueWithGoogle = async () => {
     }
 
     authStore.setAuthenticatedSession(session.token, session.userId)
+    const redirectTarget = await resolveGoogleOnboardingRedirect(authStore, response)
     toast.success('Signed in with Google', {
       id: loadingToastId,
-      description: 'Your account session is ready. Redirecting now.',
+      description: redirectTarget === '/auth/signup/details'
+        ? 'Finish your profile details to continue.'
+        : 'Your account session is ready. Redirecting now.',
     })
-    await router.push('/feed')
+    await router.push(redirectTarget)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

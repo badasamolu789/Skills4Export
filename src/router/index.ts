@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getStoredOnboardingRequired } from '@/stores/auth'
 
 const CreateAlertView = () => import('@/views/CreateAlertView.vue')
 const CreatePageView = () => import('@/views/CreatePageView.vue')
@@ -411,8 +412,15 @@ const getStoredAuthToken = () => {
 
 router.beforeEach((to) => {
   const isAuthenticated = Boolean(getStoredAuthToken())
+  const onboardingRequired = isAuthenticated && getStoredOnboardingRequired()
 
   if (to.name === 'landing' && isAuthenticated) {
+    if (onboardingRequired) {
+      return {
+        name: 'signup-details',
+      }
+    }
+
     return '/feed'
   }
 
@@ -425,7 +433,20 @@ router.beforeEach((to) => {
     }
   }
 
-  if (to.meta.guestOnly && isAuthenticated) {
+  if (onboardingRequired && to.name !== 'signup-details') {
+    if (to.fullPath.startsWith('/auth')) {
+      return {
+        name: 'signup-details',
+      }
+    }
+
+    return {
+      name: 'signup-details',
+      query: { redirect: to.fullPath },
+    }
+  }
+
+  if (to.meta.guestOnly && isAuthenticated && to.name !== 'signup-details') {
     const redirectTarget =
       typeof to.query.redirect === 'string' && to.query.redirect.startsWith('/')
         ? to.query.redirect

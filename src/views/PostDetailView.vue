@@ -123,17 +123,75 @@ const answerItems = ref<QuestionAnswerItem[]>([])
 const mapAnswerBody = (answer: QuestionAnswerRecord) =>
   answer.content || answer.body || answer.answer || answer.text || answer.message || ''
 
+const readRecord = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return null
+  }
+
+  const record = source as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>
+    }
+  }
+
+  return null
+}
+
+const readString = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return ''
+  }
+
+  const record = source as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const getEmbeddedProfileData = (source: unknown) => {
+  const user = readRecord(source, ['user', 'author', 'answerer', 'commenter'])
+  const profile =
+    readRecord(source, ['profile', 'userProfile', 'user_profile']) ??
+    readRecord(user, ['profile', 'userProfile', 'user_profile'])
+
+  return {
+    user,
+    profile,
+  } as MyProfileData
+}
+
+const getEmbeddedAvatar = (source: unknown) => {
+  const profileData = getEmbeddedProfileData(source)
+
+  return (
+    readString(profileData.profile, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
+    readString(profileData.user, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
+    null
+  )
+}
+
 const mapAnswerItem = (answer: QuestionAnswerRecord): QuestionAnswerItem => {
   const userId = answer.userId || answer.user_id || ''
   const isCurrentUser = userId && userId === authStore.userId
+  const embeddedProfile = getEmbeddedProfileData(answer)
+  const embeddedName = getProfileDisplayName(embeddedProfile)
 
   return {
     id: answer.id,
-    authorName: isCurrentUser ? currentUser.displayName.value : 'Community member',
+    authorName: isCurrentUser ? currentUser.displayName.value : embeddedName,
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
-    avatarSrc: isCurrentUser ? currentUser.avatarSrc.value || null : null,
-    avatarText: isCurrentUser ? currentUser.initials.value : 'CM',
-    authorMeta: ['Skills4Export member'],
+    avatarSrc: isCurrentUser ? currentUser.avatarSrc.value || null : getEmbeddedAvatar(answer),
+    avatarText: getInitials(isCurrentUser ? currentUser.displayName.value : embeddedName),
+    authorMeta: getProfileSkills(embeddedProfile),
     time: formatCommentTime(answer.createdAt || answer.created_at || ''),
     content: mapAnswerBody(answer),
     score: getOptionalCount(
@@ -183,12 +241,13 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
     ? await usersService.getUserProfile(comment.user_id, authStore.authToken).catch(() => null)
     : null
   const profile = response?.data ?? null
-  const name = getProfileDisplayName(profile) || 'Community member'
+  const embeddedProfile = getEmbeddedProfileData(comment)
+  const name = getProfileDisplayName(profile) || getProfileDisplayName(embeddedProfile)
 
   return {
     name,
     to: comment.user_id ? `/profile/view/${comment.user_id}` : '/profile',
-    avatarSrc: profile?.profile?.avatar || null,
+    avatarSrc: profile?.profile?.avatar || getEmbeddedAvatar(comment),
     tag: getProfileSkillsLine(profile),
   }
 }
@@ -325,7 +384,7 @@ const author = computed(() => {
     to: post.value.author.to,
     avatarText: post.value.author.avatarText,
     avatarSrc: post.value.author.avatarSrc || null,
-    eyebrow: post.value.author.tag || 'Skills4Export member',
+    eyebrow: post.value.author.tag || '',
   }
 })
 
@@ -355,7 +414,7 @@ const postContextDetail = computed(() => {
   }
 
   if (post.value.communityId) {
-    return post.value.communityName || 'Community'
+    return post.value.communityName || ''
   }
 
   return 'Personal post'
@@ -402,7 +461,7 @@ const answererName = computed(
       answererProfile.value?.user?.name,
       answererProfile.value?.profile?.username,
       answererProfile.value?.user?.username,
-    ) || 'Member',
+    ),
 )
 
 const answererAvatar = computed(
@@ -424,7 +483,7 @@ const answererSkills = computed(() => {
 
   const draftSkills = authStore.signUpDraft.interests.slice(0, 3)
 
-  return draftSkills.length ? draftSkills : ['Skills4Export member']
+  return draftSkills
 })
 
 const answererInitials = computed(() =>
@@ -500,7 +559,7 @@ const shareLink = computed(() =>
     : window.location.href,
 )
 
-const sharePreviewAuthor = computed(() => author.value?.name || 'Skills4Export member')
+const sharePreviewAuthor = computed(() => author.value?.name || '')
 const sharePreviewDescription = computed(() => {
   if (!post.value) {
     return ''
@@ -1082,7 +1141,7 @@ const submitAnswer = async () => {
         authorTo: currentUser.profilePath.value,
         avatarSrc: currentUser.avatarSrc.value || null,
         avatarText: currentUser.initials.value,
-        authorMeta: skillPills.value.length ? skillPills.value.slice(0, 3) : ['Skills4Export member'],
+        authorMeta: skillPills.value.slice(0, 3),
         time: 'Just now',
         content: mapAnswerBody(response.data) || value,
         isScored: false,
@@ -1112,7 +1171,7 @@ const submitAnswer = async () => {
     authorTo: currentUser.profilePath.value,
     avatarSrc: currentUser.avatarSrc.value || null,
     avatarText: currentUser.initials.value,
-    authorMeta: skillPills.value.length ? skillPills.value.slice(0, 3) : ['Skills4Export member'],
+    authorMeta: skillPills.value.slice(0, 3),
     time: 'Just now',
     content: value,
     score: 0,

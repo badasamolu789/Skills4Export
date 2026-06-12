@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
+import { isTransientRequestError } from '@/lib/errors'
 import { authService } from '@/services/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
@@ -89,7 +90,7 @@ const requestResetLink = async () => {
     const message =
       error instanceof ApiError ? error.message : 'We could not send the reset link. Please try again.'
 
-    if (!setApiFieldErrors(error)) {
+    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
       setFieldError('email', message)
     }
 
@@ -148,7 +149,7 @@ const submitReset = async () => {
     const message =
       error instanceof ApiError ? error.message : 'We could not reset your password. Please try again.'
 
-    if (!setApiFieldErrors(error)) {
+    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
       setFieldError('newPassword', message)
     }
 

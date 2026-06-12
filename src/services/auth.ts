@@ -7,7 +7,7 @@ export type LoginRequest = {
 }
 
 export type SignUpRequest = {
-  fullName: string
+  name: string
   email: string
   password: string
 }
@@ -232,6 +232,73 @@ export const extractAuthSession = (response?: AuthSuccessResponse | null): AuthS
       response.session?.expiresIn,
     user: user ?? (response.data ? { id: response.data.id, email: response.data.email, username: response.data.username } : undefined),
   }
+}
+
+const readBooleanField = (source: Record<string, unknown> | undefined, keys: string[]) => {
+  if (!source) {
+    return null
+  }
+
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'boolean') {
+      return value
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (normalized === 'true') {
+        return true
+      }
+      if (normalized === 'false') {
+        return false
+      }
+    }
+  }
+
+  return null
+}
+
+const getProfileRecord = (response?: AuthSuccessResponse | null) => {
+  const profile = response?.data?.profile
+
+  return profile && typeof profile === 'object'
+    ? profile as Record<string, unknown>
+    : null
+}
+
+export const extractOnboardingCompleted = (response?: AuthSuccessResponse | null) => {
+  if (!response) {
+    return null
+  }
+
+  const explicitValue =
+    readBooleanField(response.data, ['onboardingCompleted', 'onboarding_completed', 'profileCompleted', 'profile_completed']) ??
+    readBooleanField(response as Record<string, unknown>, ['onboardingCompleted', 'onboarding_completed', 'profileCompleted', 'profile_completed'])
+
+  if (explicitValue !== null) {
+    return explicitValue
+  }
+
+  const profile = getProfileRecord(response)
+  const hasLocation = Boolean(readStringField(profile ?? undefined, ['location', 'state', 'country']))
+  const hasHeadline = Boolean(
+    readStringField(profile ?? undefined, [
+      'bio',
+      'headline',
+      'currentJobTitle',
+      'current_job_title',
+      'currentWorkspace',
+      'current_workspace',
+    ]),
+  )
+
+  return profile ? hasLocation && hasHeadline : null
+}
+
+export const getAuthResponseProfile = (response?: AuthSuccessResponse | null) => {
+  return getProfileRecord(response)
 }
 
 export const authService = {

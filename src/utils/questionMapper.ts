@@ -10,6 +10,41 @@ import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const readString = (source: unknown, keys: string[]) => {
+  if (!isRecord(source)) {
+    return ''
+  }
+
+  for (const key of keys) {
+    const value = source[key]
+
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const readRecord = (source: unknown, keys: string[]) => {
+  if (!isRecord(source)) {
+    return null
+  }
+
+  for (const key of keys) {
+    const value = source[key]
+
+    if (isRecord(value)) {
+      return value
+    }
+  }
+
+  return null
+}
+
 export const getQuestionUserId = (question: QuestionRecord) =>
   getStringValue(question.userId, question.user_id, question.user?.id, question.asker?.id)
 
@@ -43,6 +78,12 @@ const formatQuestionTime = (value?: string) => {
 
 const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) => {
   const profileRecord = author?.profile as Record<string, unknown> | null | undefined
+  const questionUser = isRecord(question.user) ? question.user : null
+  const questionAsker = isRecord(question.asker) ? question.asker : null
+  const questionAuthor = readRecord(question, ['author', 'creator', 'owner'])
+  const questionProfile =
+    readRecord(question, ['profile', 'userProfile', 'user_profile']) ??
+    readRecord(questionUser, ['profile', 'userProfile', 'user_profile'])
   const profileName = getDisplayName(
     author?.user?.name?.trim() ||
       '',
@@ -53,14 +94,17 @@ const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) 
     author?.user?.username?.trim(),
   )
   const userName = getDisplayName(
-    question.user?.name,
-    question.user?.username,
-    question.asker?.name,
-    question.asker?.username,
+    questionUser?.name as string | undefined,
+    readString(questionUser, ['displayName', 'display_name']),
+    readString(questionProfile, ['displayName', 'display_name', 'name']),
+    readString(questionAuthor, ['name', 'displayName', 'display_name', 'username']),
+    questionUser?.username as string | undefined,
+    questionAsker?.name as string | undefined,
+    questionAsker?.username as string | undefined,
+    readString(question, ['authorName', 'author_name', 'userName', 'user_name', 'displayName', 'display_name', 'name']),
   )
-  const userId = getQuestionUserId(question)
 
-  return profileName || userName || (userId ? 'Community member' : 'Member')
+  return profileName || userName
 }
 
 const getAuthorTag = (author?: MyProfileData | null) => {
@@ -101,7 +145,7 @@ export const mapApiQuestionToFeedPost = (
   const embeddedCommunity = question.community
     ? {
       id: question.community.id || communityId,
-      name: question.community.name || communityName || 'Community',
+      name: question.community.name || communityName || '',
       description: question.community.description || '',
       icon: question.community.icon,
       iconName: question.community.iconName,
@@ -127,7 +171,7 @@ export const mapApiQuestionToFeedPost = (
     apiId: question.id,
     userId,
     communityId,
-    communityName: communityId ? communityName || question.community?.name || 'Community' : 'Everyone',
+    communityName: communityId ? communityName || question.community?.name || '' : 'Everyone',
     communityIconClass: iconCommunity ? getCommunityLineAwesomeClass(iconCommunity) : 'las la-users',
     createdAt,
     updatedAt,

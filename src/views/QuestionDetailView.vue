@@ -183,9 +183,7 @@ const answererSkills = computed(() => {
     return profileSkills
   }
 
-  return currentUser.skills.value.length
-    ? currentUser.skills.value
-    : ['Skills4Export member']
+  return currentUser.skills.value
 })
 
 const answererInitials = computed(() =>
@@ -219,6 +217,45 @@ const getStringFromRecord = (source: Record<string, unknown>, keys: string[]) =>
   }
 
   return ''
+}
+
+const getRecordFromUnknown = (source: unknown, keys: string[]) => {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return null
+  }
+
+  const record = source as Record<string, unknown>
+  for (const key of keys) {
+    const value = record[key]
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>
+    }
+  }
+
+  return null
+}
+
+const getEmbeddedProfileData = (source: unknown) => {
+  const user = getRecordFromUnknown(source, ['user', 'author', 'answerer', 'commenter'])
+  const profile =
+    getRecordFromUnknown(source, ['profile', 'userProfile', 'user_profile']) ??
+    getRecordFromUnknown(user, ['profile', 'userProfile', 'user_profile'])
+
+  return {
+    user,
+    profile,
+  } as MyProfileData
+}
+
+const getEmbeddedAvatar = (source: unknown) => {
+  const profileData = getEmbeddedProfileData(source)
+
+  return (
+    (profileData.profile ? getStringFromRecord(profileData.profile as Record<string, unknown>, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) : '') ||
+    (profileData.user ? getStringFromRecord(profileData.user as Record<string, unknown>, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) : '') ||
+    null
+  )
 }
 
 const normalizeAnswerMediaItems = (value: unknown): AnswerMediaLike[] => {
@@ -316,13 +353,14 @@ const mapAnswerComment = (comment: AnswerCommentRecord): AnswerCommentItem => ({
   authorName:
     (comment.user_id || comment.userId) === authStore.userId
       ? currentUser.displayName.value
-      : 'Community member',
+      : getProfileNameWithoutEmail(getEmbeddedProfileData(comment)),
   time: formatTime(comment.createdAt || comment.created_at),
   content: comment.content,
 })
 
 const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> => {
   const userId = answer.userId || answer.user_id || ''
+  const embeddedProfile = getEmbeddedProfileData(answer)
   const author =
     userId && userId === authStore.userId
       ? currentAnswerAuthor()
@@ -331,25 +369,25 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
             .getUserProfile(userId, authStore.authToken)
             .then((response) => {
               const profile = response.data
-              const name = getProfileNameWithoutEmail(profile) || 'Community member'
+              const name = getProfileNameWithoutEmail(profile) || getProfileNameWithoutEmail(embeddedProfile)
 
               return {
                 name,
                 to: `/profile/view/${userId}`,
-                avatarSrc: profile?.profile?.avatar || null,
+                avatarSrc: profile?.profile?.avatar || getEmbeddedAvatar(answer),
                 skills: getProfileSkills(profile),
               }
             })
             .catch(() => ({
-              name: 'Community member',
+              name: getProfileNameWithoutEmail(embeddedProfile),
               to: `/profile/view/${userId}`,
-              avatarSrc: null,
+              avatarSrc: getEmbeddedAvatar(answer),
               skills: [] as string[],
             }))
         : {
-            name: 'Community member',
+            name: getProfileNameWithoutEmail(embeddedProfile),
             to: '/profile',
-            avatarSrc: null,
+            avatarSrc: getEmbeddedAvatar(answer),
             skills: [] as string[],
           }
 
@@ -459,7 +497,7 @@ const loadQuestion = async (id: string, options: { background?: boolean } = {}) 
     const embeddedCommunity = response.data.community
       ? {
         id: response.data.community.id || communityId,
-        name: response.data.community.name || 'Community',
+        name: response.data.community.name || '',
         description: response.data.community.description || '',
         icon: response.data.community.icon,
         iconName: response.data.community.iconName,

@@ -35,15 +35,80 @@ const HTTP_STATUS_MESSAGES: Record<number, string> = {
     429: "You're doing that too often. Please wait a moment and try again.",
     500: "Something went wrong on our end. We're working on it. Please try again later.",
     503: 'We\'re temporarily unavailable. Please check back in a few minutes.',
-    504: 'The request is taking too long. Please check your connection and try again.',
+    504: 'This is taking longer than expected. Please try again.',
 }
 
 // Network and client errors
 const NETWORK_ERROR_MESSAGES: Record<string, string> = {
-    timeout: 'The request is taking too long. Please check your connection and try again.',
+    timeout: 'This is taking longer than expected. Please try again.',
     offline: 'Unable to connect. Please check your internet connection and try again.',
     network: 'Unable to connect. Please check your internet connection and try again.',
     abort: 'The request was cancelled. Please try again.',
+}
+
+const INTERNAL_MESSAGE_PATTERNS = [
+    /backend/i,
+    /\/api\//i,
+    /route/i,
+    /endpoint/i,
+    /stack/i,
+    /sql/i,
+]
+
+export function isTransientRequestStatus(status: number | undefined): boolean {
+    return status === 0 || status === 408 || status === 504
+}
+
+export function isTransientRequestError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') {
+        return false
+    }
+
+    const status = (error as { status?: unknown }).status
+    return typeof status === 'number' && isTransientRequestStatus(status)
+}
+
+export function getErrorMessage(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
+    if (!error) {
+        return fallback
+    }
+
+    if (error instanceof Error) {
+        return sanitizeUserMessage(error.message, fallback)
+    }
+
+    if (typeof error === 'string') {
+        return sanitizeUserMessage(error, fallback)
+    }
+
+    return fallback
+}
+
+export function sanitizeUserMessage(
+    message: string | undefined,
+    fallback = 'Something went wrong. Please try again.'
+): string {
+    const trimmed = message?.trim() ?? ''
+
+    if (!trimmed) {
+        return fallback
+    }
+
+    const lowerMessage = trimmed.toLowerCase()
+
+    if (lowerMessage.includes('request timeout') || lowerMessage.includes('timed out') || lowerMessage.includes('timeout')) {
+        return NETWORK_ERROR_MESSAGES.timeout
+    }
+
+    if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('networkerror') || lowerMessage.includes('unable to reach')) {
+        return NETWORK_ERROR_MESSAGES.network
+    }
+
+    if (INTERNAL_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
+        return fallback
+    }
+
+    return trimmed.length > 140 ? `${trimmed.slice(0, 137).trim()}...` : trimmed
 }
 
 /**
@@ -219,7 +284,13 @@ export function getUserFriendlyErrorMessage(
         return HTTP_STATUS_MESSAGES[status]
     }
 
-    return fallback
+    if (isTransientRequestStatus(status)) {
+        return status === 408 || status === 504
+            ? NETWORK_ERROR_MESSAGES.timeout
+            : NETWORK_ERROR_MESSAGES.network
+    }
+
+    return sanitizeUserMessage(fallback)
 }
 
 /**

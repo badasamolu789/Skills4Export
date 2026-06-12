@@ -5,6 +5,7 @@ import { isLikelyEmail } from '@/utils/displayName'
 
 const AUTH_TOKEN_KEY = 'skills4export-auth-token'
 const AUTH_USER_ID_KEY = 'skills4export-user-id'
+const ONBOARDING_REQUIRED_KEY = 'skills4export-onboarding-required'
 const PROFILE_OVERRIDES_KEY = 'skills4export-profile-overrides'
 
 const getStoredToken = () => {
@@ -21,6 +22,14 @@ const getStoredUserId = () => {
   }
 
   return window.localStorage.getItem(AUTH_USER_ID_KEY) ?? ''
+}
+
+export const getStoredOnboardingRequired = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.localStorage.getItem(ONBOARDING_REQUIRED_KEY) === 'true'
 }
 
 const normalizeProfileLocation = (location?: string | null) => {
@@ -57,6 +66,7 @@ const setProfileOverrides = (overrides: Record<string, Partial<UserProfile>>) =>
 export const useAuthStore = defineStore('auth', () => {
   const authToken = ref(getStoredToken())
   const userId = ref(getStoredUserId())
+  const onboardingRequired = ref(getStoredOnboardingRequired())
   const isAuthenticated = ref(Boolean(authToken.value))
   const currentUser = ref<UserRecord | null>(null)
   const userProfile = ref<UserProfile | null>(null)
@@ -118,6 +128,18 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  const setOnboardingRequired = (required: boolean) => {
+    onboardingRequired.value = required
+
+    if (typeof window !== 'undefined') {
+      if (required) {
+        window.localStorage.setItem(ONBOARDING_REQUIRED_KEY, 'true')
+      } else {
+        window.localStorage.removeItem(ONBOARDING_REQUIRED_KEY)
+      }
+    }
+  }
+
   const resetUserScopedState = () => {
     currentUser.value = null
     userProfile.value = null
@@ -169,6 +191,7 @@ export const useAuthStore = defineStore('auth', () => {
   const clearAuthenticatedSession = () => {
     persistToken('')
     persistUserId('')
+    setOnboardingRequired(false)
     resetUserScopedState()
   }
 
@@ -318,6 +341,7 @@ export const useAuthStore = defineStore('auth', () => {
     userId,
     currentUser,
     userProfile,
+    onboardingRequired,
     isAuthenticated,
     signUpDraft,
     authMenuLabel,
@@ -327,6 +351,7 @@ export const useAuthStore = defineStore('auth', () => {
     setCurrentUser,
     setUserProfile,
     setUserProfileOverride,
+    setOnboardingRequired,
     toggleAuth,
     resetSignUpDraft,
   }

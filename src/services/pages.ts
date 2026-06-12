@@ -301,7 +301,7 @@ const normalizePage = (page: unknown): PageRecord => {
     type: readNullableString(record.type, record.pageType, record.page_type) as PageRecord['type'],
     pageType: readNullableString(record.pageType, record.type, record.page_type) as PageRecord['pageType'],
     page_type: readNullableString(record.page_type, record.type, record.pageType) as PageRecord['page_type'],
-    name: readString(record.name, record.title) || 'Untitled page',
+    name: readString(record.name, record.title),
     slug: readString(record.slug),
     description: readString(record.description, record.bio, record.about),
     avatar: readNullableString(record.avatar, record.avatarUrl, record.avatar_url, record.logo, record.logoUrl, record.logo_url),

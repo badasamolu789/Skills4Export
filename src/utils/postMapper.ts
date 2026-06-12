@@ -26,7 +26,7 @@ const getInitials = (value: string) => {
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'CM'
+    .toUpperCase()
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -57,6 +57,18 @@ const getNestedRecord = (source: unknown, key: string) => {
   return isRecord(value) ? value : null
 }
 
+const firstNestedRecord = (source: unknown, keys: string[]) => {
+  for (const key of keys) {
+    const value = getNestedRecord(source, key)
+
+    if (value) {
+      return value
+    }
+  }
+
+  return null
+}
+
 export const getPostUserId = (post: PostRecord) =>
   getStringValue(post, ['user_id', 'userId', 'authorId', 'author_id']) ||
   getStringValue(post.user, ['id', 'userId', 'user_id'])
@@ -66,21 +78,25 @@ const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
   const authorUser = getNestedRecord(author, 'user')
   const authorProfile = getNestedRecord(author, 'profile') ?? authorRecord
   const postUser = isRecord(post.user) ? post.user : null
+  const postAuthor = firstNestedRecord(post, ['author', 'creator', 'owner'])
+  const postProfile =
+    firstNestedRecord(post, ['profile', 'userProfile', 'user_profile']) ??
+    firstNestedRecord(postUser, ['profile', 'userProfile', 'user_profile'])
 
-  return (
-    getDisplayName(
-      getStringValue(authorUser, ['name', 'displayName', 'display_name']),
-      getStringValue(authorProfile, ['displayName', 'display_name', 'name']),
-      getStringValue(authorRecord, ['displayName', 'display_name', 'name']),
-      getStringValue(postUser, ['name', 'displayName', 'display_name']),
-      getStringValue(post, ['authorName', 'author_name', 'userName', 'user_name', 'displayName', 'display_name']),
-      getStringValue(authorUser, ['username']),
-      getStringValue(authorProfile, ['username']),
-      getStringValue(authorRecord, ['username']),
-      getStringValue(postUser, ['username']),
-      getStringValue(post, ['username']),
-    ) ||
-    (getPostUserId(post) ? 'Community member' : 'Member')
+  return getDisplayName(
+    getStringValue(authorUser, ['name', 'displayName', 'display_name']),
+    getStringValue(authorProfile, ['displayName', 'display_name', 'name']),
+    getStringValue(authorRecord, ['displayName', 'display_name', 'name']),
+    getStringValue(postProfile, ['displayName', 'display_name', 'name']),
+    getStringValue(postAuthor, ['name', 'displayName', 'display_name', 'username']),
+    getStringValue(postUser, ['name', 'displayName', 'display_name']),
+    getStringValue(post, ['authorName', 'author_name', 'userName', 'user_name', 'displayName', 'display_name', 'name']),
+    getStringValue(authorUser, ['username']),
+    getStringValue(authorProfile, ['username']),
+    getStringValue(authorRecord, ['username']),
+    getStringValue(postProfile, ['username']),
+    getStringValue(postUser, ['username']),
+    getStringValue(post, ['username']),
   )
 }
 
@@ -127,7 +143,7 @@ const getAuthorAvatar = (author?: MyProfileData | null) => {
 
 const getPageTag = (page?: PostRecord['page'] | PageRecord | null) => {
   if (!page) {
-    return 'Page'
+    return ''
   }
 
   const pageRecord = isRecord(page) ? page : null
@@ -137,7 +153,7 @@ const getPageTag = (page?: PostRecord['page'] | PageRecord | null) => {
     return `${pageType[0]?.toUpperCase()}${pageType.slice(1)} page`
   }
 
-  return 'Page'
+  return ''
 }
 
 export const getOptionalCount = (...values: unknown[]) => {
@@ -173,7 +189,8 @@ export const mapApiPostToFeedPost = (
 
   const authorName = getAuthorName(post, author)
   const postUserId = getPostUserId(post)
-  const resolvedCommunityName = communityName || post.community?.name || ''
+  const postCommunity = isRecord(post.community) ? post.community : null
+  const resolvedCommunityName = communityName || getStringValue(postCommunity, ['name', 'title', 'communityName', 'community_name']) || ''
   const postPageId = post.pageId || post.page_id || getStringValue(post.page, ['id'])
   const resolvedPage = page || post.page
   const pageAuthorName = getStringValue(resolvedPage, [
@@ -183,8 +200,12 @@ export const mapApiPostToFeedPost = (
     'title',
     'pageName',
     'page_name',
+    'businessName',
+    'business_name',
+    'studentName',
+    'student_name',
   ])
-  const resolvedAuthorName = postPageId ? pageAuthorName || 'Page' : authorName
+  const resolvedAuthorName = postPageId ? pageAuthorName : authorName
   const authorProfile = {
     name: resolvedAuthorName,
     to: postPageId ? `/pages/${resolvedPage?.slug || postPageId}/public` : `/profile/view/${postUserId}`,
@@ -203,7 +224,7 @@ export const mapApiPostToFeedPost = (
     apiId: post.id,
     userId: postUserId,
     communityId: getPostCommunityId(post),
-    communityName: getPostCommunityId(post) ? resolvedCommunityName || 'Community' : undefined,
+    communityName: getPostCommunityId(post) ? resolvedCommunityName : undefined,
     pageId: postPageId,
     originalPostId: post.originalPostId || post.parent_post_id || null,
     createdAt: post.created_at,

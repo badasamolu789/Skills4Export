@@ -109,8 +109,7 @@ const getQuestionAuthor = (question: QuestionRecord) => {
 
   return (
     (userId ? questionAuthors.value.get(userId) : '') ||
-    getDisplayName(question.user?.name, question.user?.username) ||
-    'Community member'
+    getDisplayName(question.user?.name, question.user?.username)
   )
 }
 
@@ -181,7 +180,7 @@ const loadTrendingQuestions = async (options: { background?: boolean } = {}) => 
           name = getAuthorNameFromProfile(userResponse?.data)
         }
 
-        return [userId, name || 'Community member'] as const
+        return [userId, name] as const
       }),
     )
     questionAuthors.value = new Map(authorEntries)

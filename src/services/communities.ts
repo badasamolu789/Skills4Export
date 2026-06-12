@@ -34,6 +34,14 @@ export type CommunityRecord = {
   created_at?: string
 }
 
+export type CommunityCategoryRecord = {
+  id: string
+  name: string
+  description?: string | null
+  total_communities?: number
+  totalCommunities?: number
+}
+
 export type CommunityMemberRecord = {
   id: string
   userId?: string
@@ -78,6 +86,7 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
 }
 
 const COMMUNITY_ROUTES = {
+  communityCategories: '/community-categories',
   communities: '/communities',
   communityById: (id: string) => `/communities/${id}`,
   communityJoin: (id: string) => `/communities/${id}/join`,
@@ -85,6 +94,13 @@ const COMMUNITY_ROUTES = {
 } as const
 
 export const communitiesService = {
+  listCommunityCategories(token?: string | null) {
+    return api.get<ApiSuccessResponse<CommunityCategoryRecord[]>>(
+      COMMUNITY_ROUTES.communityCategories,
+      { token },
+    )
+  },
+
   listCommunities(params: CommunityListParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<CommunityRecord>>(
       withQuery(COMMUNITY_ROUTES.communities, params),

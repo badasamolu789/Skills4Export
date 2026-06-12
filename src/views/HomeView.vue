@@ -530,10 +530,12 @@ onBeforeUnmount(() => {
     >
       <div
         v-if="isLoadingMore"
-        class="inline-flex items-center gap-3 rounded-full border border-(--border-soft) bg-(--surface-primary) px-4 py-2 text-sm text-(--text-secondary) shadow-(--shadow-elevated)"
+        class="flex items-center gap-2 rounded-full border border-(--border-soft) bg-(--surface-primary) px-4 py-3 shadow-(--shadow-elevated)"
+        aria-label="Loading more posts"
       >
         <span class="h-2.5 w-2.5 animate-pulse rounded-full bg-(--accent)" />
-        Loading more posts...
+        <span class="h-2.5 w-2.5 animate-pulse rounded-full bg-(--accent)" />
+        <span class="h-2.5 w-2.5 animate-pulse rounded-full bg-(--accent)" />
       </div>
 
       <p

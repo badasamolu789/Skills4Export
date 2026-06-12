@@ -4,8 +4,10 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
+import { isTransientRequestError } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
@@ -59,6 +61,7 @@ const submitLogin = async () => {
 
     authStore.signUpDraft.email = form.value.email
     authStore.setAuthenticatedSession(session.token, session.userId)
+    authStore.setOnboardingRequired(false)
 
     toast.success('Signed in', {
       id: loadingToastId,
@@ -72,7 +75,7 @@ const submitLogin = async () => {
         ? error.message
         : 'We could not sign you in. Please try again.'
 
-    if (!setApiFieldErrors(error)) {
+    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
       setFieldErrors({
         email: message,
         password: message,
@@ -111,11 +114,14 @@ const continueWithGoogle = async () => {
     }
 
     authStore.setAuthenticatedSession(session.token, session.userId)
+    const redirectTarget = await resolveGoogleOnboardingRedirect(authStore, response)
     toast.success('Signed in with Google', {
       id: loadingToastId,
-      description: 'Your account session is ready. Redirecting now.',
+      description: redirectTarget === '/auth/signup/details'
+        ? 'Finish your profile details to continue.'
+        : 'Your account session is ready. Redirecting now.',
     })
-    router.push('/feed')
+    router.push(redirectTarget)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

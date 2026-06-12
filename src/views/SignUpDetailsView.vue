@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { BookOpen, BriefcaseBusiness } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
+import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { usersService } from '@/services/users'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 const isSubmitting = ref(false)
 
@@ -25,16 +28,20 @@ const form = ref({
   courseOfStudy: authStore.signUpDraft.courseOfStudy,
 })
 
-const canAccessDetails = computed(
-  () =>
-    Boolean(
-      authStore.signUpDraft.name &&
-        authStore.signUpDraft.email &&
-        authStore.signUpDraft.password &&
-        authStore.signUpDraft.acceptedTerms &&
-        authStore.signUpDraft.verificationSentAt,
-    ),
-)
+const isGoogleOnboarding = computed(() => Boolean(authStore.authToken && authStore.onboardingRequired))
+const canAccessDetails = computed(() => {
+  if (isGoogleOnboarding.value) {
+    return true
+  }
+
+  return Boolean(
+    authStore.signUpDraft.name &&
+      authStore.signUpDraft.email &&
+      authStore.signUpDraft.password &&
+      authStore.signUpDraft.acceptedTerms &&
+      authStore.signUpDraft.verificationSentAt,
+  )
+})
 
 if (!canAccessDetails.value) {
   router.replace('/auth/signup')
@@ -65,7 +72,95 @@ const canSubmit = computed(() => {
   )
 })
 
-const submitDetails = () => {
+const toUsername = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/@.*/, '')
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+const getProfileIdentity = () => {
+  const emailUsername = toUsername(authStore.signUpDraft.email)
+  const nameUsername = toUsername(authStore.signUpDraft.name || authStore.currentUser?.name || '')
+  const fallbackId = authStore.userId ? `user_${authStore.userId.slice(0, 8).toLowerCase()}` : ''
+
+  return {
+    username: authStore.signUpDraft.username || emailUsername || nameUsername || fallbackId,
+    displayName: authStore.signUpDraft.name || authStore.currentUser?.name || authStore.signUpDraft.email || undefined,
+  }
+}
+
+const persistDraftDetails = () => {
+  const state = form.value.state.trim()
+  const country = form.value.country.trim()
+
+  authStore.signUpDraft.is16OrAbove = form.value.is16OrAbove
+  authStore.signUpDraft.accountType = form.value.accountType
+  authStore.signUpDraft.state = state
+  authStore.signUpDraft.country = country
+  authStore.signUpDraft.jobTitle = form.value.jobTitle.trim()
+  authStore.signUpDraft.workplace = form.value.workplace.trim()
+  authStore.signUpDraft.university = form.value.university.trim()
+  authStore.signUpDraft.yearStarted = form.value.yearStarted
+  authStore.signUpDraft.courseOfStudy = form.value.courseOfStudy.trim()
+  authStore.signUpDraft.location = [state, country].filter(Boolean).join(', ')
+  authStore.signUpDraft.headline = isStudentAccount.value
+    ? form.value.courseOfStudy.trim()
+    : form.value.jobTitle.trim()
+  authStore.signUpDraft.signUpDetailsCompleted = true
+}
+
+const completeGoogleOnboarding = async () => {
+  if (!authStore.userId || !authStore.authToken) {
+    throw new Error('Your Google session is ready, but we could not identify the account. Please sign in again.')
+  }
+
+  const profileResponse = await usersService.updateUserProfile(
+    authStore.userId,
+    {
+      ...getProfileIdentity(),
+      bio: authStore.signUpDraft.headline,
+      location: authStore.signUpDraft.location,
+      currentJobTitle: isStudentAccount.value ? undefined : authStore.signUpDraft.jobTitle,
+      currentWorkspace: isStudentAccount.value ? undefined : authStore.signUpDraft.workplace,
+    },
+    authStore.authToken,
+    { suppressErrorModal: true },
+  )
+
+  if (profileResponse.data) {
+    authStore.setUserProfile(profileResponse.data)
+  }
+
+  if (isStudentAccount.value) {
+    await usersService.addUserEducation(
+      authStore.userId,
+      {
+        school: authStore.signUpDraft.university,
+        field: authStore.signUpDraft.courseOfStudy,
+        startDate: `${authStore.signUpDraft.yearStarted}-01-01`,
+      },
+      authStore.authToken,
+      { suppressErrorModal: true },
+    )
+  } else {
+    await usersService.addUserExperience(
+      authStore.userId,
+      {
+        company: authStore.signUpDraft.workplace,
+        title: authStore.signUpDraft.jobTitle,
+        isCurrent: true,
+      },
+      authStore.authToken,
+      { suppressErrorModal: true },
+    )
+  }
+
+  authStore.setOnboardingRequired(false)
+}
+
+const submitDetails = async () => {
   if (isSubmitting.value) {
     return
   }
@@ -77,36 +172,52 @@ const submitDetails = () => {
 
   isSubmitting.value = true
 
-  authStore.signUpDraft.is16OrAbove = form.value.is16OrAbove
-  authStore.signUpDraft.accountType = form.value.accountType
-  authStore.signUpDraft.state = form.value.state.trim()
-  authStore.signUpDraft.country = form.value.country.trim()
-  authStore.signUpDraft.jobTitle = form.value.jobTitle.trim()
-  authStore.signUpDraft.workplace = form.value.workplace.trim()
-  authStore.signUpDraft.university = form.value.university.trim()
-  authStore.signUpDraft.yearStarted = form.value.yearStarted
-  authStore.signUpDraft.courseOfStudy = form.value.courseOfStudy.trim()
-  authStore.signUpDraft.location = [form.value.state.trim(), form.value.country.trim()].filter(Boolean).join(', ')
-  authStore.signUpDraft.headline = isStudentAccount.value
-    ? form.value.courseOfStudy.trim()
-    : form.value.jobTitle.trim()
-  authStore.signUpDraft.signUpDetailsCompleted = true
+  try {
+    persistDraftDetails()
 
-  router.push('/auth/signup/verify')
+    if (isGoogleOnboarding.value) {
+      await completeGoogleOnboarding()
+
+      toast.success('Profile setup complete', {
+        description: 'You can now continue to your workspace.',
+      })
+
+      const redirectTarget =
+        typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
+          ? route.query.redirect
+          : '/feed'
+
+      router.replace(redirectTarget)
+      return
+    }
+
+    router.push('/auth/signup/verify')
+  } catch (error) {
+    const message =
+      error instanceof ApiError || error instanceof Error
+        ? error.message
+        : 'We could not save your details. Please try again.'
+
+    toast.error('Setup details not saved', {
+      description: message,
+    })
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
 <template>
   <AuthShell
-    badge="Step 2 of 3"
+    :badge="isGoogleOnboarding ? 'Step 2 of 2' : 'Step 2 of 3'"
     title="Tell us where you fit on the platform."
-    description="These details help shape profile setup, discovery, jobs, and recommendations after verification."
+    :description="isGoogleOnboarding ? 'These details finish your Google account setup before entering the app.' : 'These details help shape profile setup, discovery, jobs, and recommendations after verification.'"
     centered
   >
     <form class="space-y-5" @submit.prevent="submitDetails">
       <div class="px-1">
         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-          Step 2 of 3
+          {{ isGoogleOnboarding ? 'Step 2 of 2' : 'Step 2 of 3' }}
         </p>
         <h1 class="mt-2 text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">
           Tell us where you fit on the platform.
@@ -252,7 +363,7 @@ const submitDetails = () => {
         :disabled="!canSubmit || isSubmitting"
         class="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
       >
-        {{ isSubmitting ? 'Saving details...' : 'Continue to verification' }}
+        {{ isSubmitting ? 'Saving details...' : isGoogleOnboarding ? 'Finish setup' : 'Continue to verification' }}
       </button>
     </form>
   </AuthShell>

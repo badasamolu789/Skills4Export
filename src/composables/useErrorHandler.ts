@@ -6,6 +6,7 @@ import {
     extractErrorCode,
     extractFieldErrors,
     getErrorSeverity,
+    sanitizeUserMessage,
 } from '@/lib/errors'
 
 export interface ErrorHandlerOptions {
@@ -90,7 +91,10 @@ export function useErrorHandler() {
                 }
             }
 
-            const message = getUserFriendlyErrorMessage(errorCode, apiError.status)
+            const message = sanitizeUserMessage(
+                apiError.message,
+                getUserFriendlyErrorMessage(errorCode, apiError.status),
+            )
 
             if (shouldShowToast) {
                 if (severity === 'warning') {
@@ -116,7 +120,7 @@ export function useErrorHandler() {
             if (errorName === 'aborterror') {
                 message = 'The request was cancelled. Please try again.'
             } else if (errorName.includes('timeout')) {
-                message = 'The request is taking too long. Please check your connection and try again.'
+                message = 'This is taking longer than expected. Please try again.'
             } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                 message = 'Unable to connect. Please check your internet connection and try again.'
             }

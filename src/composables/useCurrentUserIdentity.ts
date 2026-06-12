@@ -67,7 +67,7 @@ export const getInitials = (value: string) =>
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'CM'
+    .toUpperCase()
 
 export const useCurrentUserIdentity = () => {
   const authStore = useAuthStore()
@@ -79,7 +79,7 @@ export const useCurrentUserIdentity = () => {
       authStore.userProfile?.displayName,
       authStore.userProfile?.username,
       authStore.signUpDraft.username,
-    ) || 'Member'),
+    )),
   )
 
   const avatarSrc = computed(() => authStore.userProfile?.avatar || authStore.signUpDraft.avatar || '')
@@ -98,7 +98,7 @@ export const useCurrentUserIdentity = () => {
       getRecordString(authStore.currentUser, workplaceKeys),
     ), { keepSmallWords: true }),
   )
-  const role = computed(() => [currentTitle.value, currentWorkplace.value].filter(Boolean).join(' - ') || 'Member')
+  const role = computed(() => [currentTitle.value, currentWorkplace.value].filter(Boolean).join(' - '))
   const profilePath = computed(() => (authStore.userId ? `/profile/view/${authStore.userId}` : '/profile'))
   const skills = computed(() => authStore.signUpDraft.interests.slice(0, 3))
 

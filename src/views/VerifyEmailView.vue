@@ -5,6 +5,7 @@ import { ShieldCheck, TimerReset } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
+import { isTransientRequestError } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
@@ -110,6 +111,7 @@ const verifyOtp = async () => {
     if (session) {
       authStore.setAuthenticatedSession(session.token, session.userId)
     }
+    authStore.setOnboardingRequired(false)
     if (response.data?.user) {
       authStore.setCurrentUser(response.data.user)
     }
@@ -127,7 +129,7 @@ const verifyOtp = async () => {
     const message =
       error instanceof ApiError ? error.message : 'We could not verify that code. Please try again.'
 
-    if (!setApiFieldErrors(error)) {
+    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
       setFieldError('otp', message)
     }
 

@@ -160,10 +160,13 @@ onMounted(() => {
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
             <div class="inline-flex h-12 w-12 items-center justify-center rounded-[0.75rem] bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)]">
-              {{ (follower.followerId?.charAt(0) || 'U').toUpperCase() }}
+              {{ follower.followerId?.charAt(0).toUpperCase() || '' }}
             </div>
-            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">
-              User {{ follower.followerId }}
+            <p
+              v-if="follower.followerId"
+              class="mt-3 h-4 w-32 animate-pulse rounded-full bg-[var(--surface-muted)]"
+              aria-label="Loading follower name"
+            >
             </p>
             <p class="mt-1 text-xs text-[var(--text-tertiary)]">
               {{ follower.createdAt ? new Date(follower.createdAt).toLocaleDateString() : 'Recently' }}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   BriefcaseBusiness,
@@ -20,6 +20,8 @@ import {
 } from 'lucide-vue-next'
 import { usePagesStore } from '@/stores/pages'
 import { useAuthStore } from '@/stores/auth'
+import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 
 type SidebarMenuGroup = {
   label: string
@@ -96,6 +98,7 @@ const footerLinks = [
 const pagesStore = usePagesStore()
 const authStore = useAuthStore()
 const route = useRoute()
+const verticalCommunities = ref<CommunityRecord[]>([])
 const popularLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'popular' } }))
 const latestLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'latest' } }))
 const isJobsRoute = computed(() => route.path.startsWith('/jobs'))
@@ -141,6 +144,18 @@ const yourPages = computed(() =>
   })),
 )
 const hasYourPages = computed(() => yourPages.value.length > 0)
+const verticalCommunityLinks = computed(() =>
+  verticalCommunities.value
+    .filter((community) => community.is_active !== 0)
+    .map((community) => ({
+      id: community.id,
+      label: community.name,
+      iconClass: getCommunityLineAwesomeClass(community),
+      to: `/communities/${community.id}`,
+    }))
+    .sort((first, second) => first.label.localeCompare(second.label)),
+)
+const hasVerticalCommunities = computed(() => verticalCommunityLinks.value.length > 0)
 
 const loadUserPages = () => {
   if (!authStore.authToken) {
@@ -149,6 +164,15 @@ const loadUserPages = () => {
   }
 
   void pagesStore.loadPages()
+}
+
+const loadVerticalCommunities = async () => {
+  try {
+    const response = await communitiesService.listCommunities({ per_page: 100 }, authStore.authToken)
+    verticalCommunities.value = response.data
+  } catch {
+    verticalCommunities.value = []
+  }
 }
 
 const getCurrentQueryValue = (key: string) => {
@@ -206,11 +230,21 @@ const handleNavigation = () => {
   }
 }
 
-onMounted(loadUserPages)
+onMounted(() => {
+  loadUserPages()
+  void loadVerticalCommunities()
+})
 
 watch(
   () => [authStore.userId, authStore.authToken] as const,
   loadUserPages,
+)
+
+watch(
+  () => authStore.authToken,
+  () => {
+    void loadVerticalCommunities()
+  },
 )
 </script>
 
@@ -391,30 +425,49 @@ watch(
               Browse
             </p>
             <div class="space-y-1.5">
-              <RouterLink
+              <template
                 v-for="group in menuGroups"
                 :key="group.label"
-                :to="group.to"
-                :target="group.target"
-                :rel="group.target === '_blank' ? 'noopener noreferrer' : undefined"
-                :class="getTopLevelLinkClasses(isGroupActive(group))"
-                class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
-                @click="handleNavigation"
               >
-                <i
-                  v-if="group.iconClass"
-                  :class="[group.iconClass, getTopLevelIconClasses(isGroupActive(group))]"
-                  class="text-[1.05rem] leading-none"
-                  aria-hidden="true"
-                />
-                <component
-                  :is="group.icon"
-                  v-else
-                  :class="getTopLevelIconClasses(isGroupActive(group))"
-                  class="h-4 w-4"
-                />
-                <span :class="getTopLevelLabelClasses(isGroupActive(group))">{{ group.label }}</span>
-              </RouterLink>
+                <RouterLink
+                  :to="group.to"
+                  :target="group.target"
+                  :rel="group.target === '_blank' ? 'noopener noreferrer' : undefined"
+                  :class="getTopLevelLinkClasses(isGroupActive(group))"
+                  class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
+                  @click="handleNavigation"
+                >
+                  <i
+                    v-if="group.iconClass"
+                    :class="[group.iconClass, getTopLevelIconClasses(isGroupActive(group))]"
+                    class="text-[1.05rem] leading-none"
+                    aria-hidden="true"
+                  />
+                  <component
+                    :is="group.icon"
+                    v-else
+                    :class="getTopLevelIconClasses(isGroupActive(group))"
+                    class="h-4 w-4"
+                  />
+                  <span :class="getTopLevelLabelClasses(isGroupActive(group))">{{ group.label }}</span>
+                </RouterLink>
+
+                <RouterLink
+                  v-for="community in group.label === 'Freelancers' ? verticalCommunityLinks : []"
+                  :key="community.id"
+                  :to="community.to"
+                  :class="getTopLevelLinkClasses(isRouteActive(community.to))"
+                  class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
+                  @click="handleNavigation"
+                >
+                  <i
+                    :class="[community.iconClass, getTopLevelIconClasses(isRouteActive(community.to))]"
+                    class="text-[1.05rem] leading-none"
+                    aria-hidden="true"
+                  />
+                  <span :class="getTopLevelLabelClasses(isRouteActive(community.to))">{{ community.label }}</span>
+                </RouterLink>
+              </template>
             </div>
           </section>
 

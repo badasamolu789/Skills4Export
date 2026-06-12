@@ -119,6 +119,14 @@ export type UserOauthAccount = {
 }
 
 export type MyProfileData = {
+  id?: string
+  uuid?: string
+  name?: string | null
+  email?: string
+  location?: string | null
+  bio?: string | null
+  current_job_title?: string | null
+  current_workspace?: string | null
   user?: UserRecord | null
   profile?: UserProfile | null
   skills?: UserSkill[]
@@ -220,6 +228,51 @@ const normalizeUserProfile = (profile?: UserProfile | null): UserProfile | null 
     bio,
     avatar: avatar || profile.avatar || null,
     banner: banner || profile.banner || null,
+  }
+}
+
+const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | null => {
+  if (!data) {
+    return null
+  }
+
+  if (data.profile) {
+    return data.profile
+  }
+
+  const record = data as Record<string, unknown>
+  const hasProfileFields = [
+    'username',
+    'displayName',
+    'display_name',
+    'bio',
+    'description',
+    'about',
+    'location',
+    'avatar',
+    'profile_image',
+    'currentJobTitle',
+    'current_job_title',
+    'currentWorkspace',
+    'current_workspace',
+  ].some((key) => record[key] !== undefined && record[key] !== null)
+
+  if (!hasProfileFields) {
+    return null
+  }
+
+  const displayName = getStringFromRecord(record, ['displayName', 'display_name', 'name'])
+  const avatar = getStringFromRecord(record, ['avatar', 'profile_image', 'profileImage', 'profile_image'])
+  const currentJobTitle = getStringFromRecord(record, ['currentJobTitle', 'current_job_title'])
+  const currentWorkspace = getStringFromRecord(record, ['currentWorkspace', 'current_workspace'])
+
+  return {
+    ...(data as UserProfile),
+    userId: getStringFromRecord(record, ['userId', 'user_id', 'uuid']) || data.user?.id,
+    ...(displayName ? { displayName } : {}),
+    ...(avatar ? { avatar } : {}),
+    ...(currentJobTitle ? { currentJobTitle, current_job_title: currentJobTitle } : {}),
+    ...(currentWorkspace ? { currentWorkspace, current_workspace: currentWorkspace } : {}),
   }
 }
 
@@ -371,7 +424,7 @@ const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileRespo
   data: response.data
     ? {
       ...response.data,
-      profile: normalizeUserProfile(response.data.profile),
+      profile: normalizeUserProfile(getProfileFromProfileData(response.data)),
       skills: collectUserSkills(response.data.skills, response.data),
     }
     : response.data,
@@ -639,8 +692,8 @@ const USER_ROUTES = {
 } as const
 
 export const usersService = {
-  getMyProfile(token?: string | null) {
-    return api.get<MyProfileResponse>(USER_ROUTES.myProfile, { token }).then(normalizeMyProfileResponse)
+  getMyProfile(token?: string | null, options?: UserRequestOptions) {
+    return api.get<MyProfileResponse>(USER_ROUTES.myProfile, { token, ...options }).then(normalizeMyProfileResponse)
   },
   getMyStats(token?: string | null, options?: UserRequestOptions) {
     return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token, ...options })
@@ -692,7 +745,7 @@ export const usersService = {
     options?: UserRequestOptions,
   ) {
     return api
-      .put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
+      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
       .then(normalizeUserProfileResponse)
   },
   uploadUserAvatar(
@@ -868,8 +921,16 @@ export const usersService = {
    * @param payload - The education data
    * @param token - Optional authorization token
    */
-  addUserEducation(userId: string, payload: AddUserEducationRequest, token?: string | null) {
-    return api.post<UserEducationResponse>(USER_ROUTES.userEducations(userId), payload, { token })
+  addUserEducation(
+    userId: string,
+    payload: AddUserEducationRequest,
+    token?: string | null,
+    options?: UserRequestOptions,
+  ) {
+    return api.post<UserEducationResponse>(USER_ROUTES.userEducations(userId), payload, {
+      token,
+      ...options,
+    })
   },
 
   /**

@@ -74,7 +74,7 @@ const props = withDefaults(
     logoAlt: 'Platform logo',
     searchPlaceholder: 'Search communities, questions, jobs, and updates',
     isAuthenticated: true,
-    userRole: 'Member',
+    userRole: '',
   },
 )
 
@@ -897,11 +897,13 @@ onMounted(() => {
                       {{ props.isAuthenticated ? userName : 'Guest user' }}
                     </p>
                     <p class="mt-0.5 truncate text-[0.72rem] text-[var(--text-tertiary)]">
-                      {{
-                        props.isAuthenticated
-                          ? userRole
-                          : 'Log in to personalize your profile, alerts, and activities.'
-                      }}
+                      <span v-if="props.isAuthenticated && userRole">{{ userRole }}</span>
+                      <span
+                        v-else-if="props.isAuthenticated"
+                        class="block h-3 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]"
+                        aria-label="Loading profile role"
+                      />
+                      <span v-else>Log in to personalize your profile, alerts, and activities.</span>
                     </p>
                   </div>
                 </div>
