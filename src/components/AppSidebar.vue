@@ -21,6 +21,7 @@ import {
 import { usePagesStore } from '@/stores/pages'
 import { useAuthStore } from '@/stores/auth'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { isVerticalCommunity } from '@/utils/communityFilters'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 
 type SidebarMenuGroup = {
@@ -146,7 +147,7 @@ const yourPages = computed(() =>
 const hasYourPages = computed(() => yourPages.value.length > 0)
 const verticalCommunityLinks = computed(() =>
   verticalCommunities.value
-    .filter((community) => community.is_active !== 0)
+    .filter((community) => community.is_active !== 0 && isVerticalCommunity(community))
     .map((community) => ({
       id: community.id,
       label: community.name,

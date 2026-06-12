@@ -140,7 +140,6 @@ const getAccountFromUnknown = (value: unknown) => {
   const name = getDisplayName(
     getStringField(profileRecord, ['displayName', 'display_name', 'name']),
     getStringField(userRecord, ['name', 'displayName', 'display_name', 'fullName', 'full_name', 'username']),
-    id ? `User ${id.slice(0, 8)}` : 'User',
   )
   const avatar =
     getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
@@ -170,7 +169,6 @@ const getFollowerAccount = (follower: UserFollower) => {
   const name = getDisplayName(
     getStringField(profileRecord, ['displayName', 'display_name', 'name']),
     getStringField(userRecord, ['name', 'displayName', 'display_name', 'fullName', 'full_name', 'username']),
-    id ? `User ${id.slice(0, 8)}` : 'User',
   )
   const avatar =
     getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
@@ -800,7 +798,7 @@ watch(
       </div>
 
       <div class="grid gap-6 lg:grid-cols-2">
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+        <section class="order-5 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -818,7 +816,7 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No public skills added yet.</p>
         </section>
 
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+        <section class="order-4 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Portfolio</h2>
             <BookOpen class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -861,7 +859,7 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No portfolio items shared publicly yet.</p>
         </section>
 
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section class="order-3 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Certifications</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -881,7 +879,7 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No public certifications yet.</p>
         </section>
 
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section class="order-2 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Education</h2>
             <GraduationCap class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -901,7 +899,7 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No education details shared publicly yet.</p>
         </section>
 
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section class="order-1 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Experience</h2>
             <Briefcase class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -921,7 +919,7 @@ watch(
           <p v-else class="text-sm text-[var(--text-secondary)]">No public experience records yet.</p>
         </section>
 
-        <section class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+        <section class="order-6 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Uploads</h2>
             <ImageIcon class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -1030,7 +1028,7 @@ watch(
             :key="account.id"
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
-            <div class="flex items-center gap-3">
+            <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
               <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
                 <img
                   v-if="account.avatar"
@@ -1045,10 +1043,18 @@ watch(
                   {{ account.initials }}
                 </span>
               </div>
-              <div>
-                <p class="text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
-              </div>
-            </div>
+              <p
+                v-if="account.name"
+                class="truncate text-sm font-semibold text-[var(--text-primary)]"
+              >
+                {{ account.name }}
+              </p>
+              <span
+                v-else
+                class="h-4 w-36 animate-pulse rounded-full bg-[var(--surface-muted)]"
+                aria-label="Loading follower name"
+              />
+            </RouterLink>
             <button
               v-if="!account.isCurrentUser"
               type="button"
@@ -1096,7 +1102,17 @@ watch(
                   {{ account.initials }}
                 </span>
               </div>
-              <p class="truncate text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
+              <p
+                v-if="account.name"
+                class="truncate text-sm font-semibold text-[var(--text-primary)]"
+              >
+                {{ account.name }}
+              </p>
+              <span
+                v-else
+                class="h-4 w-36 animate-pulse rounded-full bg-[var(--surface-muted)]"
+                aria-label="Loading following profile name"
+              />
             </RouterLink>
             <button
               v-if="authStore.isAuthenticated && authStore.userId !== account.id"

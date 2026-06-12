@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ApiError } from '@/lib/api'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
+import { isVerticalCommunity } from '@/utils/communityFilters'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 
 const authStore = useAuthStore()
@@ -31,7 +32,7 @@ const loadCommunities = async () => {
 
   try {
     const response = await communitiesService.listCommunities({ per_page: 100 }, authStore.authToken)
-    communities.value = response.data
+    communities.value = response.data.filter((community) => !isVerticalCommunity(community))
   } catch (error) {
     communitiesError.value = error instanceof ApiError ? error.message : 'Unable to load communities.'
     communities.value = []
