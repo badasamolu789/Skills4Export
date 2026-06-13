@@ -179,7 +179,7 @@ const submitReset = async () => {
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <img src="/logo_1.svg" alt="Skills4Export logo" class="h-10 w-auto sm:h-12" />
+        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-10 w-auto sm:h-12" />
       </div>
 
       <p class="mb-4 text-center text-xl tracking-[0.08em] text-(--accent-strong) sm:text-2xl">

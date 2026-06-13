@@ -645,7 +645,7 @@ const clearPassportUpload = () => {
                     :to="getFreelancerPath(freelancer)"
                     class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--accent-strong)] sm:h-14 sm:w-14"
                   >
-                    <img
+                    <img loading="lazy" decoding="async"
                       v-if="freelancer.avatar"
                       :src="freelancer.avatar"
                       :alt="freelancer.name"
@@ -974,7 +974,7 @@ const clearPassportUpload = () => {
         <div class="mt-6 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
           <div class="hidden sm:block" />
           <div class="flex aspect-[10/9] w-full max-w-[14rem] items-center justify-center overflow-hidden justify-self-center rounded-[0.85rem] bg-[var(--surface-secondary)] text-xl font-bold text-[var(--text-secondary)]">
-            <img
+            <img loading="lazy" decoding="async"
               v-if="passportPreviewUrl"
               :src="passportPreviewUrl"
               alt="Passport preview"

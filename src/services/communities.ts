@@ -3,6 +3,17 @@ import type { ApiSuccessResponse, PaginatorPayload } from '@/services/posts'
 
 export type CommunityRecord = {
   id: string
+  metadata?: unknown
+  meta?: unknown
+  metaData?: unknown
+  meta_data?: unknown
+  isVertical?: boolean | number | string | null
+  is_vertical?: boolean | number | string | null
+  verticalCommunity?: boolean | number | string | null
+  vertical_community?: boolean | number | string | null
+  communityType?: string | null
+  community_type?: string | null
+  type?: string | null
   categoryId?: string | null
   category_id?: string | null
   category?: {

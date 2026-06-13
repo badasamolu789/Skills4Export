@@ -147,7 +147,11 @@ const yourPages = computed(() =>
 const hasYourPages = computed(() => yourPages.value.length > 0)
 const verticalCommunityLinks = computed(() =>
   verticalCommunities.value
-    .filter((community) => community.is_active !== 0 && isVerticalCommunity(community))
+    .filter(
+      (community) =>
+        community.is_active !== 0 &&
+        isVerticalCommunity(community),
+    )
     .map((community) => ({
       id: community.id,
       label: community.name,
@@ -285,7 +289,7 @@ watch(
               class="flex min-w-0 items-center"
               @click="handleNavigation"
             >
-              <img
+              <img loading="lazy" decoding="async"
                 :src="props.logoSrc"
                 :alt="props.logoAlt"
                 class="h-10 w-auto object-contain"
@@ -491,7 +495,7 @@ watch(
                 <span
                   class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-xs font-semibold text-white"
                 >
-                  <img
+                  <img loading="lazy" decoding="async"
                     v-if="page.avatar"
                     :src="page.avatar"
                     :alt="page.name"

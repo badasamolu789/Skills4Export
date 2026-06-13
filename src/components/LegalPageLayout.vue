@@ -108,7 +108,7 @@ const navigationSections = computed(() =>
     <header class="border-b border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
       <div class="mx-auto flex w-full max-w-7xl flex-col items-center px-4 py-10 text-center sm:px-6 lg:px-8 lg:py-14">
         <RouterLink to="/" class="inline-flex items-center justify-center">
-          <img src="/logo_1.svg" alt="Skills4Export logo" class="h-12 w-auto sm:h-14" />
+          <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-12 w-auto sm:h-14" />
         </RouterLink>
         <h1 class="mt-7 text-3xl font-bold tracking-normal text-[var(--text-primary)] sm:text-4xl lg:text-5xl">
           {{ title }}

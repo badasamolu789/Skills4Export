@@ -1054,7 +1054,7 @@ watch(pagePostFile, (file, previousFile) => {
         <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div class="flex min-w-0 items-center gap-4">
             <span class="page-avatar">
-              <img v-if="pageImage" :src="pageImage" :alt="page.name" class="h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" v-if="pageImage" :src="pageImage" :alt="page.name" class="h-full w-full object-cover" />
               <span v-else>{{ pageInitials }}</span>
             </span>
             <div class="min-w-0">
@@ -1209,7 +1209,7 @@ watch(pagePostFile, (file, previousFile) => {
             class="overflow-hidden rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]"
           >
             <div class="aspect-square bg-[var(--surface-secondary)]">
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="item.mediaType === 'image'"
                 :src="item.url"
                 :alt="item.title"
@@ -1538,7 +1538,7 @@ watch(pagePostFile, (file, previousFile) => {
 
       <div class="grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center">
         <div class="flex aspect-[10/9] items-center justify-center overflow-hidden rounded-[0.8rem] bg-[var(--surface-secondary)] text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
-          <img
+          <img loading="lazy" decoding="async"
             v-if="editAvatarPreviewUrl || pageImage"
             :src="editAvatarPreviewUrl || pageImage"
             alt="Page image preview"
@@ -1625,7 +1625,7 @@ watch(pagePostFile, (file, previousFile) => {
           class="mt-2 block overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
         >
           <span class="block bg-[var(--surface-secondary)] p-3">
-            <img
+            <img loading="lazy" decoding="async"
               v-if="pagePostFileKind === 'image'"
               :src="pagePostFilePreviewUrl"
               :alt="pagePostFile.name"
@@ -1721,7 +1721,7 @@ watch(pagePostFile, (file, previousFile) => {
           @dragover.prevent
           @drop.prevent="handleUploadDrop"
         >
-          <img
+          <img loading="lazy" decoding="async"
             v-if="uploadPreviewUrl && uploadFile?.type.startsWith('image/')"
             :src="uploadPreviewUrl"
             alt="Selected upload preview"

@@ -176,6 +176,12 @@ export const getOptionalCount = (...values: unknown[]) => {
 
 export const getPostCommunityId = (post: PostRecord) => post.community_id || post.communityId || null
 
+export const isVideoPostMedia = (media?: { mediaType?: string; media_type?: string; url?: string } | null) => {
+  const mediaType = String(media?.mediaType || media?.media_type || '').toLowerCase()
+  const url = media?.url || ''
+  return mediaType.includes('video') || /\/video\/upload\/|\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(url)
+}
+
 export const mapApiPostToFeedPost = (
   post: PostRecord,
   media: PostMediaRecord[] = [],
@@ -233,7 +239,9 @@ export const mapApiPostToFeedPost = (
     time: formatPostTime(post.created_at),
     title: post.title,
     description: post.content,
-    imageSrc: imageMedia[0]?.thumbnail_url || imageMedia[0]?.url || '',
+    imageSrc: imageMedia.find((item) => !isVideoPostMedia(item))?.thumbnail_url ||
+      imageMedia.find((item) => !isVideoPostMedia(item))?.url ||
+      '',
     imageAlt: post.title,
     media: imageMedia.map((item) => ({
       id: item.id,

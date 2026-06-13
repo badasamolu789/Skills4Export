@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/api'
 import { isTransientRequestError } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
 
 const authStore = useAuthStore()
@@ -118,6 +119,7 @@ const verifyOtp = async () => {
     if (response.data?.profile) {
       authStore.setUserProfile(response.data.profile)
     }
+    await syncSignUpDetailsToProfile(authStore)
 
     toast.success('Email verified', {
       id: loadingToastId,

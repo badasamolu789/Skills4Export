@@ -158,7 +158,7 @@ onMounted(() => {
               <span
                 class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]"
               >
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="item.actor?.avatar"
                   :src="item.actor.avatar"
                   :alt="item.actor.name || item.title"

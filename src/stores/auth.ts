@@ -249,11 +249,30 @@ export const useAuthStore = defineStore('auth', () => {
       signUpDraft.value.username = userProfile.value.username
     }
 
+    if (userProfile.value?.displayName && !isLikelyEmail(userProfile.value.displayName)) {
+      signUpDraft.value.name = userProfile.value.displayName
+    }
+
     if (userProfile.value?.bio) {
       signUpDraft.value.headline = userProfile.value.bio
     }
 
     signUpDraft.value.location = normalizeProfileLocation(userProfile.value?.location)
+
+    const currentJobTitle =
+      userProfile.value?.currentJobTitle ||
+      userProfile.value?.current_job_title
+    const currentWorkspace =
+      userProfile.value?.currentWorkspace ||
+      userProfile.value?.current_workspace
+
+    if (currentJobTitle) {
+      signUpDraft.value.jobTitle = currentJobTitle
+    }
+
+    if (currentWorkspace) {
+      signUpDraft.value.workplace = currentWorkspace
+    }
 
     if (userProfile.value?.avatar) {
       signUpDraft.value.avatar = userProfile.value.avatar

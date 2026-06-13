@@ -32,7 +32,11 @@ const loadCommunities = async () => {
 
   try {
     const response = await communitiesService.listCommunities({ per_page: 100 }, authStore.authToken)
-    communities.value = response.data.filter((community) => !isVerticalCommunity(community))
+    communities.value = response.data.filter(
+      (community) =>
+        community.is_active !== 0 &&
+        !isVerticalCommunity(community),
+    )
   } catch (error) {
     communitiesError.value = error instanceof ApiError ? error.message : 'Unable to load communities.'
     communities.value = []

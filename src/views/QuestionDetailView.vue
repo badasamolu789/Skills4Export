@@ -14,6 +14,7 @@ import type { PostMediaRecord } from '@/services/posts'
 import { questionsService, type AnswerCommentRecord, type QuestionAnswerRecord } from '@/services/questions'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getOptionalCount } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
@@ -22,6 +23,7 @@ import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
 
 type AnswerItem = {
@@ -593,20 +595,19 @@ const submitAnswer = async () => {
 
     try {
       const uploadedMedia = await uploadAnswerAttachments()
-      const response = await questionsService.createAnswer(
+      const answer = await socialActionsStore.addAnswer(
         questionId.value,
         {
           content: value,
           parentAnswerId: null,
           mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
         },
-        authStore.authToken,
       )
 
-      const responseMedia = getAnswerEmbeddedMedia(response.data)
+      const responseMedia = getAnswerEmbeddedMedia(answer)
       const uploadedPreviewMedia = [...uploadedMedia.uploadedUrls, ...uploadedMedia.fallbackMedia].map((item, index) => ({
-        id: `uploaded-${response.data.id}-${index}`,
-        post_id: response.data.id,
+        id: `uploaded-${answer.id}-${index}`,
+        post_id: answer.id,
         media_type: item.mediaType,
         url: item.url,
         thumbnail_url: item.mediaType === 'image' ? item.url : '',
@@ -614,7 +615,7 @@ const submitAnswer = async () => {
       }))
 
       answerItems.value.unshift({
-        ...(await mapAnswerItem(response.data)),
+        ...(await mapAnswerItem(answer)),
         authorUserId: authStore.userId || '',
         pageId: null,
         authorName: answererName.value,
@@ -623,7 +624,7 @@ const submitAnswer = async () => {
         avatarText: answererInitials.value,
         authorMeta: answererSkills.value,
         time: 'Just now',
-        content: mapAnswerContent(response.data) || value,
+        content: mapAnswerContent(answer) || value,
         isSaved: false,
         isFollowing: false,
         comments: 0,
@@ -722,11 +723,7 @@ const toggleAnswerFollow = (answer: AnswerItem) => {
           await pagesService.unfollowPage(answer.pageId, authStore.authToken)
         }
       } else if (answer.authorUserId) {
-        if (nextValue) {
-          await usersService.followUser(answer.authorUserId, { followerId: authStore.userId }, authStore.authToken)
-        } else {
-          await usersService.unfollowUser(answer.authorUserId, authStore.authToken)
-        }
+        await socialActionsStore.toggleUserFollow(answer.authorUserId)
       }
 
       answer.isFollowing = nextValue
@@ -975,7 +972,7 @@ onBeforeUnmount(() => {
             :to="questionAuthor.to"
             class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-[0.68rem] font-bold text-white"
           >
-            <img
+            <img loading="lazy" decoding="async"
               v-if="questionAuthor.avatarSrc"
               :src="questionAuthor.avatarSrc"
               :alt="questionAuthor.name"
@@ -1050,7 +1047,7 @@ onBeforeUnmount(() => {
                   :to="answer.authorTo"
                   class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
-                  <img
+                  <img loading="lazy" decoding="async"
                     v-if="answer.avatarSrc"
                     :src="answer.avatarSrc"
                     :alt="answer.authorName"
@@ -1103,7 +1100,7 @@ onBeforeUnmount(() => {
                 :key="item.id || item.url"
                 class="overflow-hidden rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
               >
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="!getAnswerMediaType(item).includes('video')"
                   :src="getAnswerMediaThumbnail(item)"
                   :alt="answer.content || 'Answer media'"
@@ -1238,7 +1235,7 @@ onBeforeUnmount(() => {
             :to="answererProfilePath"
             class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
-            <img
+            <img loading="lazy" decoding="async"
               v-if="answererAvatar"
               :src="answererAvatar"
               :alt="answererName"
@@ -1296,7 +1293,7 @@ onBeforeUnmount(() => {
               :key="file.key"
               class="overflow-hidden rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
             >
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="file.kind === 'image'"
                 :src="file.url"
                 :alt="file.name"

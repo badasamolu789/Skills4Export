@@ -35,6 +35,7 @@ import {
   type UserSkill,
 } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
@@ -48,6 +49,7 @@ type ProfileUploadItem = {
 }
 
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -328,6 +330,9 @@ const loadRecentActivity = async () => {
         typeLabel: 'Answer',
       })),
     ]
+    socialActionsStore.setProfileStats(userId.value, {
+      score: scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+    })
     recentActivities.value = [...postActivities, ...questionActivities]
       .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
       .slice(0, 5)
@@ -413,6 +418,25 @@ const loadProfile = async () => {
     followers.value = []
   }
 
+  const nextFollowStates = { ...followStates.value }
+  followers.value.forEach((follower) => {
+    const account = getFollowerAccount(follower)
+    if (account.id) {
+      nextFollowStates[account.id] = account.isFollowing
+      socialActionsStore.setUserFollowingState(account.id, account.isFollowing)
+    }
+  })
+  followStates.value = nextFollowStates
+
+  socialActionsStore.setProfileStats(userId.value, {
+    followers: followers.value.length,
+    following: following.value.length,
+  })
+  socialActionsStore.setUserFollowingState(
+    userId.value,
+    followers.value.some((entry) => entry.followerId === authStore.userId),
+  )
+
   if (!user.value && !userProfile.value && !loadError.value) {
     loadError.value = 'This profile could not be loaded.'
   }
@@ -467,8 +491,10 @@ const profileMetaItems = computed(() =>
 const shouldShowProfileSkeleton = computed(() => isLoadingProfile.value || (!profile.value.name && !loadError.value))
 
 const totalTScore = computed(() =>
-  scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+  socialActionsStore.getProfileStats(userId.value).score,
 )
+const globalFollowerCount = computed(() => socialActionsStore.getProfileStats(userId.value).followers)
+const globalFollowingCount = computed(() => socialActionsStore.getProfileStats(userId.value).following)
 
 const summaryCards = computed(() => [
   {
@@ -498,7 +524,9 @@ const summaryCards = computed(() => [
 ])
 
 const isFollowingProfile = computed(() =>
-  followers.value.some((entry) => entry.followerId === authStore.userId),
+  socialActionsStore.followingUserIds[userId.value] !== undefined
+    ? socialActionsStore.isFollowingUser(userId.value)
+    : followers.value.some((entry) => entry.followerId === authStore.userId),
 )
 const isOwnProfile = computed(() => Boolean(authStore.userId && authStore.userId === userId.value))
 
@@ -528,11 +556,11 @@ const handleFollowToggle = async () => {
 
   try {
     if (isFollowingProfile.value) {
-      await usersService.unfollowUser(userId.value, authStore.authToken)
+      await socialActionsStore.unfollowUser(userId.value)
       followers.value = followers.value.filter((entry) => entry.followerId !== authStore.userId)
       toast.success('Profile unfollowed')
     } else {
-      await usersService.followUser(userId.value, {}, authStore.authToken)
+      await socialActionsStore.followUser(userId.value)
       followers.value = [
         {
           id: `local-${Date.now()}`,
@@ -579,7 +607,7 @@ const toggleFollowFromModal = async (targetUserId: string) => {
 
   try {
     if (followStates.value[targetUserId]) {
-      await usersService.unfollowUser(targetUserId, authStore.authToken)
+      await socialActionsStore.unfollowUser(targetUserId)
       followStates.value = {
         ...followStates.value,
         [targetUserId]: false,
@@ -589,7 +617,7 @@ const toggleFollowFromModal = async (targetUserId: string) => {
       return
     }
 
-    await usersService.followUser(targetUserId, {}, authStore.authToken)
+    await socialActionsStore.followUser(targetUserId)
     followStates.value = {
       ...followStates.value,
       [targetUserId]: true,
@@ -639,7 +667,7 @@ watch(
       <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
         <!-- Banner hidden to match the private profile page layout. -->
         <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
-          <img
+          <img loading="lazy" decoding="async"
             v-if="profile.banner"
             :src="profile.banner"
             alt="Profile banner"
@@ -664,7 +692,7 @@ watch(
           <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
               <div class="h-24 w-24 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="profile.avatar"
                   :src="profile.avatar"
                   alt="Profile avatar"
@@ -735,7 +763,7 @@ watch(
                     class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
                     @click="profileModal = 'followers'"
                   >
-                    {{ followers.length }} followers
+                    {{ globalFollowerCount }} followers
                   </button>
                   <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
                   <button
@@ -743,7 +771,7 @@ watch(
                     class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
                     @click="profileModal = 'following'"
                   >
-                    {{ following.length }} following
+                    {{ globalFollowingCount }} following
                   </button>
                 </div>
                 <div
@@ -835,7 +863,7 @@ watch(
                   class="h-full w-full object-cover"
                   controls
                 />
-                <img
+                <img loading="lazy" decoding="async"
                   v-else
                   :src="portfolio.pictures[0]"
                   :alt="`${portfolio.title || 'Project'} media`"
@@ -932,7 +960,7 @@ watch(
               class="overflow-hidden rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]"
             >
               <div class="aspect-square bg-[var(--surface-secondary)]">
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="item.mediaType === 'image'"
                   :src="item.url"
                   :alt="item.title"
@@ -1030,7 +1058,7 @@ watch(
           >
             <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
               <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="account.avatar"
                   :src="account.avatar"
                   :alt="`${account.name} profile image`"
@@ -1089,7 +1117,7 @@ watch(
           >
             <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
               <div class="h-12 w-12 shrink-0 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="account.avatar"
                   :src="account.avatar"
                   :alt="`${account.name} profile image`"

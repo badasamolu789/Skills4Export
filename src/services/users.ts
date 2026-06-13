@@ -1,4 +1,4 @@
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import type { ApiRequestOptions } from '@/lib/api'
 
 export type UserRecord = {
@@ -237,7 +237,27 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
   }
 
   if (data.profile) {
-    return data.profile
+    const record = data as Record<string, unknown>
+    const topLevelBio = getStringFromRecord(record, ['bio', 'description', 'about', 'aboutMe', 'about_me'])
+    const topLevelLocation = getStringFromRecord(record, ['location'])
+    const topLevelDisplayName = getStringFromRecord(record, ['displayName', 'display_name', 'name'])
+    const topLevelJobTitle = getStringFromRecord(record, ['currentJobTitle', 'current_job_title'])
+    const topLevelWorkspace = getStringFromRecord(record, ['currentWorkspace', 'current_workspace'])
+    const topLevelAvatar = getStringFromRecord(record, ['avatar', 'profile_image', 'profileImage'])
+
+    return {
+      ...data.profile,
+      ...(topLevelBio ? { bio: topLevelBio } : {}),
+      ...(topLevelLocation ? { location: topLevelLocation } : {}),
+      ...(topLevelDisplayName ? { displayName: topLevelDisplayName } : {}),
+      ...(topLevelJobTitle
+        ? { currentJobTitle: topLevelJobTitle, current_job_title: topLevelJobTitle }
+        : {}),
+      ...(topLevelWorkspace
+        ? { currentWorkspace: topLevelWorkspace, current_workspace: topLevelWorkspace }
+        : {}),
+      ...(topLevelAvatar ? { avatar: topLevelAvatar } : {}),
+    }
   }
 
   const record = data as Record<string, unknown>
@@ -745,8 +765,36 @@ export const usersService = {
     options?: UserRequestOptions,
   ) {
     return api
-      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
+      .put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
       .then(normalizeUserProfileResponse)
+  },
+  async saveUserProfile(
+    id: string,
+    payload: UpsertUserProfileRequest,
+    hasExistingProfile: boolean,
+    token?: string | null,
+    options?: UserRequestOptions,
+  ) {
+    if (hasExistingProfile) {
+      return this.updateUserProfile(id, payload, token, options)
+    }
+
+    try {
+      return await this.createUserProfile(id, payload, token, options)
+    } catch (error) {
+      const isExistingProfileConflict =
+        error instanceof ApiError &&
+        error.status === 409 &&
+        error.payload?.error &&
+        typeof error.payload.error === 'object' &&
+        error.payload.error.code === 'profile_already_exists'
+
+      if (!isExistingProfileConflict) {
+        throw error
+      }
+
+      return this.updateUserProfile(id, payload, token, options)
+    }
   },
   uploadUserAvatar(
     id: string,

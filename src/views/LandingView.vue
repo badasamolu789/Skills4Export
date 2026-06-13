@@ -153,7 +153,7 @@ const continueWithGoogle = async () => {
       <main class="flex-1">
         <div class="pt-5 sm:pt-7 lg:pt-8">
           <div class="flex justify-center">
-            <img src="/nlogo.png" alt="Skills4Export logo" class="h-16 w-auto sm:h-20 lg:h-24" />
+            <img loading="eager" decoding="async" fetchpriority="high" src="/nlogo.png" alt="Skills4Export logo" class="h-16 w-auto sm:h-20 lg:h-24" />
           </div>
 
           <div class="grid gap-8 py-8 sm:py-10 lg:grid-cols-[minmax(20rem,0.92fr)_minmax(24rem,1.08fr)] lg:gap-12 lg:py-12">

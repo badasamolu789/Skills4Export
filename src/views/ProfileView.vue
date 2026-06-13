@@ -11,6 +11,7 @@ import { mediaService } from '@/services/media'
 import { postsService, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
 import { getQuestionUserId } from '@/utils/questionMapper'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
@@ -26,6 +27,7 @@ type ProfileUploadItem = {
 }
 
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const isLoadingProfile = ref(false)
 const isLoadingFollowers = ref(false)
@@ -615,6 +617,9 @@ const loadRecentActivity = async (userId: string) => {
       comments: userCommentCount,
     }
     scoreEntries.value = [...postScores, ...questionScores, ...answerScores]
+    socialActionsStore.setProfileStats(userId, {
+      score: scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+    })
   } catch {
     scoreEntries.value = []
   } finally {
@@ -802,6 +807,7 @@ const loadFollowersData = async (userId: string) => {
 
       if (followerId) {
         nextFollowStates[followerId] = explicitState ?? true
+        socialActionsStore.setUserFollowingState(followerId, explicitState ?? true)
       }
     }
 
@@ -814,9 +820,14 @@ const loadFollowersData = async (userId: string) => {
         avatar: account.avatar,
         initials: account.initials,
       }))
+    socialActionsStore.setProfileStats(userId, {
+      followers: followers.value.length,
+      following: following.value.length,
+    })
   } catch (error) {
     followers.value = []
     stats.value.followers = 0
+    socialActionsStore.setProfileStats(userId, { followers: 0 })
   } finally {
     isLoadingFollowers.value = false
   }
@@ -881,7 +892,7 @@ const toggleFollowFromModal = async (targetUserId: string) => {
 
   try {
     if (followStates.value[targetUserId]) {
-      await usersService.unfollowUser(targetUserId, authStore.authToken)
+      await socialActionsStore.unfollowUser(targetUserId)
       followStates.value = {
         ...followStates.value,
         [targetUserId]: false,
@@ -891,7 +902,7 @@ const toggleFollowFromModal = async (targetUserId: string) => {
       return
     }
 
-    await usersService.followUser(targetUserId, {}, authStore.authToken)
+    await socialActionsStore.followUser(targetUserId)
     followStates.value = {
       ...followStates.value,
       [targetUserId]: true,
@@ -933,14 +944,23 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
         authStore.signUpDraft.name,
         profileData?.username,
       )),
-    bio: profileData?.bio || authStore.signUpDraft.headline || '',
-    location: toInitialCaps(profileData?.location || ''),
+    bio: profileData?.bio || '',
+    location: toInitialCaps(profileData?.location || authStore.signUpDraft.location || ''),
     currentWorkplace: toInitialCaps(
-      currentExperience?.company || profileData?.currentWorkspace || profileData?.current_workspace || '',
+      currentExperience?.company ||
+        profileData?.currentWorkspace ||
+        profileData?.current_workspace ||
+        authStore.signUpDraft.workplace ||
+        '',
       { keepSmallWords: true },
     ),
     currentJobTitle: toInitialCaps(
-      currentExperience?.title || profileData?.currentJobTitle || profileData?.current_job_title || '',
+      currentExperience?.title ||
+        profileData?.currentJobTitle ||
+        profileData?.current_job_title ||
+        authStore.signUpDraft.jobTitle ||
+        authStore.signUpDraft.courseOfStudy ||
+        '',
       { keepSmallWords: true },
     ),
   }
@@ -1073,32 +1093,14 @@ const saveProfileDetails = async () => {
         )
       : null
 
-    let savedProfile = authStore.userProfile
-
-    try {
-      const profileResponse = authStore.userProfile?.id
-        ? await usersService.updateUserProfile(authStore.userId, profilePayload, authStore.authToken, { suppressErrorModal: true })
-        : await usersService.createUserProfile(authStore.userId, profilePayload, authStore.authToken, { suppressErrorModal: true })
-
-      savedProfile = profileResponse.data ?? savedProfile
-    } catch (error) {
-      const isExistingProfileConflict =
-        error instanceof ApiError &&
-        error.status === 409 &&
-        error.payload?.error &&
-        typeof error.payload.error === 'object' &&
-        error.payload.error.code === 'profile_already_exists'
-
-      if (!isExistingProfileConflict) {
-        throw error
-      }
-
-      const existingProfileResponse = await usersService.getUserProfile(
-        authStore.userId,
-        authStore.authToken,
-      )
-      savedProfile = existingProfileResponse.data?.profile ?? savedProfile
-    }
+    const profileResponse = await usersService.saveUserProfile(
+      authStore.userId,
+      profilePayload,
+      Boolean(authStore.userProfile?.id),
+      authStore.authToken,
+      { suppressErrorModal: true },
+    )
+    const savedProfile = profileResponse.data ?? authStore.userProfile
 
     try {
       await upsertCurrentExperience()
@@ -1342,7 +1344,7 @@ const profile = computed(() => {
   const username = apiProfile?.username || getStringField(apiUser, ['username']) || draft.username
   const email = getStringField(apiUser, ['email']) || draft.email
   const phone = getStringField(apiProfile, ['phone', 'phoneNumber', 'phone_number']) || getStringField(apiUser, ['phone', 'phoneNumber', 'phone_number']) || draft.phone
-  const location = toInitialCaps(apiProfile?.location || '')
+  const location = toInitialCaps(apiProfile?.location || draft.location || [draft.state, draft.country].filter(Boolean).join(', '))
   const bio = apiProfile?.bio || ''
   const initialsSource = name || username
 
@@ -1369,15 +1371,42 @@ const featuredExperience = computed(() => experiences.value[0] ?? null)
 
 const featuredSkill = computed(() => skills.value[0]?.name || '')
 
-const profileSkillLabel = computed(() => toInitialCaps(featuredExperience.value?.title || featuredSkill.value || '', { keepSmallWords: true }))
-const profileCompanyLabel = computed(() => toInitialCaps(featuredExperience.value?.company || '', { keepSmallWords: true }))
+const profileSkillLabel = computed(() => toInitialCaps(
+  featuredExperience.value?.title ||
+    authStore.signUpDraft.jobTitle ||
+    authStore.signUpDraft.courseOfStudy ||
+    featuredSkill.value ||
+    '',
+  { keepSmallWords: true },
+))
+const profileCompanyLabel = computed(() => toInitialCaps(
+  featuredExperience.value?.company ||
+    authStore.signUpDraft.workplace ||
+    authStore.signUpDraft.university ||
+    '',
+  { keepSmallWords: true },
+))
 const profileCountryLabel = computed(() => toInitialCaps(profile.value.location || ''))
 const profileHeadlineParts = computed(() =>
   [profileSkillLabel.value, profileCompanyLabel.value, profileCountryLabel.value].filter(Boolean),
 )
 
 const totalTScore = computed(() =>
-  scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+  authStore.userId
+    ? socialActionsStore.getProfileStats(authStore.userId).score
+    : scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+)
+
+const globalFollowerCount = computed(() =>
+  authStore.userId
+    ? socialActionsStore.getProfileStats(authStore.userId).followers
+    : stats.value.followers,
+)
+
+const globalFollowingCount = computed(() =>
+  authStore.userId
+    ? socialActionsStore.getProfileStats(authStore.userId).following
+    : following.value.length,
 )
 
 const summaryCards = computed(() => [
@@ -1441,7 +1470,7 @@ const editModalTitle = computed(() => {
     <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <!-- Banner hidden for now until live banner data is ready for display. -->
       <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
-        <img
+        <img loading="lazy" decoding="async"
           v-if="profile.banner"
           :src="profile.banner"
           alt="Profile banner"
@@ -1466,7 +1495,7 @@ const editModalTitle = computed(() => {
         <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
             <div class="h-24 w-24 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="profile.avatar"
                 :src="profile.avatar"
                 alt="Profile avatar"
@@ -1483,11 +1512,16 @@ const editModalTitle = computed(() => {
             <div class="min-w-0">
               <div class="flex items-center justify-center gap-2 sm:justify-start">
                 <h2
-                  class="text-lg font-semibold tracking-tight sm:text-xl"
-                  :class="profile.name ? 'text-[var(--text-primary)]' : 'text-[var(--text-tertiary)]'"
+                  v-if="profile.name"
+                  class="text-lg font-semibold tracking-tight text-[var(--text-primary)] sm:text-xl"
                 >
-                  {{ profile.name || 'Add full name' }}
+                  {{ profile.name }}
                 </h2>
+                <span
+                  v-else
+                  class="block h-6 w-48 max-w-full animate-pulse rounded-full bg-[var(--surface-muted)]"
+                  aria-label="Loading profile name"
+                />
                 <button
                   type="button"
                   :disabled="isLoadingProfileDetails"
@@ -1504,6 +1538,15 @@ const editModalTitle = computed(() => {
                   <span>{{ part }}</span>
                 </template>
               </div>
+              <div
+                v-else
+                class="mt-2 flex flex-wrap items-center justify-center gap-2 sm:justify-start"
+                aria-label="Loading profile details"
+              >
+                <span class="h-3.5 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                <span class="h-3.5 w-32 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                <span class="h-3.5 w-20 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+              </div>
               <div class="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs font-semibold leading-5 sm:justify-start sm:text-sm">
                 <button
                   type="button"
@@ -1518,7 +1561,7 @@ const editModalTitle = computed(() => {
                   class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
                   @click="openProfileModal('followers')"
                 >
-                  {{ stats.followers }} followers
+                  {{ globalFollowerCount }} followers
                 </button>
                 <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
                 <button
@@ -1526,7 +1569,7 @@ const editModalTitle = computed(() => {
                   class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
                   @click="openProfileModal('following')"
                 >
-                  {{ following.length }} following
+                  {{ globalFollowingCount }} following
                 </button>
               </div>
             </div>
@@ -1547,12 +1590,11 @@ const editModalTitle = computed(() => {
           <p v-if="profile.bio" class="whitespace-pre-line">
             {{ profile.bio }}
           </p>
-          <p
-            v-else
-            class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-5 text-sm text-[var(--text-secondary)]"
-          >
-            No about information added yet.
-          </p>
+          <div v-else class="space-y-3 py-2" aria-label="Loading profile about information">
+            <span class="block h-4 w-full animate-pulse rounded-full bg-[var(--surface-muted)]" />
+            <span class="block h-4 w-5/6 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+            <span class="block h-4 w-2/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+          </div>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1692,7 +1734,7 @@ const editModalTitle = computed(() => {
                   class="h-full w-full object-cover"
                   controls
                 />
-                <img
+                <img loading="lazy" decoding="async"
                   v-else
                   :src="portfolio.pictures[0]"
                   :alt="`${portfolio.title || 'Project'} media`"
@@ -2022,7 +2064,7 @@ const editModalTitle = computed(() => {
               class="overflow-hidden rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]"
             >
               <div class="aspect-square bg-[var(--surface-secondary)]">
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="item.mediaType === 'image'"
                   :src="item.url"
                   :alt="item.title"
@@ -2100,7 +2142,7 @@ const editModalTitle = computed(() => {
           @dragover.prevent
           @drop.prevent="handleUploadDrop"
         >
-          <img
+          <img loading="lazy" decoding="async"
             v-if="uploadPreviewUrl && uploadFile?.type.startsWith('image/')"
             :src="uploadPreviewUrl"
             alt="Selected upload preview"
@@ -2283,7 +2325,7 @@ const editModalTitle = computed(() => {
             >
               <div class="flex items-center gap-3">
                 <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
-                  <img
+                  <img loading="lazy" decoding="async"
                     v-if="account.avatar"
                     :src="account.avatar"
                     :alt="`${account.name} profile image`"
@@ -2332,7 +2374,7 @@ const editModalTitle = computed(() => {
           >
             <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
               <div class="h-12 w-12 shrink-0 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
-                <img
+                <img loading="lazy" decoding="async"
                   v-if="account.avatar"
                   :src="account.avatar"
                   :alt="`${account.name} profile image`"

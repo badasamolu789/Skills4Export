@@ -30,7 +30,8 @@ import { questionsService } from '@/services/questions'
 import { mediaService } from '@/services/media'
 import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { useSocialActionsStore } from '@/stores/socialActions'
+import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
   id: number | string
@@ -58,11 +59,12 @@ const props = defineProps<{
 }>()
 
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
-const isFollowing = ref(props.post.isFollowing ?? false)
+const localFollowing = ref(props.post.isFollowing ?? false)
 const isSaved = ref(props.post.isSaved ?? false)
-const isScored = ref(props.post.isScored ?? false)
-const currentScore = ref('score' in props.post ? props.post.score || 0 : 0)
+const localScored = ref(props.post.isScored ?? false)
+const localScore = ref('score' in props.post ? props.post.score || 0 : 0)
 const isCommentsOpen = ref(false)
 const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
@@ -119,6 +121,23 @@ const sharePreviewImageSrc = computed(() => ('imageSrc' in props.post ? props.po
 const sharePreviewImageAlt = computed(() =>
   'imageAlt' in props.post ? props.post.imageAlt || props.post.title : props.post.title,
 )
+const primaryMedia = computed(() => {
+  if (props.post.type === 'question') {
+    return null
+  }
+
+  const media = props.post.media?.find((item) => item.url)
+  if (media) {
+    return {
+      url: media.url,
+      isVideo: isVideoPostMedia(media),
+    }
+  }
+
+  return props.post.imageSrc
+    ? { url: props.post.imageSrc, isVideo: false }
+    : null
+})
 const reportReasons = [
   'Misinformation',
   'Spam',
@@ -157,6 +176,16 @@ const reportReasonDescriptions: Record<string, string> = {
 const commentList = ref<PostComment[]>([])
 const currentComments = ref('comments' in props.post ? props.post.comments : 0)
 const currentAnswers = ref(props.post.type === 'question' ? props.post.answers : 0)
+const displayedComments = computed(() =>
+  apiPostId.value
+    ? socialActionsStore.getCommentCount(apiPostId.value, currentComments.value)
+    : currentComments.value,
+)
+const displayedAnswers = computed(() =>
+  apiPostId.value
+    ? socialActionsStore.getAnswerCount(apiPostId.value, currentAnswers.value)
+    : currentAnswers.value,
+)
 const visibleComments = computed(() => commentList.value.slice(0, visibleCommentCount.value))
 const hiddenCommentCount = computed(() =>
   Math.max(commentList.value.length - visibleCommentCount.value, 0),
@@ -208,6 +237,28 @@ const authorUserId = computed(() => {
 
   return getPublicProfileIdFromRoute(authorRoute.value)
 })
+const usesGlobalUserFollow = computed(() =>
+  Boolean(authorUserId.value && !props.post.pageId && !(props.post.type === 'question' && props.post.communityId)),
+)
+const isFollowing = computed(() =>
+  usesGlobalUserFollow.value
+    ? socialActionsStore.followingUserIds[authorUserId.value] !== undefined
+      ? socialActionsStore.isFollowingUser(authorUserId.value)
+      : localFollowing.value
+    : localFollowing.value,
+)
+const isScored = computed(() =>
+  apiPostId.value
+    ? socialActionsStore.scoredContentIds[apiPostId.value] !== undefined
+      ? socialActionsStore.isContentScored(apiPostId.value)
+      : localScored.value
+    : localScored.value,
+)
+const currentScore = computed(() =>
+  apiPostId.value
+    ? socialActionsStore.getScoreCount(apiPostId.value, localScore.value)
+    : localScore.value,
+)
 const isOwnPost = computed(() => Boolean(authStore.userId && authorUserId.value === authStore.userId))
 const isCommunityQuestion = computed(() => props.post.type === 'question' && Boolean(props.post.communityId))
 const showFollowAction = computed(() =>
@@ -508,16 +559,16 @@ const loadSharedOriginalPost = async () => {
 }
 
 const syncPostCounters = () => {
-  currentScore.value = 'score' in props.post ? props.post.score || 0 : 0
+  localScore.value = 'score' in props.post ? props.post.score || 0 : 0
   currentComments.value = 'comments' in props.post ? props.post.comments : 0
   currentAnswers.value = props.post.type === 'question' ? props.post.answers : 0
 }
 
 const syncFollowState = () => {
-  isFollowing.value = props.post.isFollowing ?? false
+  localFollowing.value = props.post.isFollowing ?? false
 
   if (props.post.type === 'question' && props.post.communityId) {
-    isFollowing.value = props.post.isFollowing ?? hasStoredCommunityFollow(props.post.communityId)
+    localFollowing.value = props.post.isFollowing ?? hasStoredCommunityFollow(props.post.communityId)
   }
 }
 
@@ -536,6 +587,7 @@ const handleDocumentPointerDown = (event: PointerEvent) => {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  socialActionsStore.upsertFeedItem(props.post, { prepend: false })
   syncFollowState()
   syncEditForm()
   void loadSharedOriginalPost()
@@ -553,10 +605,11 @@ onBeforeUnmount(() => {
 watch(
   () => props.post,
   () => {
+    socialActionsStore.upsertFeedItem(props.post, { prepend: false })
     syncPostCounters()
     syncFollowState()
     isSaved.value = props.post.isSaved ?? false
-    isScored.value = props.post.isScored ?? false
+    localScored.value = props.post.isScored ?? false
     syncEditForm()
     void loadSharedOriginalPost()
     commentList.value = []
@@ -673,14 +726,10 @@ const toggleFollow = async () => {
         await pagesService.unfollowPage(props.post.pageId, authStore.authToken)
       }
     } else if (authorUserId.value) {
-      if (nextValue) {
-        await usersService.followUser(authorUserId.value, { followerId: authStore.userId }, authStore.authToken)
-      } else {
-        await usersService.unfollowUser(authorUserId.value, authStore.authToken)
-      }
+      await socialActionsStore.toggleUserFollow(authorUserId.value)
     }
 
-    isFollowing.value = nextValue
+    localFollowing.value = nextValue
     toast.success(nextValue ? 'Following' : 'Unfollowed')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
@@ -697,8 +746,8 @@ const toggleScore = async () => {
   }
 
   if (!apiPostId.value) {
-    isScored.value = !isScored.value
-    currentScore.value += isScored.value ? 1 : -1
+    localScored.value = !localScored.value
+    localScore.value += localScored.value ? 1 : -1
     return
   }
 
@@ -716,26 +765,12 @@ const toggleScore = async () => {
   isReactingToPost.value = true
 
   try {
-    const response =
-      props.post.type === 'question'
-        ? await questionsService.toggleQuestionReaction(
-            apiPostId.value,
-            {
-              userId: authStore.userId,
-              type: 'like',
-            },
-            authStore.authToken,
-          )
-        : await postsService.togglePostReaction(
-            apiPostId.value,
-            {
-              userId: authStore.userId,
-              type: 'like',
-            },
-            authStore.authToken,
-          )
-    isScored.value = !isScored.value
-    currentScore.value = response.data.count
+    const count = await socialActionsStore.toggleContentScore(
+      apiPostId.value,
+      props.post.type === 'question' ? 'question' : 'post',
+    )
+    localScored.value = socialActionsStore.isContentScored(apiPostId.value)
+    localScore.value = count ?? localScore.value
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
     toast.error('Reaction failed', { description: message })
@@ -827,18 +862,17 @@ const submitComment = async () => {
     isSubmittingComment.value = true
 
     try {
-      const response = await postsService.createComment(
+      const comment = await socialActionsStore.addComment(
         apiPostId.value,
         {
           userId: authStore.userId || undefined,
           content: value,
           parentCommentId: null,
         },
-        authStore.authToken,
       )
 
       commentList.value.unshift({
-        id: response.data.id,
+        id: comment.id,
         parentId: null,
         author: currentUserCommentProfile().name,
         authorTo: currentUserCommentProfile().to,
@@ -846,7 +880,7 @@ const submitComment = async () => {
         avatarText: getInitials(currentUserCommentProfile().name),
         time: 'Just now',
         tag: currentUserCommentProfile().tag,
-        body: response.data.content,
+        body: comment.content,
         score: 0,
         isScored: false,
         isFollowing: false,
@@ -855,7 +889,6 @@ const submitComment = async () => {
         replyInput: '',
         replies: [],
       })
-      currentComments.value += 1
       commentInput.value = ''
 
       toast.success('Comment added', {
@@ -995,17 +1028,15 @@ const submitAnswer = async () => {
 
   try {
     const uploadedMedia = await uploadAnswerAttachments()
-    await questionsService.createAnswer(
+    await socialActionsStore.addAnswer(
       apiPostId.value,
       {
         content: value,
         parentAnswerId: null,
         mediaAssetIds: uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined,
       },
-      authStore.authToken,
     )
 
-    currentAnswers.value += 1
     closeAnswerModal()
     toast.success('Answer posted')
   } catch (error) {
@@ -1285,26 +1316,25 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
   isSubmittingComment.value = true
 
   try {
-    const response = await postsService.createComment(
+    const reply = await socialActionsStore.addComment(
       apiPostId.value,
       {
         userId: authStore.userId || undefined,
         content: value,
         parentCommentId: comment.id,
       },
-      authStore.authToken,
     )
 
     comment.replies.unshift({
-      id: response.data.id,
-      parentId: response.data.parent_comment_id,
+      id: reply.id,
+      parentId: reply.parent_comment_id,
       author: currentUserCommentProfile().name,
       authorTo: currentUserCommentProfile().to,
       avatarSrc: currentUserCommentProfile().avatarSrc,
       avatarText: getInitials(currentUserCommentProfile().name),
       time: 'Just now',
       tag: currentUserCommentProfile().tag,
-      body: response.data.content,
+      body: reply.content,
       score: 0,
       isScored: false,
       isFollowing: false,
@@ -1316,7 +1346,6 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
     comment.areRepliesOpen = true
     comment.isReplying = false
     comment.replyInput = ''
-    currentComments.value += 1
     toast.success('Reply added')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add reply.'
@@ -1432,7 +1461,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         <span
           class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
         >
-          {{ currentAnswers }} Answers
+          {{ displayedAnswers }} Answers
         </span>
       </div>
     </template>
@@ -1443,7 +1472,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           <span
             class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] text-sm font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
           >
-            <img
+            <img loading="lazy" decoding="async"
               v-if="post.author.avatarSrc"
               :src="post.author.avatarSrc"
               :alt="post.author.name"
@@ -1602,16 +1631,28 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 v-if="sharedOriginalPost.imageSrc"
                 :src="sharedOriginalPost.imageSrc"
                 :alt="sharedOriginalPost.imageAlt || sharedOriginalPost.title"
+                loading="lazy"
+                decoding="async"
                 class="mt-3 aspect-[4/5] w-full rounded-[0.8rem] bg-[var(--surface-primary)] object-cover sm:aspect-[1.91/1]"
               />
             </template>
             <p v-else class="text-sm text-[var(--text-secondary)]">The original shared post is not available.</p>
           </div>
 
+          <video
+            v-if="primaryMedia?.isVideo"
+            :src="primaryMedia.url"
+            controls
+            preload="metadata"
+            playsinline
+            class="-mx-3 mt-4 aspect-video w-[calc(100%+1.5rem)] max-w-none bg-black object-contain sm:-mx-4 sm:w-[calc(100%+2rem)]"
+          />
           <img
-            v-if="post.imageSrc"
-            :src="post.imageSrc"
+            v-else-if="primaryMedia"
+            :src="primaryMedia.url"
             :alt="post.imageAlt || post.title"
+            loading="lazy"
+            decoding="async"
             class="-mx-3 mt-4 aspect-[4/5] w-[calc(100%+1.5rem)] max-w-none bg-[var(--surface-secondary)] object-cover sm:-mx-4 sm:aspect-[1.91/1] sm:w-[calc(100%+2rem)]"
           />
 
@@ -1655,7 +1696,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               @click="toggleComments"
             >
               <MessageSquare class="h-3 w-3" />
-              {{ currentComments }} {{ currentComments === 1 ? 'comment' : 'comments' }}
+              {{ displayedComments }} {{ displayedComments === 1 ? 'comment' : 'comments' }}
               <ChevronDown
                 class="h-3 w-3 transition"
                 :class="isCommentsOpen ? 'rotate-180' : ''"
@@ -1745,7 +1786,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                       :to="comment.authorTo"
                       class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                     >
-                      <img
+                      <img loading="lazy" decoding="async"
                         v-if="comment.avatarSrc"
                         :src="comment.avatarSrc"
                         :alt="comment.author"
@@ -1963,7 +2004,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             :to="answererProfilePath"
             class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
-            <img
+            <img loading="lazy" decoding="async"
               v-if="answererAvatar"
               :src="answererAvatar"
               :alt="answererName"
@@ -2021,7 +2062,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               :key="file.key"
               class="overflow-hidden rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
             >
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="file.kind === 'image'"
                 :src="file.url"
                 :alt="file.name"
@@ -2156,7 +2197,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 <span class="font-semibold text-[var(--text-primary)]">{{ sharePreviewAuthor }}</span>
                 <span>{{ post.time }}</span>
               </div>
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="sharePreviewImageSrc"
                 :src="sharePreviewImageSrc"
                 :alt="sharePreviewImageAlt"

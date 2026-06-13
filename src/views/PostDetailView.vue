@@ -30,18 +30,34 @@ import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/se
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
 import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
-import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { useSocialActionsStore } from '@/stores/socialActions'
+import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
 
 const apiPost = ref<FeedPost | null>(null)
 const isLoadingPost = ref(false)
 const postError = ref('')
 const post = computed(() => apiPost.value)
+const primaryPostMedia = computed(() => {
+  if (!post.value || post.value.type === 'question') {
+    return null
+  }
+
+  const media = post.value.media?.find((item) => item.url)
+  if (media) {
+    return { url: media.url, isVideo: isVideoPostMedia(media) }
+  }
+
+  return post.value.imageSrc
+    ? { url: post.value.imageSrc, isVideo: false }
+    : null
+})
 const apiPostId = computed(() => post.value?.apiId)
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
   const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
@@ -697,11 +713,7 @@ const toggleFollow = async () => {
         await pagesService.unfollowPage(post.value.pageId, authStore.authToken)
       }
     } else if (postAuthorUserId.value) {
-      if (nextValue) {
-        await usersService.followUser(postAuthorUserId.value, { followerId: authStore.userId }, authStore.authToken)
-      } else {
-        await usersService.unfollowUser(postAuthorUserId.value, authStore.authToken)
-      }
+      await socialActionsStore.toggleUserFollow(postAuthorUserId.value)
     }
 
     isFollowing.value = nextValue
@@ -740,16 +752,12 @@ const toggleScore = async () => {
   isReactingToPost.value = true
 
   try {
-    const response = await postsService.togglePostReaction(
+    const count = await socialActionsStore.toggleContentScore(
       apiPostId.value,
-      {
-        userId: authStore.userId,
-        type: 'like',
-      },
-      authStore.authToken,
+      isQuestionRoute.value ? 'question' : 'post',
     )
-    isScored.value = !isScored.value
-    currentScore.value = response.data.count
+    isScored.value = socialActionsStore.isContentScored(apiPostId.value)
+    currentScore.value = count ?? currentScore.value
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
     toast.error('Reaction failed', { description: message })
@@ -1087,20 +1095,19 @@ const submitComment = async () => {
   isSubmittingComment.value = true
 
   try {
-    const response = await postsService.createComment(
+    const comment = await socialActionsStore.addComment(
       apiPostId.value,
       {
         userId: authStore.userId || undefined,
         content: value,
         parentCommentId: null,
       },
-      authStore.authToken,
     )
 
     detailComments.value.unshift(
-      createCurrentUserDetailComment(response.data.id, response.data.content, response.data.parent_comment_id),
+      createCurrentUserDetailComment(comment.id, comment.content, comment.parent_comment_id),
     )
-    currentComments.value += 1
+    currentComments.value = socialActionsStore.getCommentCount(apiPostId.value, currentComments.value + 1)
     commentInput.value = ''
     toast.success('Comment added')
   } catch (error) {
@@ -1126,24 +1133,23 @@ const submitAnswer = async () => {
     isSubmittingAnswer.value = true
 
     try {
-      const response = await questionsService.createAnswer(
+      const answer = await socialActionsStore.addAnswer(
         apiPostId.value,
         {
           content: value,
           parentAnswerId: null,
         },
-        authStore.authToken,
       )
 
       answerItems.value.unshift({
-        ...mapAnswerItem(response.data),
+        ...mapAnswerItem(answer),
         authorName: currentUser.displayName.value,
         authorTo: currentUser.profilePath.value,
         avatarSrc: currentUser.avatarSrc.value || null,
         avatarText: currentUser.initials.value,
         authorMeta: skillPills.value.slice(0, 3),
         time: 'Just now',
-        content: mapAnswerBody(response.data) || value,
+        content: mapAnswerBody(answer) || value,
         isScored: false,
       })
       closeAnswerModal()
@@ -1151,7 +1157,7 @@ const submitAnswer = async () => {
       if (apiPost.value?.type === 'question') {
         apiPost.value = {
           ...apiPost.value,
-          answers: apiPost.value.answers + 1,
+          answers: socialActionsStore.getAnswerCount(apiPostId.value, apiPost.value.answers + 1),
         }
       }
 
@@ -1280,7 +1286,7 @@ const submitAnswer = async () => {
             :to="author.to"
             class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-sm font-bold text-white sm:h-12 sm:w-12"
           >
-            <img
+            <img loading="lazy" decoding="async"
               v-if="author.avatarSrc"
               :src="author.avatarSrc"
               :alt="author.name"
@@ -1416,7 +1422,7 @@ const submitAnswer = async () => {
                   :to="answer.authorTo"
                   class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
-                    <img
+                    <img loading="lazy" decoding="async"
                       v-if="answer.avatarSrc"
                       :src="answer.avatarSrc"
                       :alt="answer.authorName"
@@ -1504,9 +1510,20 @@ const submitAnswer = async () => {
             :content="post.description"
             class="text-[0.94rem] leading-8 text-[var(--text-secondary)]"
           />
+          <video
+            v-if="primaryPostMedia?.isVideo"
+            :src="primaryPostMedia.url"
+            controls
+            preload="metadata"
+            playsinline
+            class="aspect-video max-h-[40rem] w-full rounded-[0.9rem] bg-black object-contain"
+          />
           <img
-            :src="post.imageSrc"
+            v-else-if="primaryPostMedia"
+            :src="primaryPostMedia.url"
             :alt="post.imageAlt || post.title"
+            loading="lazy"
+            decoding="async"
             class="aspect-[4/5] max-h-[40rem] w-full rounded-[0.9rem] bg-[var(--surface-secondary)] object-cover sm:aspect-[1.91/1]"
           />
         </template>
@@ -1566,7 +1583,7 @@ const submitAnswer = async () => {
                   :to="comment.authorTo"
                   class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-primary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
-                  <img
+                  <img loading="lazy" decoding="async"
                     v-if="comment.avatarSrc"
                     :src="comment.avatarSrc"
                     :alt="comment.author"
@@ -1715,7 +1732,7 @@ const submitAnswer = async () => {
             :to="answererProfilePath"
             class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
-            <img
+            <img loading="lazy" decoding="async"
               v-if="answererAvatar"
               :src="answererAvatar"
               :alt="answererName"
@@ -1773,7 +1790,7 @@ const submitAnswer = async () => {
               :key="file.key"
               class="overflow-hidden rounded-xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)]"
             >
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="file.kind === 'image'"
                 :src="file.url"
                 :alt="file.name"
@@ -1907,7 +1924,7 @@ const submitAnswer = async () => {
                 <span class="font-semibold text-[var(--text-primary)]">{{ sharePreviewAuthor }}</span>
                 <span>{{ post.time }}</span>
               </div>
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="sharePreviewImageSrc"
                 :src="sharePreviewImageSrc"
                 :alt="sharePreviewImageAlt"

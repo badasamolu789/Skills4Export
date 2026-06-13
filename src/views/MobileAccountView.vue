@@ -86,7 +86,7 @@ const handleItemClick = async (item: MenuItem) => {
             >
               {{ profileInitials }}
             </span>
-            <img
+            <img loading="lazy" decoding="async"
               v-else-if="authStore.isAuthenticated && profileImage"
               :src="profileImage"
               :alt="profileName"

@@ -471,7 +471,7 @@ onBeforeUnmount(() => {
 
         <div class="mt-6 grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center">
           <div class="flex aspect-[10/9] items-center justify-center overflow-hidden rounded-[0.8rem] bg-[var(--surface-secondary)] text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
-            <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Page image preview" class="h-full w-full object-cover" />
+            <img loading="lazy" decoding="async" v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Page image preview" class="h-full w-full object-cover" />
             <span v-else>300 x 270</span>
           </div>
 

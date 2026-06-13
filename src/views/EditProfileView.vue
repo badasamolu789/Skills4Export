@@ -1276,47 +1276,13 @@ const upsertProfile = async (payload: {
     throw new Error('No authenticated user ID is available for this profile update.')
   }
 
-  if (!authStore.userProfile?.id) {
-    try {
-      return await usersService.createUserProfile(id, payload, authStore.authToken, { suppressErrorModal: true })
-    } catch (error) {
-      const isExistingProfileConflict =
-        error instanceof ApiError &&
-        error.status === 409 &&
-        error.payload?.error &&
-        typeof error.payload.error === 'object' &&
-        error.payload.error.code === 'profile_already_exists'
-
-      if (!isExistingProfileConflict) {
-        throw error
-      }
-
-      return usersService.updateUserProfile(id, payload, authStore.authToken, { suppressErrorModal: true })
-    }
-  }
-
-  try {
-    return await usersService.updateUserProfile(id, payload, authStore.authToken, { suppressErrorModal: true })
-  } catch (error) {
-    const isExistingProfileConflict =
-      error instanceof ApiError &&
-      error.status === 409 &&
-      error.payload?.error &&
-      typeof error.payload.error === 'object' &&
-      error.payload.error.code === 'profile_already_exists'
-
-    if (isExistingProfileConflict) {
-      return usersService.getUserProfile(id, authStore.authToken)
-    }
-
-    if (error instanceof ApiError && error.status === 404) {
-      throw new Error(
-        'We could not save your profile right now. Please try again later.',
-      )
-    }
-
-    throw error
-  }
+  return usersService.saveUserProfile(
+    id,
+    payload,
+    Boolean(authStore.userProfile?.id),
+    authStore.authToken,
+    { suppressErrorModal: true },
+  )
 }
 
 const getCurrentProfileFieldPayload = () => {
@@ -1635,7 +1601,7 @@ const addExperienceFromModal = async () => {
     <section class="overflow-hidden rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
       <!-- Banner hidden for now until live banner display is re-enabled. -->
       <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
-        <img
+        <img loading="lazy" decoding="async"
           v-if="bannerPreviewUrl"
           :src="bannerPreviewUrl"
           alt="Banner preview"
@@ -1684,7 +1650,7 @@ const addExperienceFromModal = async () => {
       <div class="relative px-5 py-5 sm:px-7 sm:py-7">
         <div class="mb-4">
           <div class="relative h-32 w-32 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
-            <img
+            <img loading="lazy" decoding="async"
               v-if="avatarPreviewUrl"
               :src="avatarPreviewUrl"
               alt="Profile image preview"
@@ -1811,14 +1777,14 @@ const addExperienceFromModal = async () => {
       <section class="overflow-hidden rounded-[1.35rem] border border-[color:var(--border-soft)]">
         <div class="relative h-[18rem] overflow-hidden bg-[var(--surface-secondary)]">
           <div v-if="bannerPreviewUrl" class="absolute inset-0">
-            <img :src="bannerPreviewUrl" alt="Banner preview" class="h-full w-full object-cover" />
+            <img loading="lazy" decoding="async" :src="bannerPreviewUrl" alt="Banner preview" class="h-full w-full object-cover" />
           </div>
           <div v-else class="absolute inset-0 bg-[linear-gradient(135deg,#e8e9ff,#fef3c7)]" />
           <div class="absolute inset-0 bg-[#12121f]" />
 
           <div class="absolute left-5 bottom-5 flex items-center gap-4">
             <div class="relative h-20 w-20 overflow-hidden rounded-[0.75rem] border border-white bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
-              <img v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Avatar preview" class="h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Avatar preview" class="h-full w-full object-cover" />
               <span v-else class="flex h-full w-full items-center justify-center text-xl font-semibold text-white">
                 {{ profileInitials }}
               </span>
@@ -2088,7 +2054,7 @@ const addExperienceFromModal = async () => {
                   @dragover.prevent
                   @drop.prevent="selectProjectMediaFile($event.dataTransfer?.files?.[0])"
                 >
-                  <img
+                  <img loading="lazy" decoding="async"
                     v-if="projectMediaPreviewUrl && projectMediaFile?.type.startsWith('image/')"
                     :src="projectMediaPreviewUrl"
                     alt="Project media preview"
@@ -2484,7 +2450,7 @@ const addExperienceFromModal = async () => {
           @dragover.prevent
           @drop.prevent="selectProjectMediaFile($event.dataTransfer?.files?.[0])"
         >
-          <img
+          <img loading="lazy" decoding="async"
             v-if="projectMediaPreviewUrl && projectMediaFile?.type.startsWith('image/')"
             :src="projectMediaPreviewUrl"
             alt="Project media preview"
@@ -2558,7 +2524,7 @@ const addExperienceFromModal = async () => {
           @dragover.prevent
           @drop.prevent="handleProfileUploadDrop"
         >
-          <img
+          <img loading="lazy" decoding="async"
             v-if="profileUploadPreviewUrl && profileUploadFile?.type.startsWith('image/')"
             :src="profileUploadPreviewUrl"
             alt="Selected upload preview"

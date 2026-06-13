@@ -16,6 +16,7 @@ import { usersService } from '@/services/users'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { useTheme } from '@/composables/useTheme'
 import { isLikelyEmail } from '@/utils/displayName'
 
@@ -30,6 +31,7 @@ const headerLinks: Array<{ label: string; to?: string; action?: 'ask' | 'post'; 
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const notificationsStore = useNotificationsStore()
+const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const router = useRouter()
 const isMobileSidebarOpen = ref(false)
@@ -169,6 +171,7 @@ const handleSessionExpired = (event: Event) => {
 
   authStore.clearAuthenticatedSession()
   notificationsStore.reset()
+  socialActionsStore.reset()
 
   toast.warning('Session expired', {
     description: detail?.message || 'Please log in again to continue.',
@@ -285,6 +288,7 @@ const handleMenuAction = async (action: 'logout') => {
     })
   } finally {
     authStore.clearAuthenticatedSession()
+    socialActionsStore.reset()
     router.push('/auth/login')
 
     toast.success('Logged out', {

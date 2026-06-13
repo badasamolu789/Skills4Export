@@ -51,7 +51,7 @@ const activeActionClass =
           :to="comment.authorTo || '/profile'"
           class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.62rem] font-semibold text-[var(--text-tertiary)]"
         >
-          <img
+          <img loading="lazy" decoding="async"
             v-if="comment.avatarSrc"
             :src="comment.avatarSrc"
             :alt="comment.author"

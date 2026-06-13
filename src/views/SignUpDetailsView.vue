@@ -6,7 +6,7 @@ import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
-import { usersService } from '@/services/users'
+import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -72,25 +72,6 @@ const canSubmit = computed(() => {
   )
 })
 
-const toUsername = (value: string) =>
-  value
-    .trim()
-    .toLowerCase()
-    .replace(/@.*/, '')
-    .replace(/[^a-z0-9_]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-
-const getProfileIdentity = () => {
-  const emailUsername = toUsername(authStore.signUpDraft.email)
-  const nameUsername = toUsername(authStore.signUpDraft.name || authStore.currentUser?.name || '')
-  const fallbackId = authStore.userId ? `user_${authStore.userId.slice(0, 8).toLowerCase()}` : ''
-
-  return {
-    username: authStore.signUpDraft.username || emailUsername || nameUsername || fallbackId,
-    displayName: authStore.signUpDraft.name || authStore.currentUser?.name || authStore.signUpDraft.email || undefined,
-  }
-}
-
 const persistDraftDetails = () => {
   const state = form.value.state.trim()
   const country = form.value.country.trim()
@@ -105,58 +86,12 @@ const persistDraftDetails = () => {
   authStore.signUpDraft.yearStarted = form.value.yearStarted
   authStore.signUpDraft.courseOfStudy = form.value.courseOfStudy.trim()
   authStore.signUpDraft.location = [state, country].filter(Boolean).join(', ')
-  authStore.signUpDraft.headline = isStudentAccount.value
-    ? form.value.courseOfStudy.trim()
-    : form.value.jobTitle.trim()
+  authStore.signUpDraft.headline = ''
   authStore.signUpDraft.signUpDetailsCompleted = true
 }
 
 const completeGoogleOnboarding = async () => {
-  if (!authStore.userId || !authStore.authToken) {
-    throw new Error('Your Google session is ready, but we could not identify the account. Please sign in again.')
-  }
-
-  const profileResponse = await usersService.updateUserProfile(
-    authStore.userId,
-    {
-      ...getProfileIdentity(),
-      bio: authStore.signUpDraft.headline,
-      location: authStore.signUpDraft.location,
-      currentJobTitle: isStudentAccount.value ? undefined : authStore.signUpDraft.jobTitle,
-      currentWorkspace: isStudentAccount.value ? undefined : authStore.signUpDraft.workplace,
-    },
-    authStore.authToken,
-    { suppressErrorModal: true },
-  )
-
-  if (profileResponse.data) {
-    authStore.setUserProfile(profileResponse.data)
-  }
-
-  if (isStudentAccount.value) {
-    await usersService.addUserEducation(
-      authStore.userId,
-      {
-        school: authStore.signUpDraft.university,
-        field: authStore.signUpDraft.courseOfStudy,
-        startDate: `${authStore.signUpDraft.yearStarted}-01-01`,
-      },
-      authStore.authToken,
-      { suppressErrorModal: true },
-    )
-  } else {
-    await usersService.addUserExperience(
-      authStore.userId,
-      {
-        company: authStore.signUpDraft.workplace,
-        title: authStore.signUpDraft.jobTitle,
-        isCurrent: true,
-      },
-      authStore.authToken,
-      { suppressErrorModal: true },
-    )
-  }
-
+  await syncSignUpDetailsToProfile(authStore)
   authStore.setOnboardingRequired(false)
 }
 

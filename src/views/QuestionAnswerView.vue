@@ -7,10 +7,12 @@ import { ApiError } from '@/lib/api'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
 const isLoadingQuestions = ref(false)
 const questionsError = ref('')
@@ -18,7 +20,19 @@ const apiQuestions = ref<QuestionPost[]>([])
 const hasLoadedApiQuestions = ref(false)
 const communitiesById = ref(new Map<string, CommunityRecord>())
 
-const questions = computed(() => apiQuestions.value)
+const questions = computed(() => {
+  const loadedIds = new Set(apiQuestions.value.map((question) => question.apiId || question.slug))
+  const newGlobalQuestions = socialActionsStore.questions.filter(
+    (question) => !loadedIds.has(question.apiId || question.slug),
+  )
+
+  return [...newGlobalQuestions, ...apiQuestions.value.map((question) => {
+    const globalQuestion = socialActionsStore.questions.find(
+      (item) => (item.apiId || item.slug) === (question.apiId || question.slug),
+    )
+    return globalQuestion ?? question
+  })]
+})
 
 const loadQuestion = async (question: QuestionRecord) => {
   const userId = getQuestionUserId(question)
@@ -58,6 +72,9 @@ const loadQuestions = async () => {
       (communitiesResponse?.data ?? []).map((community) => [community.id, community]),
     )
     apiQuestions.value = await Promise.all(response.data.map((question) => loadQuestion(question)))
+    apiQuestions.value.forEach((question) => {
+      socialActionsStore.upsertFeedItem(question, { prepend: false })
+    })
     hasLoadedApiQuestions.value = true
   } catch (error) {
     questionsError.value =

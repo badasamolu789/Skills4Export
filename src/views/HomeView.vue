@@ -13,6 +13,7 @@ import { postsService, type PostMediaRecord, type PostRecord } from '@/services/
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { mapWithConcurrency } from '@/utils/async'
 import { getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
@@ -56,10 +57,11 @@ const visiblePostCount = ref(INITIAL_POST_COUNT)
 const isLoadingMore = ref(false)
 const isLoadingFeed = ref(false)
 const feedError = ref('')
-const apiPosts = ref<FeedPost[]>([])
 const adverts = ref<AdvertRecord[]>([])
 const communitiesById = ref(new Map<string, CommunityRecord>())
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
+const apiPosts = computed(() => socialActionsStore.feed)
 const currentUser = useCurrentUserIdentity()
 const route = useRoute()
 const activeFeedMode = computed(() => {
@@ -391,7 +393,7 @@ const loadFeed = async (options: { background?: boolean } = {}) => {
 
     const nextPosts = sortFeedItems([...recentPosts, ...posts, ...questions])
     if (getFeedSignature(apiPosts.value) !== getFeedSignature(nextPosts)) {
-      apiPosts.value = nextPosts
+      socialActionsStore.setFeed(nextPosts)
     }
     visiblePostCount.value = apiPosts.value.length
       ? Math.max(visiblePostCount.value, INITIAL_POST_COUNT)
@@ -417,7 +419,7 @@ const loadFeed = async (options: { background?: boolean } = {}) => {
     if (!options.background) {
       feedError.value =
         error instanceof ApiError ? error.message : 'Unable to load the feed from the server.'
-      apiPosts.value = []
+      socialActionsStore.setFeed([])
       adverts.value = []
     }
   } finally {

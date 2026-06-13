@@ -5,6 +5,7 @@ import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName } from '@/utils/displayName'
 import { getQuestionUserId } from '@/utils/questionMapper'
 
@@ -31,6 +32,7 @@ type TrendingQuestion = {
 }
 
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const questions = ref<QuestionRecord[]>([])
 const questionAuthors = ref(new Map<string, string>())
 const isLoadingQuestions = ref(false)
@@ -113,8 +115,8 @@ const getQuestionAuthor = (question: QuestionRecord) => {
   )
 }
 
-const trendingQuestions = computed<TrendingQuestion[]>(() =>
-  [...questions.value]
+const trendingQuestions = computed<TrendingQuestion[]>(() => {
+  const apiItems = [...questions.value]
     .sort((first, second) => {
       const scoreDifference = getQuestionScore(second) - getQuestionScore(first)
 
@@ -132,8 +134,23 @@ const trendingQuestions = computed<TrendingQuestion[]>(() =>
       author: getQuestionAuthor(question),
       to: `/questions/${question.id}`,
       score: getQuestionScore(question),
-    })),
-)
+    }))
+  const knownIds = new Set(apiItems.map((question) => question.id))
+  const globalItems = socialActionsStore.questions
+    .filter((question) => !knownIds.has(question.apiId || question.slug))
+    .map((question) => ({
+      id: question.apiId || question.slug,
+      title: question.title,
+      time: formatQuestionTime(question.createdAt || question.updatedAt || ''),
+      author: question.authorName,
+      to: `/questions/${question.apiId || question.slug}`,
+      score: question.score ?? 0,
+    }))
+
+  return [...globalItems, ...apiItems]
+    .sort((first, second) => second.score - first.score)
+    .slice(0, 4)
+})
 
 const usableAdverts = computed(() =>
   adverts.value.filter((advert) =>
@@ -324,6 +341,7 @@ onBeforeUnmount(() => {
             :alt="rightRailAdvert.ownerName ? `${rightRailAdvert.ownerName} advertisement` : 'Advertisement'"
             class="aspect-[4/5] w-full object-cover"
             loading="lazy"
+            decoding="async"
           >
         </a>
         <a

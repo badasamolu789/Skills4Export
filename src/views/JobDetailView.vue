@@ -441,6 +441,7 @@ watch(
               :alt="rightRailAdvert.ownerName ? `${rightRailAdvert.ownerName} advertisement` : 'Advertisement'"
               class="aspect-[29/50] w-full object-cover"
               loading="lazy"
+              decoding="async"
             >
           </a>
           <a

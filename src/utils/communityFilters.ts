@@ -1,34 +1,94 @@
 import type { CommunityRecord } from '@/services/communities'
 
-const getString = (source: unknown, keys: string[]) => {
-  if (!source || typeof source !== 'object' || Array.isArray(source)) {
-    return ''
+const normalizeValue = (value: unknown) =>
+  typeof value === 'string'
+    ? value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
+    : ''
+
+const VERTICAL_VALUES = new Set([
+  'vertical',
+  'vertical community',
+  'vertical communities',
+])
+
+const isTruthyFlag = (value: unknown) =>
+  value === true ||
+  value === 1 ||
+  ['true', '1', 'yes'].includes(normalizeValue(value))
+
+const parseMetadata = (value: unknown): unknown => {
+  if (typeof value !== 'string' || !value.trim()) {
+    return value
   }
 
-  const record = source as Record<string, unknown>
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
 
-  for (const key of keys) {
-    const value = record[key]
+const metadataMarksVertical = (value: unknown): boolean => {
+  const metadata = parseMetadata(value)
 
-    if (typeof value === 'string' && value.trim()) {
-      return value.trim()
-    }
+  if (typeof metadata === 'string') {
+    return VERTICAL_VALUES.has(normalizeValue(metadata))
   }
 
-  return ''
+  if (Array.isArray(metadata)) {
+    return metadata.some(metadataMarksVertical)
+  }
+
+  if (!metadata || typeof metadata !== 'object') {
+    return false
+  }
+
+  const record = metadata as Record<string, unknown>
+  const flags = [
+    record.isVertical,
+    record.is_vertical,
+    record.verticalCommunity,
+    record.vertical_community,
+    record.vertical,
+  ]
+  const types = [
+    record.communityType,
+    record.community_type,
+    record.type,
+    record.kind,
+    record.classification,
+    record.placement,
+    record.location,
+    record.tags,
+  ]
+
+  return flags.some(isTruthyFlag) ||
+    types.some(metadataMarksVertical) ||
+    Object.entries(record).some(([key, nestedValue]) =>
+      normalizeValue(key) === 'vertical' && isTruthyFlag(nestedValue),
+    )
 }
 
 export const isVerticalCommunity = (community: CommunityRecord) => {
-  const record = community as Record<string, unknown>
-  const category = community.category as Record<string, unknown> | null | undefined
-  const signals = [
-    getString(record, ['type', 'communityType', 'community_type', 'kind', 'group']),
-    getString(record, ['categoryName', 'category_name', 'categorySlug', 'category_slug']),
-    getString(record, ['description']),
-    getString(category, ['name', 'slug', 'type']),
+  const flags = [
+    community.isVertical,
+    community.is_vertical,
+    community.verticalCommunity,
+    community.vertical_community,
   ]
-    .filter(Boolean)
-    .map((value) => value.toLowerCase())
+  const types = [
+    community.communityType,
+    community.community_type,
+    community.type,
+  ]
+  const metadataValues = [
+    community.metadata,
+    community.meta,
+    community.metaData,
+    community.meta_data,
+  ]
 
-  return signals.some((value) => /\bvertical\b/.test(value) || value.includes('vertical communit'))
+  return flags.some(isTruthyFlag) ||
+    types.some((value) => VERTICAL_VALUES.has(normalizeValue(value))) ||
+    metadataValues.some(metadataMarksVertical)
 }

@@ -26,10 +26,13 @@ import type { NotificationItem } from '@/services/notifications'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
 import { postsService, type CreatePostRequest, type PostMediaRecord, type PostRecord } from '@/services/posts'
-import { questionsService } from '@/services/questions'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
+import { useSocialActionsStore } from '@/stores/socialActions'
+import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
+import { mapApiPostToFeedPost } from '@/utils/postMapper'
+import { mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 type HeaderLink = {
   label: string
@@ -90,6 +93,8 @@ const activeComposer = ref<null | 'ask' | 'post'>(null)
 const router = useRouter()
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
+const socialActionsStore = useSocialActionsStore()
+const currentUser = useCurrentUserIdentity()
 const askTitle = ref('')
 const askQuestion = ref('')
 const postAudienceId = ref('')
@@ -404,14 +409,22 @@ const submitQuestion = async () => {
   isSubmittingQuestion.value = true
 
   try {
-    const response = await questionsService.createQuestion(
+    const question = await socialActionsStore.createQuestion(
       {
         ...(postAudienceId.value ? { communityId: postAudienceId.value } : {}),
         title,
         body,
         visibility: postAudienceId.value ? 'community_public' : 'public',
       },
-      authStore.authToken,
+    )
+    const community = communities.value.find((item) => item.id === postAudienceId.value)
+    socialActionsStore.upsertFeedItem(
+      mapApiQuestionToFeedPost(
+        question,
+        currentUser.profileData.value,
+        community?.name,
+        community,
+      ),
     )
 
     toast.success('Question posted', {
@@ -422,8 +435,8 @@ const submitQuestion = async () => {
     postAudienceId.value = ''
     closeComposer()
 
-    if (response.data?.id) {
-      await router.push(`/questions/${response.data.id}`)
+    if (question.id) {
+      await router.push(`/questions/${question.id}`)
     }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to post question.'
@@ -520,16 +533,16 @@ const submitPost = async () => {
       media_asset_ids: mediaAssetIds,
     }
 
-    const response = await postsService.createPost(postPayload, authStore.authToken)
-    const createdAt = response.data.created_at || (response.data as PostRecord & { createdAt?: string }).createdAt || new Date().toISOString()
-    const updatedAt = response.data.updated_at || (response.data as PostRecord & { updatedAt?: string }).updatedAt || createdAt
+    const responsePost = await socialActionsStore.createPost(postPayload)
+    const createdAt = responsePost.created_at || (responsePost as PostRecord & { createdAt?: string }).createdAt || new Date().toISOString()
+    const updatedAt = responsePost.updated_at || (responsePost as PostRecord & { updatedAt?: string }).updatedAt || createdAt
     const createdPost = {
-      ...response.data,
-      user_id: response.data.user_id || authStore.userId,
-      community_id: response.data.community_id ?? selectedCommunityId,
-      page_id: response.data.page_id ?? null,
-      title: response.data.title || title,
-      content: response.data.content || content,
+      ...responsePost,
+      user_id: responsePost.user_id || authStore.userId,
+      community_id: responsePost.community_id ?? selectedCommunityId,
+      page_id: responsePost.page_id ?? null,
+      title: responsePost.title || title,
+      content: responsePost.content || content,
       created_at: createdAt,
       updated_at: updatedAt,
     } satisfies PostRecord
@@ -537,8 +550,8 @@ const submitPost = async () => {
     const fallbackMedia: PostMediaRecord[] = immediateMediaUrl
       ? [
           {
-            id: `immediate-${response.data.id}`,
-            post_id: response.data.id,
+            id: `immediate-${responsePost.id}`,
+            post_id: responsePost.id,
             media_type: uploadedMedia.mediaType || 'image',
             url: immediateMediaUrl,
             thumbnail_url: uploadedMedia.mediaType === 'image' ? immediateMediaUrl : '',
@@ -549,7 +562,7 @@ const submitPost = async () => {
 
     if (uploadedMedia.fallbackUrl) {
       await postsService.attachPostMedia(
-        response.data.id,
+        responsePost.id,
         {
           url: uploadedMedia.fallbackUrl,
           mediaType: uploadedMedia.mediaType,
@@ -569,8 +582,16 @@ const submitPost = async () => {
       post: createdPost,
       media: fallbackMedia,
     })
-    window.dispatchEvent(new CustomEvent(POST_CREATED_EVENT, { detail: { postId: response.data.id } }))
-    await router.push(`/posts/${response.data.id}`)
+    socialActionsStore.upsertFeedItem(
+      mapApiPostToFeedPost(
+        createdPost,
+        fallbackMedia,
+        currentUser.profileData.value,
+        communities.value.find((item) => item.id === selectedCommunityId)?.name,
+      ),
+    )
+    window.dispatchEvent(new CustomEvent(POST_CREATED_EVENT, { detail: { postId: responsePost.id } }))
+    await router.push(`/posts/${responsePost.id}`)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -637,7 +658,7 @@ onMounted(() => {
             <Menu class="h-4 w-4" />
           </button>
           <RouterLink to="/feed" class="flex min-w-0 items-center justify-center">
-            <img
+            <img loading="lazy" decoding="async"
               :src="logoSrc"
               :alt="logoAlt"
               class="h-[2.8rem] w-auto object-contain"
@@ -682,7 +703,7 @@ onMounted(() => {
             >
               {{ userInitials }}
             </span>
-            <img
+            <img loading="lazy" decoding="async"
               v-else-if="props.isAuthenticated && userImageSrc"
               :src="userImageSrc"
               :alt="userName"
@@ -753,7 +774,7 @@ onMounted(() => {
 
       <div class="relative hidden grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-8 md:grid lg:gap-12 xl:gap-16">
         <RouterLink to="/feed" class="flex items-center justify-center justify-self-start">
-          <img
+          <img loading="lazy" decoding="async"
             :src="logoSrc"
             :alt="logoAlt"
             class="h-[3.2rem] w-auto object-contain sm:h-16 lg:h-11"
@@ -849,7 +870,7 @@ onMounted(() => {
               >
                 {{ userInitials }}
               </span>
-              <img
+              <img loading="lazy" decoding="async"
                 v-else-if="props.isAuthenticated && userImageSrc"
                 :src="userImageSrc"
                 :alt="userName"
@@ -879,7 +900,7 @@ onMounted(() => {
                   >
                     {{ userInitials }}
                   </span>
-                  <img
+                  <img loading="lazy" decoding="async"
                     v-else-if="props.isAuthenticated && userImageSrc"
                     :src="userImageSrc"
                     :alt="userName"
@@ -1185,7 +1206,7 @@ onMounted(() => {
             class="mt-2 block overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
           >
             <span class="block bg-[var(--surface-secondary)] p-3">
-              <img
+              <img loading="lazy" decoding="async"
                 v-if="postFileKind === 'image'"
                 :src="postFilePreviewUrl"
                 :alt="postFile.name"

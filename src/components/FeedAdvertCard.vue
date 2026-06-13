@@ -28,6 +28,7 @@ const advertAltText = computed(() =>
         :alt="advertAltText"
         class="aspect-[16/7] w-full object-cover"
         loading="lazy"
+        decoding="async"
       >
     </a>
     <a
