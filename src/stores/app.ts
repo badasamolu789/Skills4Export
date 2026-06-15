@@ -31,7 +31,6 @@ export const useAppStore = defineStore('app', {
     },
     networkStatus: {
       offline: false,
-      backendUnreachable: false,
       lastIssueAt: '',
     },
   }),
@@ -66,13 +65,8 @@ export const useAppStore = defineStore('app', {
         this.networkStatus.lastIssueAt = new Date().toISOString()
       }
     },
-    reportBackendUnreachable() {
-      this.networkStatus.backendUnreachable = true
-      this.networkStatus.lastIssueAt = new Date().toISOString()
-    },
     clearNetworkIssue() {
       this.networkStatus.offline = false
-      this.networkStatus.backendUnreachable = false
     },
   },
 })

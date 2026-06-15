@@ -115,14 +115,14 @@ export function useErrorHandler() {
         // Handle network/fetch errors
         if (error instanceof Error) {
             const errorName = error.name.toLowerCase()
-            let message = 'An unexpected error occurred. Please try again.'
+            let message = 'Something went wrong. Try again.'
 
             if (errorName === 'aborterror') {
-                message = 'The request was cancelled. Please try again.'
+                message = 'Request cancelled. Try again.'
             } else if (errorName.includes('timeout')) {
-                message = 'This is taking longer than expected. Please try again.'
+                message = 'Connection timed out. Try again.'
             } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                message = 'Unable to connect. Please check your internet connection and try again.'
+                message = 'Could not connect. Try again.'
             }
 
             if (shouldShowToast) {
@@ -133,7 +133,7 @@ export function useErrorHandler() {
         }
 
         // Handle unknown errors
-        const message = 'An unexpected error occurred. Please try again.'
+        const message = 'Something went wrong. Try again.'
         if (shouldShowToast) {
             showErrorToast(message)
         }

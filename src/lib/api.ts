@@ -74,9 +74,7 @@ const AUTH_EXPIRED_STATUSES = new Set([401, 419])
 
 // Temporary API debug modal toggle.
 const SHOW_API_DEBUG_MODAL =
-  import.meta.env.VITE_SHOW_API_DEBUG_MODAL === undefined
-    ? import.meta.env.DEV
-    : import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
+  import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
 const SHOW_API_REQUEST_LOGS =
   import.meta.env.VITE_SHOW_API_REQUEST_LOGS === undefined
     ? import.meta.env.DEV
@@ -246,16 +244,9 @@ const reportApiError = ({
   }
 }
 
-const reportNetworkIssue = ({ offline }: { offline: boolean }) => {
+const reportOfflineState = () => {
   try {
-    const appStore = useAppStore()
-
-    if (offline) {
-      appStore.setOfflineStatus(true)
-      return
-    }
-
-    appStore.reportBackendUnreachable()
+    useAppStore().setOfflineStatus(true)
   } catch {
     // Ignore store access failures outside an active Pinia context.
   }
@@ -557,7 +548,6 @@ export const apiRequest = async <T>(
         // Add keepalive for critical requests
         keepalive: getRequestPriority(path) === 'high',
       })
-
       logApiResponse({
         method,
         url: requestUrl,
@@ -627,12 +617,7 @@ export const apiRequest = async <T>(
             description: 'The request timed out before the server responded.',
           })
         }
-        throw new ApiError(
-          method === 'GET'
-            ? 'This is taking longer than expected. Please try again.'
-            : 'This is taking longer than expected. Please check the result before trying again.',
-          408,
-        )
+        throw new ApiError('Connection timed out. Try again.', 408)
       }
 
       if (!suppressErrorModal) {
@@ -643,12 +628,20 @@ export const apiRequest = async <T>(
           payload: { message: String(error) },
           description: 'The request could not reach the backend service.',
         })
-        reportNetworkIssue({
-          offline: typeof navigator !== 'undefined' ? navigator.onLine === false : false,
-        })
+        // A fetch TypeError can also mean CORS, a blocked request, or a bad
+        // endpoint. Only show the global connection state when the browser
+        // itself confirms that the device is offline.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          reportOfflineState()
+        }
       }
 
-      throw new ApiError('Unable to connect. Please check your internet connection and try again.', 0)
+      throw new ApiError(
+        typeof navigator !== 'undefined' && navigator.onLine === false
+          ? 'No internet connection.'
+          : 'Could not connect. Try again.',
+        0,
+      )
     } finally {
       cleanup()
     }

@@ -97,7 +97,7 @@ const signUpWithGoogle = async () => {
       throw new Error('Missing Google client ID. Add VITE_GOOGLE_CLIENT_ID to your environment.')
     }
 
-    const idToken = await requestGoogleIdToken()
+    const idToken = await requestGoogleIdToken('signup')
     const response = await authService.googleTokenSignIn({ id_token: idToken })
     const session = extractAuthSession(response)
     if (!session) {

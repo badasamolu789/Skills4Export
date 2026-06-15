@@ -3,8 +3,7 @@ import { computed, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
-import { ApiError } from '@/lib/api'
-import { isTransientRequestError } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/errors'
 import { authService } from '@/services/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
@@ -87,12 +86,9 @@ const requestResetLink = async () => {
       description: `Check ${requestForm.value.email} for your secure password reset link.`,
     })
   } catch (error) {
-    const message =
-      error instanceof ApiError ? error.message : 'We could not send the reset link. Please try again.'
+    const message = getErrorMessage(error, 'Could not send the reset link. Try again.')
 
-    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
-      setFieldError('email', message)
-    }
+    setApiFieldErrors(error)
 
     toast.error('Unable to send reset link', {
       id: loadingToastId,
@@ -146,12 +142,9 @@ const submitReset = async () => {
 
     router.push('/auth/login')
   } catch (error) {
-    const message =
-      error instanceof ApiError ? error.message : 'We could not reset your password. Please try again.'
+    const message = getErrorMessage(error, 'Could not reset your password. Try again.')
 
-    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
-      setFieldError('newPassword', message)
-    }
+    setApiFieldErrors(error)
 
     toast.error('Reset failed', {
       id: loadingToastId,

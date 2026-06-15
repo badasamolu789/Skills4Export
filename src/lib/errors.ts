@@ -35,15 +35,15 @@ const HTTP_STATUS_MESSAGES: Record<number, string> = {
     429: "You're doing that too often. Please wait a moment and try again.",
     500: "Something went wrong on our end. We're working on it. Please try again later.",
     503: 'We\'re temporarily unavailable. Please check back in a few minutes.',
-    504: 'This is taking longer than expected. Please try again.',
+    504: 'Connection timed out. Try again.',
 }
 
 // Network and client errors
 const NETWORK_ERROR_MESSAGES: Record<string, string> = {
-    timeout: 'This is taking longer than expected. Please try again.',
-    offline: 'Unable to connect. Please check your internet connection and try again.',
-    network: 'Unable to connect. Please check your internet connection and try again.',
-    abort: 'The request was cancelled. Please try again.',
+    timeout: 'Connection timed out. Try again.',
+    offline: 'No internet connection.',
+    network: 'Could not connect. Try again.',
+    abort: 'Request cancelled. Try again.',
 }
 
 const INTERNAL_MESSAGE_PATTERNS = [
@@ -53,6 +53,7 @@ const INTERNAL_MESSAGE_PATTERNS = [
     /endpoint/i,
     /stack/i,
     /sql/i,
+    /VITE_[A-Z0-9_]+/,
 ]
 
 export function isTransientRequestStatus(status: number | undefined): boolean {
@@ -104,6 +105,10 @@ export function sanitizeUserMessage(
         return NETWORK_ERROR_MESSAGES.network
     }
 
+    if (lowerMessage === 'invalid_id_token' || lowerMessage === 'invalid id token') {
+        return 'Google could not verify this sign-in. Please try again.'
+    }
+
     if (INTERNAL_MESSAGE_PATTERNS.some((pattern) => pattern.test(trimmed))) {
         return fallback
     }
@@ -127,6 +132,7 @@ const AUTH_ERRORS: Record<string, string> = {
     invalid_email_format: 'Please enter a valid email address (e.g., name@example.com).',
     google_token_expired: 'Your Google session has expired. Please sign in with Google again.',
     google_token_invalid: 'Your Google session has expired. Please sign in with Google again.',
+    invalid_id_token: 'Google could not verify this sign-in. Please try again.',
     missing_required_fields: 'Please fill in all required fields: email, password, and full name.',
     password_reset_token_invalid: 'This password reset link is invalid or has expired. Request a new one.',
     email_not_verified: 'Please verify your email address before logging in. Check your inbox.',

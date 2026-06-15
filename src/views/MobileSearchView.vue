@@ -30,7 +30,7 @@ const searchTargets: SearchTarget[] = [
   {
     title: 'Question Answers',
     description: 'Jump into community questions and discover helpful answers.',
-    to: '/answer/question',
+    to: '/answers',
     keywords: ['ask', 'answers', 'questions', 'community'],
     icon: MessageSquareMore,
   },

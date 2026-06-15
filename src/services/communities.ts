@@ -7,13 +7,6 @@ export type CommunityRecord = {
   meta?: unknown
   metaData?: unknown
   meta_data?: unknown
-  isVertical?: boolean | number | string | null
-  is_vertical?: boolean | number | string | null
-  verticalCommunity?: boolean | number | string | null
-  vertical_community?: boolean | number | string | null
-  communityType?: string | null
-  community_type?: string | null
-  type?: string | null
   categoryId?: string | null
   category_id?: string | null
   category?: {
@@ -33,7 +26,12 @@ export type CommunityRecord = {
   name: string
   description: string
   is_active?: number
+  visibility?: 'public' | 'private' | 'connections' | 'community' | string | null
+  privacy?: 'public' | 'private' | 'connections' | 'community' | string | null
+  defaultPostVisibility?: 'public' | 'connections' | 'community' | string | null
   default_post_visibility?: 'public' | 'connections' | 'community' | string | null
+  membersOnlyPosting?: boolean | null
+  members_only_posting?: boolean | number | string | null
   posts_count?: number
   members_count?: number
   member_count?: number

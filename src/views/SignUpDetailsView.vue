@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BookOpen, BriefcaseBusiness } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
+import { countryLocationOptions, getStatesForCountry } from '@/data/locations'
 import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
@@ -48,6 +49,31 @@ if (!canAccessDetails.value) {
 }
 
 const isStudentAccount = computed(() => form.value.accountType === 'student')
+const countryOptions = computed(() => {
+  const options = countryLocationOptions.map((option) => option.name)
+  const currentCountry = form.value.country.trim()
+
+  return currentCountry && !options.includes(currentCountry)
+    ? [currentCountry, ...options]
+    : options
+})
+const stateOptions = computed(() => {
+  const options = getStatesForCountry(form.value.country)
+  const currentState = form.value.state.trim()
+
+  return currentState && !options.includes(currentState)
+    ? [currentState, ...options]
+    : options
+})
+
+watch(
+  () => form.value.country,
+  (country, previousCountry) => {
+    if (previousCountry && country !== previousCountry) {
+      form.value.state = ''
+    }
+  },
+)
 
 const canSubmit = computed(() => {
   if (!form.value.is16OrAbove) {
@@ -176,27 +202,39 @@ const submitDetails = async () => {
         <p class="text-sm font-semibold text-[var(--text-primary)]">Location</p>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-[var(--text-primary)]">State</label>
-            <input
-              v-model="form.state"
-              type="text"
+            <label class="text-sm font-semibold text-[var(--text-primary)]">Country</label>
+            <select
+              v-model="form.country"
               required
-              placeholder="e.g. Lagos"
               class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-            />
+            >
+              <option value="">Select country</option>
+              <option v-for="country in countryOptions" :key="country" :value="country">
+                {{ country }}
+              </option>
+            </select>
           </div>
 
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-[var(--text-primary)]">Country</label>
-            <input
-              v-model="form.country"
-              type="text"
+            <label class="text-sm font-semibold text-[var(--text-primary)]">State or region</label>
+            <select
+              v-model="form.state"
               required
-              placeholder="e.g. Nigeria"
-              class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-            />
+              :disabled="!form.country"
+              class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <option value="">
+                {{ form.country ? 'Select state or region' : 'Select a country first' }}
+              </option>
+              <option v-for="state in stateOptions" :key="state" :value="state">
+                {{ state }}
+              </option>
+            </select>
           </div>
         </div>
+        <p v-if="form.state && form.country" class="text-xs text-[var(--text-tertiary)]">
+          Profile location: {{ form.state }}, {{ form.country }}
+        </p>
       </div>
 
       <div class="border-b border-[color:var(--border-soft)]">

@@ -4,25 +4,20 @@ import { useRoute } from 'vue-router'
 import {
   BriefcaseBusiness,
   Bell,
-  BookOpen,
-  Check,
   FlaskConical,
   Flame,
-  Globe2,
-  Hammer,
   House,
-  Laptop,
   LayoutGrid,
-  Paintbrush,
-  PenLine,
-  Puzzle,
+  Tags,
   X,
 } from 'lucide-vue-next'
 import { usePagesStore } from '@/stores/pages'
 import { useAuthStore } from '@/stores/auth'
+import { useFreelancersStore } from '@/stores/freelancers'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
-import { isVerticalCommunity } from '@/utils/communityFilters'
+import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { slugify } from '@/utils/slugify'
 
 type SidebarMenuGroup = {
   label: string
@@ -81,12 +76,12 @@ const menuGroups: SidebarMenuGroup[] = [
     to: '/freelancers',
     target: '_blank',
   },
-  {
-    label: 'Create Page',
-    iconClass: 'lab la-readme',
-    to: '/pages/create',
-  },
 ]
+const createPageLink: SidebarMenuGroup = {
+  label: 'Create Page',
+  iconClass: 'lab la-readme',
+  to: '/pages/create',
+}
 
 const footerLinks = [
   { label: 'Advertising', to: '/' },
@@ -98,13 +93,17 @@ const footerLinks = [
 
 const pagesStore = usePagesStore()
 const authStore = useAuthStore()
+const freelancersStore = useFreelancersStore()
 const route = useRoute()
-const verticalCommunities = ref<CommunityRecord[]>([])
+const sidebarCommunities = ref<CommunityRecord[]>([])
 const popularLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'popular' } }))
 const latestLinkTarget = computed(() => ({ path: '/feed', query: { feed: 'latest' } }))
 const isJobsRoute = computed(() => route.path.startsWith('/jobs'))
 const isAnswerRoute = computed(() => route.path.startsWith('/answer'))
 const isFreelancersRoute = computed(() => route.path.startsWith('/freelancers'))
+const activeFreelancerTab = computed(() =>
+  getCurrentQueryValue('tab') === 'jobs' ? 'jobs' : 'freelancers',
+)
 const shouldShowDefaultSidebar = computed(
   () => !isJobsRoute.value && !isAnswerRoute.value && !isFreelancersRoute.value,
 )
@@ -114,23 +113,32 @@ const jobSidebarLinks: SidebarLink[] = [
   { label: 'Manage Jobs', iconClass: 'las la-industry', to: '/jobs' },
   { label: 'Create Alert', icon: Bell, to: '/jobs/alerts' },
 ]
-const freelancerSidebarLinks: SidebarLink[] = [
-  { label: 'Home', icon: House, to: '/freelancers' },
-  { label: 'Writing', icon: FlaskConical, to: '/freelancers?category=writing' },
-  { label: 'Book editing', icon: PenLine, to: '/freelancers?category=book-editing' },
-  { label: 'Article writing', icon: Globe2, to: '/freelancers?category=article-writing' },
-  { label: 'Digital marketing', icon: BookOpen, to: '/freelancers?category=digital-marketing' },
-  { label: 'content writers', icon: Laptop, to: '/freelancers?category=content-writers' },
-  { label: 'Web designers', icon: Hammer, to: '/freelancers?category=web-designers' },
-  { label: 'Graphic designers', icon: Paintbrush, to: '/freelancers?category=graphic-designers' },
-  { label: 'Software developers', icon: BriefcaseBusiness, to: '/freelancers?category=software-developers' },
-  { label: 'Mobile app developers', icon: LayoutGrid, to: '/freelancers?category=mobile-app-developers' },
-  { label: 'Wordpress developers', icon: Puzzle, to: '/freelancers?category=wordpress-developers' },
-  { label: 'Data entry operators', icon: Check, to: '/freelancers?category=data-entry-operators' },
-]
 const questionSidebarLinks: SidebarLink[] = [
-  { label: 'Questions', iconClass: 'las la-question-circle', to: '/answer/question' },
+  { label: 'Questions', iconClass: 'las la-question-circle', to: '/answers' },
 ]
+const freelancerSidebarLinks = computed<SidebarLink[]>(() => {
+  const filterNames = Array.from(
+    new Set(
+      [
+        ...freelancersStore.freelancers.flatMap((freelancer) => freelancer.skills || []),
+        ...freelancersStore.freelanceJobs.flatMap((job) => job.skills || []),
+      ]
+        .map((category) => category.trim())
+        .filter(Boolean),
+    ),
+  )
+
+  return [
+    { label: 'Home', icon: House, to: '/feed' },
+    ...filterNames
+      .sort((first, second) => first.localeCompare(second))
+      .map((filterName) => ({
+        label: filterName.replace(/-/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        icon: Tags,
+        to: `/freelancers?tab=${activeFreelancerTab.value}&category=${encodeURIComponent(slugify(filterName))}`,
+      })),
+  ]
+})
 const yourPages = computed(() =>
   pagesStore.pages.map((page) => ({
     name: page.name,
@@ -145,12 +153,12 @@ const yourPages = computed(() =>
   })),
 )
 const hasYourPages = computed(() => yourPages.value.length > 0)
-const verticalCommunityLinks = computed(() =>
-  verticalCommunities.value
+const sidebarCommunityLinks = computed(() =>
+  sidebarCommunities.value
     .filter(
       (community) =>
         community.is_active !== 0 &&
-        isVerticalCommunity(community),
+        isPrivateCommunity(community),
     )
     .map((community) => ({
       id: community.id,
@@ -160,8 +168,6 @@ const verticalCommunityLinks = computed(() =>
     }))
     .sort((first, second) => first.label.localeCompare(second.label)),
 )
-const hasVerticalCommunities = computed(() => verticalCommunityLinks.value.length > 0)
-
 const loadUserPages = () => {
   if (!authStore.authToken) {
     pagesStore.clearPages()
@@ -171,12 +177,12 @@ const loadUserPages = () => {
   void pagesStore.loadPages()
 }
 
-const loadVerticalCommunities = async () => {
+const loadSidebarCommunities = async () => {
   try {
     const response = await communitiesService.listCommunities({ per_page: 100 }, authStore.authToken)
-    verticalCommunities.value = response.data
+    sidebarCommunities.value = response.data
   } catch {
-    verticalCommunities.value = []
+    sidebarCommunities.value = []
   }
 }
 
@@ -190,9 +196,8 @@ const isRouteActive = (target: string) => {
 
   if (targetQuery) {
     const params = new URLSearchParams(targetQuery)
-    const category = params.get('category') ?? ''
-
-    return route.path === targetPath && getCurrentQueryValue('category') === category
+    return route.path === targetPath &&
+      Array.from(params.entries()).every(([key, value]) => getCurrentQueryValue(key) === value)
   }
 
   if (target === '/jobs') {
@@ -237,7 +242,13 @@ const handleNavigation = () => {
 
 onMounted(() => {
   loadUserPages()
-  void loadVerticalCommunities()
+  void loadSidebarCommunities()
+  if (!freelancersStore.freelanceJobs.length) {
+    void freelancersStore.loadFreelanceJobs()
+  }
+  if (!freelancersStore.freelancers.length) {
+    void freelancersStore.loadFreelancers()
+  }
 })
 
 watch(
@@ -248,7 +259,7 @@ watch(
 watch(
   () => authStore.authToken,
   () => {
-    void loadVerticalCommunities()
+    void loadSidebarCommunities()
   },
 )
 </script>
@@ -385,7 +396,7 @@ watch(
 
           <section v-else-if="isFreelancersRoute" class="space-y-2">
             <p class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-              Freelancers
+              Categories
             </p>
             <div class="space-y-1.5">
               <RouterLink
@@ -430,10 +441,7 @@ watch(
               Browse
             </p>
             <div class="space-y-1.5">
-              <template
-                v-for="group in menuGroups"
-                :key="group.label"
-              >
+              <template v-for="group in menuGroups" :key="group.label">
                 <RouterLink
                   :to="group.to"
                   :target="group.target"
@@ -456,23 +464,39 @@ watch(
                   />
                   <span :class="getTopLevelLabelClasses(isGroupActive(group))">{{ group.label }}</span>
                 </RouterLink>
-
-                <RouterLink
-                  v-for="community in group.label === 'Freelancers' ? verticalCommunityLinks : []"
-                  :key="community.id"
-                  :to="community.to"
-                  :class="getTopLevelLinkClasses(isRouteActive(community.to))"
-                  class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
-                  @click="handleNavigation"
-                >
-                  <i
-                    :class="[community.iconClass, getTopLevelIconClasses(isRouteActive(community.to))]"
-                    class="text-[1.05rem] leading-none"
-                    aria-hidden="true"
-                  />
-                  <span :class="getTopLevelLabelClasses(isRouteActive(community.to))">{{ community.label }}</span>
-                </RouterLink>
               </template>
+
+              <RouterLink
+                v-for="community in sidebarCommunityLinks"
+                :key="community.id"
+                :to="community.to"
+                :class="getTopLevelLinkClasses(isRouteActive(community.to))"
+                class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
+                @click="handleNavigation"
+              >
+                <i
+                  :class="[community.iconClass, getTopLevelIconClasses(isRouteActive(community.to))]"
+                  class="text-[1.05rem] leading-none"
+                  aria-hidden="true"
+                />
+                <span :class="getTopLevelLabelClasses(isRouteActive(community.to))">{{ community.label }}</span>
+              </RouterLink>
+
+              <RouterLink
+                :to="createPageLink.to"
+                :class="getTopLevelLinkClasses(isGroupActive(createPageLink))"
+                class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
+                @click="handleNavigation"
+              >
+                <i
+                  :class="[createPageLink.iconClass, getTopLevelIconClasses(isGroupActive(createPageLink))]"
+                  class="text-[1.05rem] leading-none"
+                  aria-hidden="true"
+                />
+                <span :class="getTopLevelLabelClasses(isGroupActive(createPageLink))">
+                  {{ createPageLink.label }}
+                </span>
+              </RouterLink>
             </div>
           </section>
 

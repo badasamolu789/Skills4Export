@@ -6,6 +6,7 @@ import { ArrowRight, BriefcaseBusiness, CalendarDays, CheckCircle2, Copy, MapPin
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
+import { mediaService } from '@/services/media'
 import { useAuthStore } from '@/stores/auth'
 import { useJobsStore } from '@/stores/jobs'
 
@@ -23,7 +24,7 @@ const resumeInput = ref<HTMLInputElement | null>(null)
 const selectedResumeFile = ref<File | null>(null)
 const hasAgreedToApplicationTerms = ref(false)
 const applicationForm = ref({
-  resumeMediaId: '',
+  coverLetter: '',
 })
 
 const formatMoney = (value?: number | null, currency = 'NGN') => {
@@ -194,17 +195,39 @@ const applyToJob = async () => {
     return
   }
 
+  if (!selectedResumeFile.value) {
+    toast.error('Resume required', {
+      description: 'Choose a resume before applying.',
+    })
+    return
+  }
+
   isApplying.value = true
+  const loadingToastId = toast.loading('Uploading resume...')
 
   try {
+    const uploadResponse = await mediaService.uploadMediaFile(selectedResumeFile.value, {
+      kind: 'resume',
+      title: selectedResumeFile.value.name,
+      token: authStore.authToken,
+      fallbackToDirectUpload: false,
+    })
+    const resumeMediaId = uploadResponse.data.assetId || uploadResponse.data.id
+
+    if (!resumeMediaId) {
+      throw new Error('Resume upload did not return a valid file reference.')
+    }
+
+    toast.loading('Submitting application...', { id: loadingToastId })
     await jobsStore.applyToCurrentJob({
-      resumeMediaId: applicationForm.value.resumeMediaId.trim() || undefined,
+      coverLetter: applicationForm.value.coverLetter.trim() || undefined,
+      resumeMediaId,
       answers: [],
     })
-    toast.success('Application submitted')
+    toast.success('Application submitted', { id: loadingToastId })
     isApplyModalOpen.value = false
     applicationForm.value = {
-      resumeMediaId: '',
+      coverLetter: '',
     }
     selectedResumeFile.value = null
     hasAgreedToApplicationTerms.value = false
@@ -213,7 +236,10 @@ const applyToJob = async () => {
     }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to submit this application.'
-    toast.error('Application failed', { description: message })
+    toast.error('Application failed', {
+      id: loadingToastId,
+      description: message,
+    })
   } finally {
     isApplying.value = false
   }
@@ -500,6 +526,16 @@ watch(
             </p>
           </div>
 
+          <label class="block">
+            <span class="text-base font-semibold text-[var(--text-primary)]">Cover letter</span>
+            <textarea
+              v-model="applicationForm.coverLetter"
+              rows="5"
+              class="mt-3 w-full rounded-[0.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm leading-6 text-[var(--text-primary)] outline-none transition focus:border-[color:var(--accent-soft)]"
+              placeholder="Share why you are a good fit for this role."
+            />
+          </label>
+
           <label class="mx-auto flex max-w-lg items-start gap-3 text-sm leading-6 text-[var(--text-secondary)] sm:text-base sm:leading-7">
             <input
               v-model="hasAgreedToApplicationTerms"
@@ -516,7 +552,7 @@ watch(
             :disabled="isApplying"
             class="inline-flex h-12 w-full items-center justify-center rounded-[0.65rem] bg-[var(--accent)] px-5 text-base font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
           >
-            {{ isApplying ? 'Applying...' : 'Apply' }}
+            {{ isApplying ? 'Submitting...' : 'Apply' }}
           </button>
         </div>
 

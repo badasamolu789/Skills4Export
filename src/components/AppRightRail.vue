@@ -314,7 +314,7 @@ onBeforeUnmount(() => {
         </p>
 
         <RouterLink
-          to="/answer/question"
+          to="/answers"
           class="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-[color:var(--border-soft)] px-3 py-2 text-[0.78rem] font-semibold text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--surface-secondary)]"
         >
           View all questions

@@ -4,7 +4,6 @@ import { RefreshCw, WifiOff } from 'lucide-vue-next'
 
 const props = defineProps<{
   offline: boolean
-  backendUnreachable: boolean
   lastIssueAt?: string
 }>()
 

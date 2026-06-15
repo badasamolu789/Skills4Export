@@ -14,7 +14,7 @@ import {
 import { ApiError } from '@/lib/api'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
-import { pagesService } from '@/services/pages'
+import { pagesService, type PagePrefillRecord } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore, type PageCategory } from '@/stores/pages'
 import { slugify } from '@/utils/slugify'
@@ -45,9 +45,12 @@ const pageTypes: PageTypeOption[] = [
 const selectedPageType = ref<PageCategory | null>(null)
 const agreedToTerms = ref(false)
 const isSubmitting = ref(false)
+const isLoadingPrefill = ref(false)
 const avatarFile = ref<File | null>(null)
 const avatarPreviewUrl = ref('')
+const prefilledAvatarUrl = ref('')
 const avatarFileInput = ref<HTMLInputElement | null>(null)
+const loadedPrefillTypes = new Set<PageCategory>()
 
 const businessForm = ref({
   name: '',
@@ -97,12 +100,49 @@ const uploadLabel = computed(() =>
   selectedPageType.value === 'student' ? 'Upload Passport' : 'Upload Logo',
 )
 
+const currentAvatarUrl = computed(() => avatarPreviewUrl.value || prefilledAvatarUrl.value)
+
+const readFirstValue = (...values: unknown[]) => {
+  const value = values.find((item) => typeof item === 'string' && item.trim())
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+const fillIfEmpty = (
+  currentValue: string,
+  value: unknown,
+  update: (nextValue: string) => void,
+) => {
+  if (!currentValue.trim() && typeof value === 'string' && value.trim()) {
+    update(value.trim())
+  }
+}
+
+const normalizeWebsiteUrl = (value: string) => {
+  const trimmed = value.trim()
+
+  if (!trimmed) {
+    return ''
+  }
+
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`
+  const parsed = new URL(candidate)
+
+  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname.includes('.')) {
+    throw new Error('Invalid website URL')
+  }
+
+  return parsed.toString().replace(/\/$/, '')
+}
+
 const resetUpload = () => {
   if (avatarPreviewUrl.value) {
     URL.revokeObjectURL(avatarPreviewUrl.value)
   }
 
   avatarPreviewUrl.value = ''
+  prefilledAvatarUrl.value = ''
   avatarFile.value = null
 
   if (avatarFileInput.value) {
@@ -116,10 +156,117 @@ const goBackToOptions = () => {
   resetUpload()
 }
 
+const getLocalPrefill = (type: PageCategory): PagePrefillRecord => {
+  const currentUser = authStore.currentUser
+  const profile = authStore.userProfile
+  const draft = authStore.signUpDraft
+  const name = readFirstValue(profile?.displayName, currentUser?.name, draft.name)
+  const email = readFirstValue(currentUser?.email, draft.email)
+
+  return {
+    type,
+    pageType: type,
+    name,
+    email,
+    contactEmail: email,
+    phone: readFirstValue(profile?.phone, draft.phone),
+    courseOfStudy: readFirstValue(draft.courseOfStudy),
+    skills: draft.interests,
+    website: readFirstValue(profile?.website, draft.website),
+    avatar: readFirstValue(profile?.avatar, profile?.avatarUrl, profile?.avatar_url, draft.avatar),
+  }
+}
+
+const applyPagePrefill = (type: PageCategory, prefill: PagePrefillRecord) => {
+  if (type === 'business') {
+    fillIfEmpty(
+      businessForm.value.name,
+      prefill.name,
+      (value) => { businessForm.value.name = value },
+    )
+    fillIfEmpty(
+      businessForm.value.contactEmail,
+      readFirstValue(prefill.contactEmail, prefill.email),
+      (value) => { businessForm.value.contactEmail = value },
+    )
+    fillIfEmpty(
+      businessForm.value.website,
+      prefill.website,
+      (value) => { businessForm.value.website = value },
+    )
+    fillIfEmpty(
+      businessForm.value.businessCategory,
+      prefill.businessCategory,
+      (value) => { businessForm.value.businessCategory = value },
+    )
+    return
+  }
+
+  fillIfEmpty(
+    studentForm.value.fullName,
+    prefill.name,
+    (value) => { studentForm.value.fullName = value },
+  )
+  fillIfEmpty(
+    studentForm.value.email,
+    prefill.email,
+    (value) => { studentForm.value.email = value },
+  )
+  fillIfEmpty(
+    studentForm.value.phone,
+    prefill.phone,
+    (value) => { studentForm.value.phone = value },
+  )
+  fillIfEmpty(
+    studentForm.value.courseOfStudy,
+    prefill.courseOfStudy,
+    (value) => { studentForm.value.courseOfStudy = value },
+  )
+
+  if (!studentForm.value.skills.trim() && Array.isArray(prefill.skills)) {
+    studentForm.value.skills = prefill.skills.map((skill) => skill.trim()).filter(Boolean).join(', ')
+  }
+
+  if (!studentForm.value.about.trim()) {
+    studentForm.value.about = readFirstValue(
+      authStore.userProfile?.bio,
+      authStore.userProfile?.about,
+      authStore.userProfile?.aboutMe,
+      authStore.userProfile?.about_me,
+    )
+  }
+
+  if (!avatarFile.value && !prefilledAvatarUrl.value) {
+    prefilledAvatarUrl.value = readFirstValue(prefill.avatar)
+  }
+}
+
+const loadPagePrefill = async (type: PageCategory) => {
+  const localPrefill = getLocalPrefill(type)
+  applyPagePrefill(type, localPrefill)
+
+  if (!authStore.authToken || loadedPrefillTypes.has(type)) {
+    return
+  }
+
+  isLoadingPrefill.value = true
+
+  try {
+    const response = await pagesService.getPagePrefill(type, authStore.authToken)
+    applyPagePrefill(type, response.data || localPrefill)
+    loadedPrefillTypes.add(type)
+  } catch {
+    // Local authenticated profile data remains available if prefill cannot load.
+  } finally {
+    isLoadingPrefill.value = false
+  }
+}
+
 const selectPageType = (type: PageCategory) => {
   selectedPageType.value = type
   agreedToTerms.value = false
   resetUpload()
+  void loadPagePrefill(type)
 }
 
 const handleAvatarFileChange = (event: Event) => {
@@ -155,7 +302,7 @@ const handleAvatarFileChange = (event: Event) => {
 const getBusinessMetadata = () => ({
   slogan: businessForm.value.slogan.trim(),
   contactEmail: businessForm.value.contactEmail.trim(),
-  website: businessForm.value.website.trim(),
+  website: normalizeWebsiteUrl(businessForm.value.website),
   staffSize: businessForm.value.staffSize,
   businessCategory: businessForm.value.businessCategory.trim(),
 })
@@ -182,9 +329,18 @@ const validateCurrentForm = () => {
       return false
     }
 
-    if (!businessForm.value.contactEmail.trim() || !businessForm.value.website.trim()) {
-      toast.error('Contact email and website are required.')
+    if (!businessForm.value.contactEmail.trim()) {
+      toast.error('Contact email is required.')
       return false
+    }
+
+    if (businessForm.value.website.trim()) {
+      try {
+        businessForm.value.website = normalizeWebsiteUrl(businessForm.value.website)
+      } catch {
+        toast.error('Enter a valid website address.')
+        return false
+      }
     }
   }
 
@@ -255,6 +411,7 @@ const submitPage = async () => {
         name,
         slug,
         description,
+        avatar: avatarFile.value ? undefined : prefilledAvatarUrl.value || undefined,
         metadata,
       })
     } catch (error) {
@@ -395,9 +552,18 @@ onBeforeUnmount(() => {
         class="mx-auto max-w-4xl rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-7"
         @submit.prevent="submitPage"
       >
+        <div
+          v-if="isLoadingPrefill"
+          class="mb-5 flex items-center gap-2 text-sm text-[var(--text-secondary)]"
+          aria-live="polite"
+        >
+          <Loader2 class="h-4 w-4 animate-spin" />
+          Loading your saved details...
+        </div>
+
         <div v-if="selectedPageType === 'business'" class="grid gap-5">
           <label class="space-y-2">
-            <span class="text-sm font-semibold text-[var(--text-primary)]">Product/Service/Business Name</span>
+            <span class="text-sm font-semibold text-[var(--text-primary)]">Product/Service/Business Name <span class="text-[var(--danger)]">*</span></span>
             <input v-model="businessForm.name" class="s4e-page-input" placeholder="e.g. Ben Confectioneries" />
           </label>
 
@@ -413,8 +579,15 @@ onBeforeUnmount(() => {
             </label>
 
             <label class="space-y-2">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Website <span class="text-[var(--danger)]">*</span></span>
-              <input v-model="businessForm.website" type="url" class="s4e-page-input" placeholder="https://example.com" />
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Website <span class="font-normal text-[var(--text-secondary)]">(optional)</span></span>
+              <input
+                v-model="businessForm.website"
+                type="text"
+                inputmode="url"
+                autocomplete="url"
+                class="s4e-page-input"
+                placeholder="https://www.example.com"
+              />
             </label>
 
             <label class="space-y-2">
@@ -471,7 +644,7 @@ onBeforeUnmount(() => {
 
         <div class="mt-6 grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center">
           <div class="flex aspect-[10/9] items-center justify-center overflow-hidden rounded-[0.8rem] bg-[var(--surface-secondary)] text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
-            <img loading="lazy" decoding="async" v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Page image preview" class="h-full w-full object-cover" />
+            <img v-if="currentAvatarUrl" loading="lazy" decoding="async" :src="currentAvatarUrl" alt="Page image preview" class="h-full w-full object-cover" />
             <span v-else>300 x 270</span>
           </div>
 
@@ -518,7 +691,7 @@ onBeforeUnmount(() => {
         <div class="mt-6">
           <button
             type="submit"
-            :disabled="isSubmitting"
+            :disabled="isSubmitting || isLoadingPrefill"
             class="inline-flex h-12 items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Loader2 v-if="isSubmitting" class="h-4 w-4 animate-spin" />

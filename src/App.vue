@@ -24,7 +24,7 @@ const headerLinks: Array<{ label: string; to?: string; action?: 'ask' | 'post'; 
   { label: 'Home', to: '/feed' },
   { label: 'Ask', action: 'ask', iconClass: 'las la-question-circle' },
   { label: 'Post', action: 'post' },
-  { label: 'Answer', to: '/answer/question', iconClass: 'las la-book' },
+  { label: 'Answer', to: '/answers', target: '_blank', iconClass: 'las la-book' },
   { label: 'Communities', to: '/communities', iconClass: 'las la-users' },
 ]
 
@@ -37,9 +37,7 @@ const router = useRouter()
 const isMobileSidebarOpen = ref(false)
 // Temporary API debug modal toggle. Remove this with the debug modal overlay when no longer needed.
 const showApiDebugModal =
-  import.meta.env.VITE_SHOW_API_DEBUG_MODAL === undefined
-    ? import.meta.env.DEV
-    : import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
+  import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
 
 const currentUser = useCurrentUserIdentity()
 const isLoadingCurrentUserProfile = ref(false)
@@ -73,7 +71,7 @@ const toasterOptions = {
   cancelButtonClass: 'skills-toast__cancel',
 }
 const showNetworkOverlay = computed(
-  () => appStore.networkStatus.offline || appStore.networkStatus.backendUnreachable,
+  () => appStore.networkStatus.offline,
 )
 const currentLayout = computed(() => String(route.meta.layout ?? 'public'))
 const showHeader = computed(() => currentLayout.value === 'app')
@@ -136,7 +134,7 @@ const syncBrowserNetworkState = () => {
   appStore.setOfflineStatus(!navigator.onLine)
 
   if (navigator.onLine) {
-    appStore.networkStatus.backendUnreachable = false
+    appStore.clearNetworkIssue()
   }
 }
 
@@ -188,6 +186,7 @@ const handleSessionExpired = (event: Event) => {
 }
 
 const reloadCurrentRoute = async () => {
+  appStore.clearNetworkIssue()
   await router.replace({
     path: route.fullPath,
     query: {
@@ -352,7 +351,6 @@ const handleMenuAction = async (action: 'logout') => {
               v-if="showNetworkOverlay"
               class="mb-4"
               :offline="appStore.networkStatus.offline"
-              :backend-unreachable="appStore.networkStatus.backendUnreachable"
               :last-issue-at="appStore.networkStatus.lastIssueAt"
               @retry="reloadCurrentRoute"
             />

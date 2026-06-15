@@ -164,7 +164,8 @@ const router = createRouter({
       },
     },
     {
-      path: '/answer/question',
+      path: '/answers',
+      alias: '/answer/question',
       name: 'answer-question',
       component: QuestionAnswerView,
       meta: {

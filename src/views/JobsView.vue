@@ -1,12 +1,34 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { BriefcaseBusiness, Search, Send } from 'lucide-vue-next'
+import { BriefcaseBusiness, Search, Send, Trash2 } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 import JobCard from '@/components/JobCard.vue'
+import { ApiError } from '@/lib/api'
+import type { JobApplicationRecord } from '@/services/jobs'
 import { useJobsStore } from '@/stores/jobs'
 
 const jobsStore = useJobsStore()
 const searchQuery = ref('')
 const activeTab = ref<'posted' | 'applied'>('posted')
+const withdrawingApplicationId = ref('')
+
+const withdrawApplication = async (application: JobApplicationRecord) => {
+  if (withdrawingApplicationId.value || !window.confirm('Withdraw this job application?')) {
+    return
+  }
+
+  withdrawingApplicationId.value = application.id
+
+  try {
+    await jobsStore.withdrawApplication(application)
+    toast.success('Application withdrawn')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Could not withdraw this application.'
+    toast.error('Withdrawal failed', { description: message })
+  } finally {
+    withdrawingApplicationId.value = ''
+  }
+}
 
 const formatDate = (value?: string) => {
   if (!value) {
@@ -200,12 +222,24 @@ onMounted(() => {
         </article>
 
         <template v-for="application in filteredAppliedJobs" :key="application.id">
-          <JobCard
-            v-if="!jobsStore.isLoadingManageJobs && application.job"
-            :job="application.job"
-            :status-label="application.status || 'submitted'"
-            :footer-label="`Applied ${formatDate(application.appliedAt || application.createdAt)}`"
-          />
+          <div v-if="!jobsStore.isLoadingManageJobs && application.job" class="space-y-2">
+            <JobCard
+              :job="application.job"
+              :status-label="application.status || 'submitted'"
+              :footer-label="`Applied ${formatDate(application.appliedAt || application.createdAt)}`"
+            />
+            <div class="flex justify-end">
+              <button
+                type="button"
+                :disabled="withdrawingApplicationId === application.id"
+                class="inline-flex h-9 items-center justify-center gap-2 rounded-[0.7rem] border border-[color:var(--danger)] px-3 text-xs font-semibold text-[var(--danger)] transition hover:bg-[var(--surface-secondary)] disabled:cursor-not-allowed disabled:opacity-60"
+                @click="withdrawApplication(application)"
+              >
+                <Trash2 class="h-4 w-4" />
+                {{ withdrawingApplicationId === application.id ? 'Withdrawing...' : 'Withdraw application' }}
+              </button>
+            </div>
+          </div>
         </template>
 
         <article

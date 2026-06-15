@@ -20,19 +20,7 @@ const editor = ClassicEditor as unknown as EditorRelaxedConstructor
 
 const editorConfig = {
   placeholder: '',
-  toolbar: [
-    'heading',
-    '|',
-    'bold',
-    'italic',
-    'link',
-    '|',
-    'bulletedList',
-    'numberedList',
-    '|',
-    'undo',
-    'redo',
-  ],
+  toolbar: ['undo', 'redo'],
 }
 </script>
 

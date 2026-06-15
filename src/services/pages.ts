@@ -95,6 +95,20 @@ export type PageListParams = {
   user_id?: string
 }
 
+export type PagePrefillRecord = {
+  type?: 'business' | 'student'
+  pageType?: 'business' | 'student'
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  courseOfStudy?: string | null
+  skills?: string[] | null
+  contactEmail?: string | null
+  website?: string | null
+  businessCategory?: string | null
+  avatar?: string | null
+}
+
 const PAGE_METADATA_KEYS = [
   'slogan',
   'contactEmail',
@@ -196,6 +210,7 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
 const PAGE_ROUTES = {
   pages: '/pages',
   myPages: '/me/pages',
+  pagePrefill: '/pages/prefill',
   pageById: (id: string) => `/pages/${id}`,
   pageFollow: (id: string) => `/pages/${id}/follow`,
   pageFollowers: (id: string) => `/pages/${id}/followers`,
@@ -333,6 +348,19 @@ const normalizeSuccess = (response: ApiSuccessResponse<PageRecord>): ApiSuccessR
 })
 
 export const pagesService = {
+  getPagePrefill(type: 'business' | 'student', token?: string | null) {
+    return api.get<ApiSuccessResponse<PagePrefillRecord>>(
+      withQuery(PAGE_ROUTES.pagePrefill, {
+        type,
+        pageType: type,
+      }),
+      {
+        token,
+        suppressErrorModal: true,
+      },
+    )
+  },
+
   async listPages(params: PageListParams = {}, token?: string | null) {
     const response = await api.get<PaginatorPayload<PageRecord>>(withQuery(PAGE_ROUTES.pages, params), { token })
     return normalizePaginator(response)

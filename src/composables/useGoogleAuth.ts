@@ -78,7 +78,9 @@ const loadGoogleIdentityScript = async (): Promise<void> => {
 
 export const isGoogleClientConfigured = () => Boolean(getGoogleClientId())
 
-export const requestGoogleIdToken = async (): Promise<string> => {
+export const requestGoogleIdToken = async (
+    context: 'signin' | 'signup' = 'signin',
+): Promise<string> => {
     if (typeof window === 'undefined') {
         throw new Error('Google sign-in can only be used in the browser.')
     }
@@ -123,7 +125,7 @@ export const requestGoogleIdToken = async (): Promise<string> => {
                 fail(new Error('Google did not return a credential.'))
             },
             cancel_on_tap_outside: false,
-            context: 'signup',
+            context,
         })
 
         try {

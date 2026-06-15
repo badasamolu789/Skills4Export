@@ -119,6 +119,10 @@ export const useFreelancersStore = defineStore('freelancers', () => {
   }
 
   const loadFreelanceJobs = async () => {
+    if (isLoadingFreelanceJobs.value) {
+      return
+    }
+
     isLoadingFreelanceJobs.value = true
     freelanceJobsError.value = ''
 

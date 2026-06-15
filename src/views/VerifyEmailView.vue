@@ -4,8 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { ShieldCheck, TimerReset } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
-import { ApiError } from '@/lib/api'
-import { isTransientRequestError } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
@@ -128,12 +127,9 @@ const verifyOtp = async () => {
 
     router.replace('/feed')
   } catch (error) {
-    const message =
-      error instanceof ApiError ? error.message : 'We could not verify that code. Please try again.'
+    const message = getErrorMessage(error, 'Could not verify that code. Try again.')
 
-    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
-      setFieldError('otp', message)
-    }
+    setApiFieldErrors(error)
 
     toast.error('Verification failed', {
       id: loadingToastId,
@@ -234,8 +230,7 @@ const resendOtp = async () => {
         response.message || 'Check your email for the new verification code.',
     })
   } catch (error) {
-    const message =
-      error instanceof ApiError ? error.message : 'We could not resend the OTP. Please try again.'
+    const message = getErrorMessage(error, 'Could not resend the code. Try again.')
 
     toast.error('Unable to resend OTP', {
       id: loadingToastId,

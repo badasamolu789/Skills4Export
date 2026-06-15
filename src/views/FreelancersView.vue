@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -22,9 +23,12 @@ import {
 } from '@/services/freelancers'
 import { useAuthStore } from '@/stores/auth'
 import { useFreelancersStore } from '@/stores/freelancers'
+import { slugify } from '@/utils/slugify'
 
 const authStore = useAuthStore()
 const freelancersStore = useFreelancersStore()
+const route = useRoute()
+const router = useRouter()
 const activeTab = ref<'freelancers' | 'jobs'>('freelancers')
 const skillQuery = ref('')
 const locationQuery = ref('')
@@ -162,12 +166,24 @@ const parseAttachmentIds = (value: string) =>
     .filter(Boolean)
 
 const selectedFreelanceJob = computed(() => freelancersStore.currentFreelanceJob)
+const selectedJobCategory = computed(() => {
+  const value = route.query.category
+  return String(Array.isArray(value) ? value[0] ?? '' : value ?? '').trim()
+})
+const selectedCategoryLabel = computed(() =>
+  selectedJobCategory.value
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+)
 
 const filteredFreelancers = computed(() => {
   const skill = skillQuery.value.trim().toLowerCase()
   const location = locationQuery.value.trim().toLowerCase()
 
   return freelancersStore.freelancers.filter((freelancer) => {
+    const categoryMatch =
+      !selectedJobCategory.value ||
+      freelancer.skills.some((item) => slugify(item) === selectedJobCategory.value)
     const skillMatch =
       !skill ||
       freelancer.skills.some((item) => item.toLowerCase().includes(skill)) ||
@@ -179,7 +195,7 @@ const filteredFreelancers = computed(() => {
       freelancer.status.toLowerCase() === availabilityFilter.value.toLowerCase() ||
       freelancer.availability.toLowerCase() === availabilityFilter.value.toLowerCase().replace(/\s+/g, '_')
 
-    return skillMatch && locationMatch && availabilityMatch
+    return categoryMatch && skillMatch && locationMatch && availabilityMatch
   })
 })
 
@@ -188,13 +204,16 @@ const filteredJobs = computed(() => {
   const location = locationQuery.value.trim().toLowerCase()
 
   return freelancersStore.freelanceJobs.filter((job) => {
+    const categoryMatch =
+      !selectedJobCategory.value ||
+      job.skills.some((item) => slugify(item) === selectedJobCategory.value)
     const skillMatch =
       !skill ||
       job.skills.some((item) => item.toLowerCase().includes(skill)) ||
       job.title.toLowerCase().includes(skill)
     const locationMatch = !location || String(job.location || '').toLowerCase().includes(location)
 
-    return skillMatch && locationMatch
+    return categoryMatch && skillMatch && locationMatch
   })
 })
 
@@ -246,10 +265,37 @@ const setupRevealObserver = () => {
   revealObserver.observe(revealSentinel.value)
 }
 
-watch([activeTab, skillQuery, locationQuery, availabilityFilter], () => {
-  resetRevealCounts()
-  nextTick(setupRevealObserver)
-})
+watch(
+  [
+    activeTab,
+    skillQuery,
+    locationQuery,
+    availabilityFilter,
+    selectedJobCategory,
+  ],
+  () => {
+    resetRevealCounts()
+    nextTick(setupRevealObserver)
+  },
+)
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    activeTab.value = tab === 'jobs' ? 'jobs' : 'freelancers'
+  },
+  { immediate: true },
+)
+
+const selectTab = (tab: 'freelancers' | 'jobs') => {
+  void router.replace({
+    path: '/freelancers',
+    query: {
+      tab,
+      ...(selectedJobCategory.value ? { category: selectedJobCategory.value } : {}),
+    },
+  })
+}
 
 watch(hasMoreActiveItems, () => {
   nextTick(setupRevealObserver)
@@ -511,7 +557,7 @@ const clearPassportUpload = () => {
       <div class="flex flex-wrap gap-2">
         <button
           type="button"
-          class="inline-flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--accent)] px-4 text-[0.86rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+          class="inline-flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--accent)] bg-transparent px-4 text-[0.86rem] font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-secondary)]"
           @click="isRegisterModalOpen = true"
         >
           Register as a Freelancer
@@ -532,7 +578,7 @@ const clearPassportUpload = () => {
           type="button"
           class="border-b-2 px-0 pb-3 text-[0.95rem] font-semibold transition"
           :class="activeTab === 'freelancers' ? 'border-[color:var(--accent)] text-[var(--accent-strong)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
-          @click="activeTab = 'freelancers'"
+          @click="selectTab('freelancers')"
         >
           Freelancers
         </button>
@@ -540,7 +586,7 @@ const clearPassportUpload = () => {
           type="button"
           class="border-b-2 px-0 pb-3 text-[0.95rem] font-semibold transition"
           :class="activeTab === 'jobs' ? 'border-[color:var(--accent)] text-[var(--accent-strong)]' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
-          @click="activeTab = 'jobs'"
+          @click="selectTab('jobs')"
         >
           Freelance jobs
         </button>
@@ -712,14 +758,16 @@ const clearPassportUpload = () => {
             v-if="!freelancersStore.isLoadingFreelancers && visibleFreelancers.length === 0"
             class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center shadow-[var(--shadow-soft)]"
           >
-            <h2 class="text-base font-semibold text-[var(--text-primary)]">No freelancers found.</h2>
+            <h2 class="text-base font-semibold text-[var(--text-primary)]">
+              {{ selectedCategoryLabel ? `No freelancers found for ${selectedCategoryLabel}.` : 'No freelancers found.' }}
+            </h2>
             <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              {{ freelancersStore.freelancersError || 'Freelancers will appear here once profiles are available for this filter.' }}
+              {{ freelancersStore.freelancersError || (selectedCategoryLabel ? 'There are currently no freelancer profiles in this category.' : 'Freelancers will appear here once profiles are available for this filter.') }}
             </p>
             <button
               v-if="!freelancersStore.freelancersError"
               type="button"
-              class="mt-4 inline-flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+              class="mt-4 inline-flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--accent)] bg-transparent px-4 text-sm font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-secondary)]"
               @click="isRegisterModalOpen = true"
             >
               Register as a freelancer
@@ -839,9 +887,11 @@ const clearPassportUpload = () => {
             v-if="!freelancersStore.isLoadingFreelanceJobs && visibleJobs.length === 0"
             class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center shadow-[var(--shadow-soft)]"
           >
-            <h2 class="text-base font-semibold text-[var(--text-primary)]">No freelance jobs found.</h2>
+            <h2 class="text-base font-semibold text-[var(--text-primary)]">
+              {{ selectedCategoryLabel ? `No freelance jobs found for ${selectedCategoryLabel}.` : 'No freelance jobs found.' }}
+            </h2>
             <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-              {{ freelancersStore.freelanceJobsError || 'Freelance jobs will appear here once clients publish matching work.' }}
+              {{ freelancersStore.freelanceJobsError || (selectedCategoryLabel ? 'There are currently no freelance jobs in this category.' : 'Freelance jobs will appear here once clients publish matching work.') }}
             </p>
             <button
               v-if="!freelancersStore.freelanceJobsError"

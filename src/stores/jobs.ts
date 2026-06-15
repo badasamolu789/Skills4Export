@@ -157,8 +157,43 @@ export const useJobsStore = defineStore('jobs', () => {
       hasApplied: true,
       applicantCount: (currentJob.value.applicantCount || 0) + 1,
     }
+    jobs.value = jobs.value.map((job) =>
+      job.id === currentJob.value?.id
+        ? { ...job, hasApplied: true, applicantCount: currentJob.value.applicantCount }
+        : job,
+    )
     appliedJobs.value = [response.data, ...appliedJobs.value]
     return response.data
+  }
+
+  const withdrawApplication = async (application: JobApplicationRecord) => {
+    if (!application.jobId || !application.id) {
+      throw new ApiError('This application cannot be withdrawn.', 400)
+    }
+
+    await jobsService.withdrawJobApplication(
+      application.jobId,
+      application.id,
+      authStore.authToken,
+    )
+    appliedJobs.value = appliedJobs.value.filter((item) => item.id !== application.id)
+    jobs.value = jobs.value.map((job) =>
+      job.id === application.jobId
+        ? {
+            ...job,
+            hasApplied: false,
+            applicantCount: Math.max(0, (job.applicantCount || 0) - 1),
+          }
+        : job,
+    )
+
+    if (currentJob.value?.id === application.jobId) {
+      currentJob.value = {
+        ...currentJob.value,
+        hasApplied: false,
+        applicantCount: Math.max(0, (currentJob.value.applicantCount || 0) - 1),
+      }
+    }
   }
 
   const loadManageJobs = async () => {
@@ -197,6 +232,7 @@ export const useJobsStore = defineStore('jobs', () => {
     createJob,
     loadJob,
     applyToCurrentJob,
+    withdrawApplication,
     loadManageJobs,
   }
 })

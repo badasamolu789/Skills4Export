@@ -3,8 +3,7 @@ import { ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
-import { ApiError } from '@/lib/api'
-import { isTransientRequestError } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
@@ -21,7 +20,6 @@ const passwordToggle = usePasswordToggle()
 const {
   getFieldAttrs,
   getFieldError,
-  setFieldErrors,
   setApiFieldErrors,
   clearFieldError,
   clearFieldErrors,
@@ -70,17 +68,9 @@ const submitLogin = async () => {
 
     router.push(redirectTarget)
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'We could not sign you in. Please try again.'
+    const message = getErrorMessage(error, 'Could not sign in. Try again.')
 
-    if (!setApiFieldErrors(error) && !isTransientRequestError(error)) {
-      setFieldErrors({
-        email: message,
-        password: message,
-      })
-    }
+    setApiFieldErrors(error)
 
     toast.error('Sign in failed', {
       id: loadingToastId,
@@ -106,7 +96,7 @@ const continueWithGoogle = async () => {
       throw new Error('Missing Google client ID. Add VITE_GOOGLE_CLIENT_ID to your environment.')
     }
 
-    const idToken = await requestGoogleIdToken()
+    const idToken = await requestGoogleIdToken('signin')
     const response = await authService.googleTokenSignIn({ id_token: idToken })
     const session = extractAuthSession(response)
     if (!session) {
@@ -123,10 +113,7 @@ const continueWithGoogle = async () => {
     })
     router.push(redirectTarget)
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Google sign-in could not be completed.'
+    const message = getErrorMessage(error, 'Google sign-in is unavailable right now.')
 
     toast.error('Google sign-in failed', {
       id: loadingToastId,

@@ -950,7 +950,7 @@ onBeforeUnmount(() => {
     <article class="overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
       <div class="space-y-4 border-b border-[color:var(--border-soft)] p-4 sm:p-5">
         <div class="flex flex-wrap items-center gap-2 text-[0.82rem] text-[var(--text-secondary)]">
-          <RouterLink to="/answer/question" class="transition hover:text-[var(--accent-strong)]">Questions</RouterLink>
+          <RouterLink to="/answers" class="transition hover:text-[var(--accent-strong)]">Questions</RouterLink>
           <span>/</span>
           <span class="font-medium text-[var(--accent-strong)]">Details</span>
         </div>
