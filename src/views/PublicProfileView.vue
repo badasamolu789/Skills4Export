@@ -5,23 +5,16 @@ import {
   Award,
   BookOpen,
   Briefcase,
-  ClipboardList,
   ExternalLink,
   GraduationCap,
   Image as ImageIcon,
-  Rocket,
-  Sparkles,
   UserCheck,
   UserPlus,
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import AppFeedPost from '@/components/AppFeedPost.vue'
 import { ApiError } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
-import type { FeedPost } from '@/data/feedPosts'
-import { postsService, type PostRecord } from '@/services/posts'
-import { questionsService, type QuestionRecord } from '@/services/questions'
 import {
   collectUserSkills,
   usersService,
@@ -36,9 +29,7 @@ import {
 } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
-import { getOptionalCount, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
-import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
-import { getDisplayName } from '@/utils/displayName'
+import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 
 type ProfileUploadItem = {
   id: string
@@ -67,18 +58,9 @@ const following = ref<Array<{
   avatar: string
   initials: string
 }>>([])
-const recentActivities = ref<FeedPost[]>([])
-const scoreEntries = ref<Array<{ id: string; title: string; community: string; score: number; typeLabel: string }>>([])
-const stats = ref({
-  posts: 0,
-  questions: 0,
-  answers: 0,
-  comments: 0,
-})
 const isLoadingProfile = ref(false)
-const isLoadingActivity = ref(false)
 const isTogglingFollow = ref(false)
-const profileModal = ref<null | 'score' | 'followers' | 'following'>(null)
+const profileModal = ref<null | 'followers' | 'following'>(null)
 const followStates = ref<Record<string, boolean>>({})
 const followToggles = ref<Record<string, boolean>>({})
 const loadError = ref('')
@@ -245,104 +227,6 @@ const profileUploads = computed<ProfileUploadItem[]>(() =>
     .filter((item): item is ProfileUploadItem => Boolean(item)),
 )
 
-const publicProfileData = computed(() => ({
-  user: user.value,
-  profile: userProfile.value,
-  skills: displaySkills.value,
-}))
-
-const loadRecentActivity = async () => {
-  if (!userId.value) {
-    return
-  }
-
-  isLoadingActivity.value = true
-
-  try {
-    const [postsResult, questionsResult] = await Promise.allSettled([
-      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-    ])
-    const allPosts = postsResult.status === 'fulfilled' ? postsResult.value.data : []
-    const allQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data : []
-    const userPosts = allPosts.filter((post: PostRecord) => getPostUserId(post) === userId.value)
-    const userQuestions = allQuestions.filter((question: QuestionRecord) => getQuestionUserId(question) === userId.value)
-    const [postCommentResults, questionAnswerResults] = await Promise.all([
-      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),
-      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken).catch(() => null))),
-    ])
-    const userCommentCount = postCommentResults.reduce((total, response) => {
-      const comments = response?.data ?? []
-      return total + comments.filter((comment) => comment.user_id === userId.value).length
-    }, 0)
-    const userAnswers = questionAnswerResults.flatMap((response) => response?.data ?? []).filter((answer) => {
-      const answerUserId = answer.userId || answer.user_id || ''
-      return answerUserId === userId.value
-    })
-    const postActivities = await Promise.all(userPosts.map(async (post) => {
-      const [mediaResponse, commentsResponse] = await Promise.all([
-        postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
-        postsService.listComments(post.id, authStore.authToken).catch(() => null),
-      ])
-      const mappedPost = mapApiPostToFeedPost(post, mediaResponse?.data ?? [], publicProfileData.value)
-
-      return {
-        ...mappedPost,
-        comments: commentsResponse?.total ?? ('comments' in mappedPost ? mappedPost.comments : 0),
-      }
-    }))
-    const questionActivities = userQuestions.map((question) =>
-      mapApiQuestionToFeedPost(
-        {
-          ...question,
-          answers_count: questionAnswerResults[allQuestions.findIndex((item) => item.id === question.id)]?.total ?? question.answers_count,
-        },
-        publicProfileData.value,
-      ),
-    )
-
-    stats.value = {
-      posts: userPosts.length,
-      questions: userQuestions.length,
-      answers: userAnswers.length,
-      comments: userCommentCount,
-    }
-    scoreEntries.value = [
-      ...userPosts.map((post) => ({
-        id: post.id,
-        title: post.title,
-        community: post.community?.name || 'Post',
-        score: getOptionalCount(post.score, post.reactions_count, post.reaction_count),
-        typeLabel: 'Post',
-      })),
-      ...userQuestions.map((question) => ({
-        id: question.id,
-        title: question.title,
-        community: 'Question',
-        score: getOptionalCount(question.score, question.reactions_count, question.reaction_count),
-        typeLabel: 'Question',
-      })),
-      ...userAnswers.map((answer) => ({
-        id: answer.id,
-        title: answer.content || answer.body || answer.answer || 'Answer',
-        community: 'Answer',
-        score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count),
-        typeLabel: 'Answer',
-      })),
-    ]
-    socialActionsStore.setProfileStats(userId.value, {
-      score: scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
-    })
-    recentActivities.value = [...postActivities, ...questionActivities]
-      .sort((a, b) => new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime())
-      .slice(0, 5)
-  } catch {
-    recentActivities.value = []
-  } finally {
-    isLoadingActivity.value = false
-  }
-}
-
 const loadProfile = async () => {
   if (!userId.value) {
     loadError.value = 'This profile link is missing a user ID.'
@@ -490,38 +374,8 @@ const profileMetaItems = computed(() =>
 )
 const shouldShowProfileSkeleton = computed(() => isLoadingProfile.value || (!profile.value.name && !loadError.value))
 
-const totalTScore = computed(() =>
-  socialActionsStore.getProfileStats(userId.value).score,
-)
 const globalFollowerCount = computed(() => socialActionsStore.getProfileStats(userId.value).followers)
 const globalFollowingCount = computed(() => socialActionsStore.getProfileStats(userId.value).following)
-
-const summaryCards = computed(() => [
-  {
-    label: 'Comments',
-    value: stats.value.comments,
-    icon: ClipboardList,
-    accentClass: 'bg-[var(--accent-soft)] text-[var(--accent-strong)]',
-  },
-  {
-    label: 'Questions',
-    value: stats.value.questions,
-    icon: Sparkles,
-    accentClass: 'bg-emerald-100 text-emerald-700',
-  },
-  {
-    label: 'Answers',
-    value: stats.value.answers,
-    icon: Rocket,
-    accentClass: 'bg-amber-100 text-amber-700',
-  },
-  {
-    label: 'Posts',
-    value: stats.value.posts,
-    icon: BookOpen,
-    accentClass: 'bg-violet-100 text-violet-700',
-  },
-])
 
 const isFollowingProfile = computed(() =>
   socialActionsStore.followingUserIds[userId.value] !== undefined
@@ -691,7 +545,7 @@ watch(
 
           <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-              <div class="h-24 w-24 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
+              <div class="h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
                 <img loading="lazy" decoding="async"
                   v-if="profile.avatar"
                   :src="profile.avatar"
@@ -753,14 +607,6 @@ watch(
                   <button
                     type="button"
                     class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
-                    @click="profileModal = 'score'"
-                  >
-                    {{ totalTScore }} T.Scores
-                  </button>
-                  <span class="text-[var(--border-strong,var(--border-soft))]">|</span>
-                  <button
-                    type="button"
-                    class="text-[var(--accent)] transition hover:text-[var(--accent-strong)]"
                     @click="profileModal = 'followers'"
                   >
                     {{ globalFollowerCount }} followers
@@ -779,7 +625,6 @@ watch(
                   class="mt-3 flex flex-wrap items-center justify-center gap-3 sm:justify-start"
                   aria-label="Loading profile stats"
                 >
-                  <span class="h-4 w-20 animate-pulse rounded-full bg-[var(--surface-muted)]" />
                   <span class="h-4 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]" />
                   <span class="h-4 w-24 animate-pulse rounded-full bg-[var(--surface-muted)]" />
                 </div>
@@ -808,13 +653,14 @@ watch(
           <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
             <p v-if="profile.bio" class="whitespace-pre-line">{{ profile.bio }}</p>
             <div
-              v-else
-              class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-5"
-              aria-label="Loading profile bio"
+              v-else-if="isLoadingProfile"
+              class="space-y-3 py-2"
+              aria-label="Loading profile about information"
             >
-              <div class="h-4 w-full max-w-xl animate-pulse rounded-full bg-[var(--surface-muted)]" />
-              <div class="mt-3 h-4 w-2/3 max-w-lg animate-pulse rounded-full bg-[var(--surface-muted)]" />
+              <span class="block h-4 w-full max-w-xl animate-pulse rounded-full bg-[var(--surface-muted)]" />
+              <span class="block h-4 w-2/3 max-w-lg animate-pulse rounded-full bg-[var(--surface-muted)]" />
             </div>
+            <p v-else>No about information added yet.</p>
           </div>
 
         </div>
@@ -825,8 +671,9 @@ watch(
         <div class="mt-3 h-3 w-64 max-w-full rounded-full bg-[var(--surface-muted)]" />
       </div>
 
-      <div class="grid gap-6 lg:grid-cols-2">
-        <section class="order-5 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+      <div class="space-y-6">
+        <div class="flex flex-col gap-6">
+        <section id="skills" class="order-5 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Skills</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -841,20 +688,22 @@ watch(
               <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">{{ skill.name }}</span>
             </div>
           </div>
-          <p v-else class="text-sm text-[var(--text-secondary)]">No public skills added yet.</p>
+          <div v-else class="py-8 text-center text-sm text-[var(--text-secondary)]">
+            <p>No skills added yet.</p>
+          </div>
         </section>
 
-        <section class="order-4 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+        <section id="portfolio" class="order-4 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Portfolio</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Projects</h2>
             <BookOpen class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="portfolios.length > 0" class="space-y-4">
+          <div v-if="portfolios.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article
               v-for="portfolio in portfolios"
               :key="portfolio.id || portfolio.title"
-              class="rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5"
+              class="flex h-full flex-col rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 transition hover:border-[var(--accent)]"
             >
               <div v-if="portfolio.pictures?.[0]" class="-mx-5 -mt-5 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)]">
                 <video
@@ -871,7 +720,7 @@ watch(
                 />
               </div>
               <p class="break-words text-lg font-semibold text-[var(--text-primary)]">{{ portfolio.title }}</p>
-              <p v-if="portfolio.description" class="mt-3 text-sm leading-6 text-[var(--text-secondary)]">{{ portfolio.description }}</p>
+              <p v-if="portfolio.description" class="mt-3 line-clamp-5 text-sm leading-6 text-[var(--text-secondary)]">{{ portfolio.description }}</p>
               <a
                 v-if="portfolio.link"
                 :href="portfolio.link"
@@ -884,16 +733,18 @@ watch(
               </a>
             </article>
           </div>
-          <p v-else class="text-sm text-[var(--text-secondary)]">No portfolio items shared publicly yet.</p>
+          <div v-else class="py-8 text-center text-sm text-[var(--text-secondary)]">
+            <p>No portfolio items added yet.</p>
+          </div>
         </section>
 
-        <section class="order-3 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section id="certifications" class="order-3 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Certifications</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Professional Certifications</h2>
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="certifications.length > 0" class="space-y-3">
+          <div v-if="certifications.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div
               v-for="certification in certifications"
               :key="certification.id || certification.name"
@@ -904,16 +755,18 @@ watch(
               <p v-if="certification.issueDate" class="mt-1 text-xs text-[var(--text-tertiary)]">Issued: {{ new Date(certification.issueDate).toLocaleDateString() }}</p>
             </div>
           </div>
-          <p v-else class="text-sm text-[var(--text-secondary)]">No public certifications yet.</p>
+          <div v-else class="py-8 text-center text-sm text-[var(--text-secondary)]">
+            <p>No certifications added yet.</p>
+          </div>
         </section>
 
-        <section class="order-2 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+        <section id="education" class="order-2 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Education</h2>
+            <h2 class="text-xl font-semibold text-[var(--text-primary)]">Highest Level Education</h2>
             <GraduationCap class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="educations.length > 0" class="space-y-3">
+          <div v-if="educations.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div
               v-for="education in educations"
               :key="education.id || education.school"
@@ -922,32 +775,47 @@ watch(
               <p class="font-semibold text-[var(--text-primary)]">{{ education.school }}</p>
               <p v-if="education.degree" class="text-sm text-[var(--text-secondary)]">{{ education.degree }}</p>
               <p v-if="education.field" class="text-sm text-[var(--text-secondary)]">{{ education.field }}</p>
+              <p v-if="education.startDate || education.endDate" class="mt-1 text-xs text-[var(--text-tertiary)]">
+                {{ education.startDate ? new Date(education.startDate).toLocaleDateString() : '' }}
+                {{ education.startDate && education.endDate ? ' - ' : '' }}
+                {{ education.endDate ? new Date(education.endDate).toLocaleDateString() : '' }}
+              </p>
             </div>
           </div>
-          <p v-else class="text-sm text-[var(--text-secondary)]">No education details shared publicly yet.</p>
+          <div v-else class="py-8 text-center text-sm text-[var(--text-secondary)]">
+            <p>No education records added yet.</p>
+          </div>
         </section>
 
-        <section class="order-1 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+        <section id="experience" class="order-1 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Experience</h2>
             <Briefcase class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="experiences.length > 0" class="space-y-3">
+          <div v-if="experiences.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div
               v-for="experience in experiences"
               :key="experience.id || `${experience.company}-${experience.title}`"
               class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
             >
-              <p class="font-semibold text-[var(--text-primary)]">{{ experience.title }}</p>
-              <p v-if="experience.company" class="text-sm text-[var(--text-secondary)]">{{ experience.company }}</p>
+              <p class="font-semibold text-[var(--text-primary)]">{{ toInitialCaps(experience.title, { keepSmallWords: true }) }}</p>
+              <p v-if="experience.company" class="text-sm text-[var(--text-secondary)]">{{ toInitialCaps(experience.company, { keepSmallWords: true }) }}</p>
+              <p v-if="experience.employmentType" class="text-xs text-[var(--text-tertiary)]">{{ experience.employmentType }}</p>
+              <p v-if="experience.startDate || experience.endDate || experience.isCurrent" class="mt-1 text-xs text-[var(--text-tertiary)]">
+                {{ experience.startDate ? new Date(experience.startDate).toLocaleDateString() : '' }}
+                {{ experience.startDate && (experience.endDate || experience.isCurrent) ? ' - ' : '' }}
+                {{ experience.isCurrent ? 'Present' : (experience.endDate ? new Date(experience.endDate).toLocaleDateString() : '') }}
+              </p>
               <p v-if="experience.description" class="mt-2 text-sm text-[var(--text-secondary)]">{{ experience.description }}</p>
             </div>
           </div>
-          <p v-else class="text-sm text-[var(--text-secondary)]">No public experience records yet.</p>
+          <div v-else class="py-8 text-center text-sm text-[var(--text-secondary)]">
+            <p>No experience records added yet.</p>
+          </div>
         </section>
 
-        <section class="order-6 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] lg:col-span-2">
+        <section id="uploads" class="order-6 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Uploads</h2>
             <ImageIcon class="h-5 w-5 text-[var(--accent-strong)]" />
@@ -995,6 +863,7 @@ watch(
           </div>
         </section>
 
+        </div>
       </div>
     </template>
   </section>
@@ -1008,11 +877,10 @@ watch(
       <div class="flex items-center justify-between gap-4 border-b border-[color:var(--border-soft)] px-5 py-4 sm:px-6">
         <div>
           <h3 class="text-lg font-semibold text-[var(--text-primary)]">
-            {{ profileModal === 'score' ? 'T.Scores' : profileModal === 'followers' ? 'Followers' : 'Following' }}
+            {{ profileModal === 'followers' ? 'Followers' : 'Following' }}
           </h3>
           <p class="mt-1 text-sm text-[var(--text-secondary)]">
-            <span v-if="profileModal === 'score'">Public post scores across communities and shared content.</span>
-            <span v-else-if="profileModal === 'followers'">People currently following this profile.</span>
+            <span v-if="profileModal === 'followers'">People currently following this profile.</span>
             <span v-else>Profiles this member follows.</span>
           </p>
         </div>
@@ -1026,38 +894,14 @@ watch(
       </div>
 
       <div class="max-h-[70vh] space-y-3 overflow-y-auto px-5 py-5 sm:px-6">
-        <template v-if="profileModal === 'score'">
-          <div
-            v-for="entry in scoreEntries"
-            :key="entry.id"
-            class="flex items-start justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
-          >
-            <div class="min-w-0">
-              <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">{{ entry.typeLabel }}</p>
-              <p class="mt-2 text-base font-semibold text-[var(--text-primary)]">{{ entry.title }}</p>
-              <p class="mt-1 text-sm text-[var(--text-secondary)]">{{ entry.community }}</p>
-            </div>
-            <div class="rounded-full bg-[color:color-mix(in_srgb,var(--accent)_14%,white)] px-3 py-1 text-sm font-semibold text-[var(--accent-strong)]">
-              {{ entry.score }} score
-            </div>
-          </div>
-
-          <div
-            v-if="scoreEntries.length === 0"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
-          >
-            No scored public posts yet.
-          </div>
-        </template>
-
-        <template v-else-if="profileModal === 'followers'">
+        <template v-if="profileModal === 'followers'">
           <div
             v-for="account in followerAccounts"
             :key="account.id"
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
             <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
-              <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+              <div class="h-12 w-12 overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
                 <img loading="lazy" decoding="async"
                   v-if="account.avatar"
                   :src="account.avatar"
@@ -1116,7 +960,7 @@ watch(
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
             <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
-              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
                 <img loading="lazy" decoding="async"
                   v-if="account.avatar"
                   :src="account.avatar"

@@ -30,6 +30,7 @@ const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const isLoadingProfile = ref(false)
+const hasLoadedProfile = ref(false)
 const isLoadingFollowers = ref(false)
 const isLoadingSkills = ref(false)
 const isLoadingPortfolios = ref(false)
@@ -346,6 +347,19 @@ const closeActionMenu = () => {
   activeActionMenu.value = null
 }
 
+const handleActionMenuPointerDown = (event: PointerEvent) => {
+  if (!activeActionMenu.value) {
+    return
+  }
+
+  const target = event.target
+  if (target instanceof Element && target.closest('[data-profile-action-menu]')) {
+    return
+  }
+
+  closeActionMenu()
+}
+
 const isDeleting = (type: string, id: string | undefined) => {
   if (!id) {
     return false
@@ -649,6 +663,7 @@ const loadProfile = async () => {
 
     authStore.setCurrentUser(profileResponse.data?.user ?? null)
     authStore.setUserProfile(profileResponse.data?.profile ?? null)
+    hasLoadedProfile.value = true
 
     const loadedUserId = getProfileUserId(profileResponse.data)
 
@@ -764,6 +779,7 @@ const loadProfile = async () => {
       return
     }
   } finally {
+    hasLoadedProfile.value = true
     isLoadingProfile.value = false
   }
 }
@@ -971,26 +987,26 @@ const openProfileDetailsModal = async () => {
     return
   }
 
+  prefillProfileDetailsForm(profileResponseData.value)
+  isProfileDetailsModalOpen.value = true
   isLoadingProfileDetails.value = true
-  let latestData = profileResponseData.value
+
   try {
     const response = await usersService.getMyProfile(authStore.authToken)
     const data = response.data ?? null
 
-    latestData = data
     profileResponseData.value = data
     authStore.setCurrentUser(data?.user ?? null)
     authStore.setUserProfile(data?.profile ?? null)
     if (data?.experiences) {
       experiences.value = data.experiences
     }
+    prefillProfileDetailsForm(data)
   } catch (error) {
     toast.error('Unable to refresh profile details', {
       description: getErrorMessage(error, 'Using the most recently loaded profile information.'),
     })
   } finally {
-    prefillProfileDetailsForm(latestData)
-    isProfileDetailsModalOpen.value = true
     isLoadingProfileDetails.value = false
   }
 }
@@ -1297,10 +1313,12 @@ const replaceSectionItem = async () => {
 }
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleActionMenuPointerDown)
   void loadProfile()
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleActionMenuPointerDown)
   clearUploadSelection()
 
   profileUploads.value.forEach((item) => {
@@ -1309,14 +1327,6 @@ onBeforeUnmount(() => {
     }
   })
 })
-
-// Refresh data when user profile changes (after edits)
-watch(
-  () => authStore.userProfile?.id,
-  () => {
-    void loadProfile()
-  },
-)
 
 // Refresh data when navigating to this route
 watch(
@@ -1345,7 +1355,7 @@ const profile = computed(() => {
   const email = getStringField(apiUser, ['email']) || draft.email
   const phone = getStringField(apiProfile, ['phone', 'phoneNumber', 'phone_number']) || getStringField(apiUser, ['phone', 'phoneNumber', 'phone_number']) || draft.phone
   const location = toInitialCaps(apiProfile?.location || draft.location || [draft.state, draft.country].filter(Boolean).join(', '))
-  const bio = apiProfile?.bio || ''
+  const bio = apiProfile?.bio || profileResponseData.value?.bio || ''
   const initialsSource = name || username
 
   return {
@@ -1494,7 +1504,7 @@ const editModalTitle = computed(() => {
 
         <div class="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-start sm:gap-4 sm:text-left">
-            <div class="h-24 w-24 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
+            <div class="h-24 w-24 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)]">
               <img loading="lazy" decoding="async"
                 v-if="profile.avatar"
                 :src="profile.avatar"
@@ -1590,11 +1600,12 @@ const editModalTitle = computed(() => {
           <p v-if="profile.bio" class="whitespace-pre-line">
             {{ profile.bio }}
           </p>
-          <div v-else class="space-y-3 py-2" aria-label="Loading profile about information">
+          <div v-else-if="isLoadingProfile && !hasLoadedProfile" class="space-y-3 py-2" aria-label="Loading profile about information">
             <span class="block h-4 w-full animate-pulse rounded-full bg-[var(--surface-muted)]" />
             <span class="block h-4 w-5/6 animate-pulse rounded-full bg-[var(--surface-muted)]" />
             <span class="block h-4 w-2/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
           </div>
+          <p v-else>No about information added yet.</p>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1648,7 +1659,7 @@ const editModalTitle = computed(() => {
               <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
                 {{ skill.name }}
               </span>
-              <div class="relative">
+              <div class="relative" data-profile-action-menu>
                 <button
                   type="button"
                   class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
@@ -1759,7 +1770,7 @@ const editModalTitle = computed(() => {
                   </a>
                 </div>
 
-                <div class="relative">
+                <div class="relative" data-profile-action-menu>
                   <button
                     type="button"
                     class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
@@ -1833,7 +1844,7 @@ const editModalTitle = computed(() => {
                   <p v-if="certification.issueDate" class="text-xs text-[var(--text-tertiary)] mt-1">Issued: {{ new Date(certification.issueDate).toLocaleDateString() }}</p>
                 </div>
 
-                <div class="relative">
+                <div class="relative" data-profile-action-menu>
                   <button
                     type="button"
                     class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
@@ -1913,7 +1924,7 @@ const editModalTitle = computed(() => {
                   </p>
                 </div>
 
-                <div class="relative">
+                <div class="relative" data-profile-action-menu>
                   <button
                     type="button"
                     class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
@@ -1996,7 +2007,7 @@ const editModalTitle = computed(() => {
                   </p>
                 </div>
 
-                <div class="relative">
+                <div class="relative" data-profile-action-menu>
                   <button
                     type="button"
                     class="inline-flex h-10 w-10 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
@@ -2310,7 +2321,7 @@ const editModalTitle = computed(() => {
             class="space-y-3"
           >
             <div v-for="item in 3" :key="item" class="flex animate-pulse items-center gap-3 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-              <div class="h-10 w-10 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+              <div class="h-10 w-10 rounded-full bg-[var(--surface-muted)]" />
               <div class="min-w-0 flex-1 space-y-2">
                 <div class="h-3 w-32 rounded-full bg-[var(--surface-muted)]" />
                 <div class="h-3 w-20 rounded-full bg-[var(--surface-muted)]" />
@@ -2324,7 +2335,7 @@ const editModalTitle = computed(() => {
               class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
             >
               <div class="flex items-center gap-3">
-                <div class="h-12 w-12 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+                <div class="h-12 w-12 overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
                   <img loading="lazy" decoding="async"
                     v-if="account.avatar"
                     :src="account.avatar"
@@ -2373,7 +2384,7 @@ const editModalTitle = computed(() => {
             class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
           >
             <RouterLink :to="`/profile/view/${account.id}`" class="flex min-w-0 items-center gap-3">
-              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
                 <img loading="lazy" decoding="async"
                   v-if="account.avatar"
                   :src="account.avatar"

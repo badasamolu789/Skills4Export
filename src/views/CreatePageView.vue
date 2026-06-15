@@ -434,22 +434,22 @@ const submitPage = async () => {
 
       try {
         const uploadResponse = await pagesService.uploadPageAvatarFile(page.id, avatarFile.value, authStore.authToken)
-        const refreshedPage = await pagesStore.loadPage(page.id)
         const processedUrl =
           uploadResponse.data.avatar ||
           uploadResponse.data.page?.avatar ||
           uploadResponse.data.url ||
           ''
 
-        if (refreshedPage) page = refreshedPage
-        if (!refreshedPage?.avatar || (processedUrl && refreshedPage.avatar !== processedUrl)) {
-          avatarPersistenceWarning = 'The image upload finished, but the saved page record did not return the uploaded image.'
+        if (processedUrl) {
+          page = { ...page, avatar: processedUrl }
+          pagesStore.updatePageAvatar(page.id, processedUrl)
+        } else {
+          avatarPersistenceWarning = 'The page image is still being processed and will appear shortly.'
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'The image upload did not finish.'
         toast.warning('Page saved without its image', {
           id: toastId,
-          description: `${message} You can upload the image again from the page settings.`,
+          description: 'The page is ready. You can upload its image again from page settings.',
         })
         await router.push(`/pages/${page.id}`)
         return
@@ -643,8 +643,8 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="mt-6 grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center">
-          <div class="flex aspect-[10/9] items-center justify-center overflow-hidden rounded-[0.8rem] bg-[var(--surface-secondary)] text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
-            <img v-if="currentAvatarUrl" loading="lazy" decoding="async" :src="currentAvatarUrl" alt="Page image preview" class="h-full w-full object-cover" />
+          <div class="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] bg-white text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
+            <img v-if="currentAvatarUrl" loading="lazy" decoding="async" :src="currentAvatarUrl" alt="Page image preview" class="h-full w-full object-contain object-center p-2" />
             <span v-else>300 x 270</span>
           </div>
 
@@ -662,10 +662,10 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <label class="mt-6 block space-y-2">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">
+        <div class="mt-6">
+          <div class="mb-2 text-sm font-semibold text-[var(--text-primary)]">
             {{ selectedPageType === 'business' ? 'Describe your business/organisation' : 'About - Describe your self' }}<span v-if="selectedPageType === 'student'" class="text-[var(--danger)]">*</span>
-          </span>
+          </div>
           <RichTextEditor
             v-if="selectedPageType === 'business'"
             v-model="businessForm.description"
@@ -676,7 +676,7 @@ onBeforeUnmount(() => {
             v-model="studentForm.about"
             placeholder="Describe your academic achievements, skills, interests, and experience."
           />
-        </label>
+        </div>
 
         <label class="mt-6 flex items-start gap-3 text-sm text-[var(--text-secondary)]">
           <input v-model="agreedToTerms" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-[color:var(--border-soft)]" />

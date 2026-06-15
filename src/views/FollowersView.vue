@@ -133,7 +133,7 @@ onMounted(() => {
         class="flex animate-pulse items-center justify-between gap-4 rounded-[1.25rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
       >
         <div class="flex min-w-0 items-center gap-3">
-          <div class="h-12 w-12 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+          <div class="h-12 w-12 rounded-full bg-[var(--surface-muted)]" />
           <div class="min-w-0 space-y-2">
             <div class="h-4 w-36 rounded-full bg-[var(--surface-muted)]" />
             <div class="h-3 w-24 rounded-full bg-[var(--surface-muted)]" />
@@ -159,7 +159,7 @@ onMounted(() => {
       >
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1 min-w-0">
-            <div class="inline-flex h-12 w-12 items-center justify-center rounded-[0.75rem] bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)]">
+            <div class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)]">
               {{ follower.followerId?.charAt(0).toUpperCase() || '' }}
             </div>
             <p

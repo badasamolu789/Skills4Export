@@ -73,8 +73,26 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     const existingIndex = feed.value.findIndex((entry) => getFeedId(entry) === id)
 
     if (existingIndex >= 0) {
+      const existingItem = feed.value[existingIndex]
+      const nextItem = { ...existingItem, ...item } as FeedPost
+      const keys = new Set([
+        ...Object.keys(existingItem),
+        ...Object.keys(item),
+      ])
+      const hasChanged = Array.from(keys).some(
+        (key) =>
+          !Object.is(
+            (existingItem as unknown as Record<string, unknown>)[key],
+            (nextItem as unknown as Record<string, unknown>)[key],
+          ),
+      )
+
+      if (!hasChanged) {
+        return
+      }
+
       feed.value = feed.value.map((entry, index) =>
-        index === existingIndex ? { ...entry, ...item } as FeedPost : entry,
+        index === existingIndex ? nextItem : entry,
       )
       return
     }

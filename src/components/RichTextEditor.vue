@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import ClassicEditor from '@ckeditor/ckeditor5-build-classic'
 import { Ckeditor } from '@ckeditor/ckeditor5-vue'
 import type { EditorRelaxedConstructor } from '@ckeditor/ckeditor5-integrations-common'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: string
   disabled?: boolean
   placeholder?: string
@@ -18,20 +19,26 @@ const emit = defineEmits<{
 
 const editor = ClassicEditor as unknown as EditorRelaxedConstructor
 
+const editorValue = computed({
+  get: () => props.modelValue || '',
+  set: (value: string) => emit('update:modelValue', value),
+})
+
 const editorConfig = {
   placeholder: '',
-  toolbar: ['undo', 'redo'],
+  toolbar: {
+    items: [],
+  },
 }
 </script>
 
 <template>
   <div class="s4e-rich-editor">
     <Ckeditor
+      v-model="editorValue"
       :editor="editor"
-      :model-value="modelValue"
       :disabled="disabled"
       :config="{ ...editorConfig, placeholder }"
-      @update:model-value="emit('update:modelValue', String($event || ''))"
     />
   </div>
 </template>
@@ -42,21 +49,29 @@ const editorConfig = {
 }
 
 .s4e-rich-editor :deep(.ck.ck-toolbar) {
-  border-color: var(--border-soft);
-  border-top-left-radius: 0.75rem;
-  border-top-right-radius: 0.75rem;
-  background: var(--surface-secondary);
+  display: none;
 }
 
 .s4e-rich-editor :deep(.ck.ck-editor__main > .ck-editor__editable) {
   min-height: 8rem;
   border-color: var(--border-soft);
-  border-bottom-left-radius: 0.75rem;
-  border-bottom-right-radius: 0.75rem;
+  border-radius: 0.75rem;
   background: var(--surface-primary);
   color: var(--text-primary);
   font-size: 0.875rem;
   line-height: 1.75;
+}
+
+.s4e-rich-editor :deep(.ck.ck-editor__editable_inline) {
+  cursor: text;
+}
+
+.s4e-rich-editor :deep(.ck.ck-editor__editable_inline > :first-child) {
+  margin-top: 0;
+}
+
+.s4e-rich-editor :deep(.ck.ck-editor__editable_inline > :last-child) {
+  margin-bottom: 0;
 }
 
 .s4e-rich-editor :deep(.ck.ck-editor__main > .ck-editor__editable.ck-focused) {

@@ -70,6 +70,7 @@ const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
 const isAnswerModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
+const failedAuthorAvatarSrc = ref('')
 const postMenuRoot = ref<HTMLElement | null>(null)
 const isEditModalOpen = ref(false)
 const editPostTitle = ref('')
@@ -230,6 +231,14 @@ const authorRoute = computed(() =>
 const authorName = computed(() =>
   props.post.type === 'question' ? props.post.authorName : props.post.author.name,
 )
+const authorAvatarSrc = computed(() => {
+  if (props.post.type === 'question') {
+    return props.post.authorAvatarSrc || ''
+  }
+
+  const source = props.post.author.avatarSrc || ''
+  return source && source !== failedAuthorAvatarSrc.value ? source : ''
+})
 const authorUserId = computed(() => {
   if (props.post.userId) {
     return props.post.userId
@@ -237,6 +246,13 @@ const authorUserId = computed(() => {
 
   return getPublicProfileIdFromRoute(authorRoute.value)
 })
+
+watch(
+  () => props.post.type === 'question' ? props.post.authorAvatarSrc : props.post.author.avatarSrc,
+  () => {
+    failedAuthorAvatarSrc.value = ''
+  },
+)
 const usesGlobalUserFollow = computed(() =>
   Boolean(authorUserId.value && !props.post.pageId && !(props.post.type === 'question' && props.post.communityId)),
 )
@@ -591,10 +607,6 @@ onMounted(() => {
   syncFollowState()
   syncEditForm()
   void loadSharedOriginalPost()
-
-  if (props.post.type !== 'question') {
-    void loadComments()
-  }
 })
 
 onBeforeUnmount(() => {
@@ -619,9 +631,6 @@ watch(
     isAnswerModalOpen.value = false
     isContentExpanded.value = false
 
-    if (props.post.type !== 'question') {
-      void loadComments()
-    }
   },
 )
 
@@ -1358,7 +1367,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
 <template>
   <article
-    class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-3 shadow-[var(--shadow-elevated)] sm:p-4"
+    class="s4e-feed-card rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-3 shadow-[var(--shadow-elevated)] sm:p-4"
   >
     <template v-if="post.type === 'question'">
       <div class="min-w-0">
@@ -1469,17 +1478,20 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
     <template v-else>
       <div class="space-y-3">
         <div class="flex items-start gap-3">
-          <span
-            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] text-sm font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
+          <RouterLink
+            :to="authorRoute"
+            class="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
+            :aria-label="`View ${authorName}'s profile`"
           >
             <img loading="lazy" decoding="async"
-              v-if="post.author.avatarSrc"
-              :src="post.author.avatarSrc"
+              v-if="authorAvatarSrc"
+              :src="authorAvatarSrc"
               :alt="post.author.name"
-              class="h-full w-full rounded-[0.75rem] object-cover"
+              class="absolute inset-0 block h-full w-full object-cover"
+              @error="failedAuthorAvatarSrc = authorAvatarSrc"
             />
             <span v-else>{{ post.author.avatarText }}</span>
-          </span>
+          </RouterLink>
 
           <div class="min-w-0 flex-1">
             <div class="min-w-0">
@@ -1643,7 +1655,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             v-if="primaryMedia?.isVideo"
             :src="primaryMedia.url"
             controls
-            preload="metadata"
+            preload="none"
             playsinline
             class="-mx-3 mt-4 aspect-video w-[calc(100%+1.5rem)] max-w-none bg-black object-contain sm:-mx-4 sm:w-[calc(100%+2rem)]"
           />
@@ -1756,7 +1768,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   :key="item"
                   class="flex animate-pulse items-start gap-2.5"
                 >
-                  <div class="h-8 w-8 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+                  <div class="h-8 w-8 rounded-full bg-[var(--surface-muted)]" />
                   <div class="flex-1 space-y-2">
                     <div class="h-3 w-32 rounded-full bg-[var(--surface-muted)]" />
                     <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
@@ -1784,7 +1796,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   <div class="flex items-start gap-2.5">
                     <RouterLink
                       :to="comment.authorTo"
-                      class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                      class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                     >
                       <img loading="lazy" decoding="async"
                         v-if="comment.avatarSrc"
@@ -2002,7 +2014,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         <div class="flex min-w-0 items-center gap-3">
           <RouterLink
             :to="answererProfilePath"
-            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
+            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
             <img loading="lazy" decoding="async"
               v-if="answererAvatar"
@@ -2363,3 +2375,9 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
     </div>
   </Teleport>
 </template>
+
+<style scoped>
+.s4e-feed-card {
+  min-width: 0;
+}
+</style>

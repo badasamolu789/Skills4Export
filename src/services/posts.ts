@@ -17,6 +17,11 @@ export type PostRecord = {
     displayName?: string | null
     display_name?: string | null
     email?: string | null
+    avatar?: string | null
+    avatarUrl?: string | null
+    avatar_url?: string | null
+    profileImage?: string | null
+    profile_image?: string | null
   } | null
   page_id: string | null
   pageId?: string | null
@@ -42,6 +47,12 @@ export type PostRecord = {
   originalPostId?: string | null
   title: string
   content: string
+  file_path?: unknown[]
+  filePath?: unknown[]
+  media_path?: unknown[]
+  mediaPath?: unknown[]
+  media?: unknown[]
+  attachments?: unknown[]
   created_at: string
   updated_at: string
   comments_count?: number
@@ -63,6 +74,14 @@ export type PostMediaRecord = {
   url: string
   thumbnail_url: string
   display_order: number
+  postId?: string
+  mediaType?: string
+  media_url?: string
+  mediaUrl?: string
+  secure_url?: string
+  secureUrl?: string
+  thumbnailUrl?: string
+  displayOrder?: number
 }
 
 export type PostCommentRecord = {

@@ -156,13 +156,13 @@ onMounted(() => {
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-start gap-3">
               <span
-                class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]"
+                class="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--accent-strong)]"
               >
                 <img loading="lazy" decoding="async"
                   v-if="item.actor?.avatar"
                   :src="item.actor.avatar"
                   :alt="item.actor.name || item.title"
-                  class="h-full w-full rounded-[0.75rem] object-cover"
+                  class="h-full w-full rounded-full object-cover object-center"
                 />
                 <Bell v-else class="h-5 w-5" />
               </span>

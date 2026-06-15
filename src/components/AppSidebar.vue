@@ -179,7 +179,10 @@ const loadUserPages = () => {
 
 const loadSidebarCommunities = async () => {
   try {
-    const response = await communitiesService.listCommunities({ per_page: 100 }, authStore.authToken)
+    const response = await communitiesService.listCommunities(
+      { per_page: 100, limit: 100 },
+      authStore.authToken,
+    )
     sidebarCommunities.value = response.data
   } catch {
     sidebarCommunities.value = []
@@ -243,10 +246,10 @@ const handleNavigation = () => {
 onMounted(() => {
   loadUserPages()
   void loadSidebarCommunities()
-  if (!freelancersStore.freelanceJobs.length) {
+  if (isFreelancersRoute.value && !freelancersStore.freelanceJobs.length) {
     void freelancersStore.loadFreelanceJobs()
   }
-  if (!freelancersStore.freelancers.length) {
+  if (isFreelancersRoute.value && !freelancersStore.freelancers.length) {
     void freelancersStore.loadFreelancers()
   }
 })
@@ -262,6 +265,19 @@ watch(
     void loadSidebarCommunities()
   },
 )
+
+watch(isFreelancersRoute, (isActive) => {
+  if (!isActive) {
+    return
+  }
+
+  if (!freelancersStore.freelanceJobs.length) {
+    void freelancersStore.loadFreelanceJobs()
+  }
+  if (!freelancersStore.freelancers.length) {
+    void freelancersStore.loadFreelancers()
+  }
+})
 </script>
 
 <template>
@@ -517,13 +533,15 @@ watch(
                 @click="handleNavigation"
               >
                 <span
-                  class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-xs font-semibold text-white"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] bg-white text-xs font-semibold text-[var(--accent-strong)]"
                 >
-                  <img loading="lazy" decoding="async"
+                  <img
                     v-if="page.avatar"
                     :src="page.avatar"
                     :alt="page.name"
-                    class="h-full w-full rounded-[0.75rem] object-cover"
+                    class="block h-full w-full rounded-full object-contain object-center p-1"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <span v-else>{{ page.initials }}</span>
                 </span>

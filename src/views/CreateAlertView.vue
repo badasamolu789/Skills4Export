@@ -27,6 +27,19 @@ const maxJobSearchTags = 10
 
 const remainingJobSearchSlots = computed(() => maxJobSearchTags - jobSearchTags.value.length)
 
+const getSavedScholarshipTypes = (data: {
+  scholarshipTypes?: string[]
+  scholarshipType?: string | null
+}) => {
+  if (Array.isArray(data.scholarshipTypes)) {
+    return data.scholarshipTypes.filter((option) => scholarshipOptions.includes(option))
+  }
+
+  return data.scholarshipType && scholarshipOptions.includes(data.scholarshipType)
+    ? [data.scholarshipType]
+    : []
+}
+
 const addJobSearchTag = (rawValue: string) => {
   const value = rawValue.trim()
 
@@ -97,7 +110,7 @@ const loadAlertPreferences = async () => {
     const response = await alertsService.getAlertPreferences(authStore.authToken)
     contestAlert.value = response.data.contestAlert
     sponsorshipAlert.value = response.data.sponsorshipAlert
-    scholarshipTypes.value = response.data.scholarshipType ? [response.data.scholarshipType] : []
+    scholarshipTypes.value = getSavedScholarshipTypes(response.data)
     jobAlert.value = response.data.jobAlert
     jobSearchTags.value = response.data.jobSearchTags ?? []
   } catch (error) {
@@ -122,6 +135,13 @@ const saveAlertPreferences = async () => {
     return
   }
 
+  if (sponsorshipAlert.value && scholarshipTypes.value.length === 0) {
+    toast.error('Choose a scholarship type', {
+      description: 'Select at least one option for sponsorship alerts.',
+    })
+    return
+  }
+
   isSavingPreferences.value = true
 
   try {
@@ -129,6 +149,8 @@ const saveAlertPreferences = async () => {
       {
         contestAlert: contestAlert.value,
         sponsorshipAlert: sponsorshipAlert.value,
+        scholarshipTypes: sponsorshipAlert.value ? scholarshipTypes.value : [],
+        // Keep the singular field until the API migrates fully to scholarshipTypes.
         scholarshipType: sponsorshipAlert.value ? scholarshipTypes.value[0] ?? null : null,
         jobAlert: jobAlert.value,
         jobSearchTags: jobAlert.value ? jobSearchTags.value : [],
@@ -138,7 +160,9 @@ const saveAlertPreferences = async () => {
 
     contestAlert.value = response.data.contestAlert
     sponsorshipAlert.value = response.data.sponsorshipAlert
-    scholarshipTypes.value = response.data.scholarshipType ? [response.data.scholarshipType] : []
+    scholarshipTypes.value = response.data.scholarshipTypes
+      ? getSavedScholarshipTypes(response.data)
+      : scholarshipTypes.value
     jobAlert.value = response.data.jobAlert
     jobSearchTags.value = response.data.jobSearchTags ?? []
     toast.success('Alert preferences saved.')
@@ -221,11 +245,10 @@ onMounted(() => {
                 "
               >
                 <input
-                  :checked="scholarshipTypes.includes(option)"
+                  v-model="scholarshipTypes"
                   type="checkbox"
                   :value="option"
                   class="h-4 w-4 accent-[var(--accent)]"
-                  @change="scholarshipTypes = scholarshipTypes.includes(option) ? [] : [option]"
                 />
                 <span class="text-sm font-medium text-[var(--text-primary)]">{{ option }}</span>
               </label>

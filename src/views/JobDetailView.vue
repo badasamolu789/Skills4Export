@@ -333,7 +333,7 @@ watch(
   </section>
 
   <section v-else-if="job" class="space-y-8">
-    <section class="-mx-3 border-b border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-8 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 lg:py-10 xl:-mx-8 xl:px-8">
+    <section class="-mx-3 border-b border-[color:var(--border-soft)] bg-transparent px-3 py-8 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 lg:py-10 xl:-mx-8 xl:px-8">
       <div class="relative mx-auto max-w-7xl">
         <div class="pointer-events-none absolute left-8 top-24 hidden h-20 w-28 opacity-50 md:block">
           <div class="absolute left-6 top-0 h-full w-px rotate-[32deg] bg-[var(--border-soft)]" />

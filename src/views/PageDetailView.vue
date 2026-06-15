@@ -1054,7 +1054,7 @@ watch(pagePostFile, (file, previousFile) => {
         <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div class="flex min-w-0 items-center gap-4">
             <span class="page-avatar">
-              <img loading="lazy" decoding="async" v-if="pageImage" :src="pageImage" :alt="page.name" class="h-full w-full object-cover" />
+              <img loading="lazy" decoding="async" v-if="pageImage" :src="pageImage" :alt="page.name" class="h-full w-full object-contain object-center p-1.5" />
               <span v-else>{{ pageInitials }}</span>
             </span>
             <div class="min-w-0">
@@ -1335,7 +1335,7 @@ watch(pagePostFile, (file, previousFile) => {
     aria-label="Loading page details"
   >
     <div class="flex animate-pulse items-center gap-4">
-      <div class="h-20 w-20 rounded-[1rem] bg-[var(--surface-muted)]" />
+      <div class="h-20 w-20 rounded-full bg-[var(--surface-muted)]" />
       <div class="min-w-0 flex-1 space-y-3">
         <div class="h-6 w-2/5 rounded-full bg-[var(--surface-muted)]" />
         <div class="h-4 w-1/4 rounded-full bg-[var(--surface-muted)]" />
@@ -1537,12 +1537,12 @@ watch(pagePostFile, (file, previousFile) => {
       </div>
 
       <div class="grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center">
-        <div class="flex aspect-[10/9] items-center justify-center overflow-hidden rounded-[0.8rem] bg-[var(--surface-secondary)] text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
+        <div class="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] bg-white text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
           <img loading="lazy" decoding="async"
             v-if="editAvatarPreviewUrl || pageImage"
             :src="editAvatarPreviewUrl || pageImage"
             alt="Page image preview"
-            class="h-full w-full object-cover"
+            class="h-full w-full object-contain object-center p-2"
           />
           <span v-else>300 x 270</span>
         </div>
@@ -1795,7 +1795,7 @@ watch(pagePostFile, (file, previousFile) => {
 
 .page-detail-hero {
   border-bottom: 1px solid var(--border-soft);
-  background: var(--surface-primary);
+  background: transparent;
   padding: 3rem 0 0;
 }
 
@@ -1807,8 +1807,9 @@ watch(pagePostFile, (file, previousFile) => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 1rem;
-  background: var(--surface-secondary);
+  border: 1px solid var(--border-soft);
+  border-radius: 9999px;
+  background: white;
   color: var(--accent-strong);
   font-size: 1.1rem;
   font-weight: 700;

@@ -390,6 +390,8 @@ export const pagesService = {
     const normalizedPayload = normalizePagePayload(payload) as CreatePageRequest
     const response = await api.post<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pages, normalizedPayload, {
       token,
+      timeoutMs: 60000,
+      suppressErrorModal: true,
       // The backend should persist responses by this key so a repeated create
       // after an uncertain timeout returns the original page instead of a duplicate.
       headers: {
@@ -400,7 +402,10 @@ export const pagesService = {
   },
 
   async getPage(id: string, token?: string | null) {
-    const response = await api.get<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pageById(id), { token })
+    const response = await api.get<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pageById(id), {
+      token,
+      suppressErrorModal: true,
+    })
     return normalizeSuccess(response)
   },
 
@@ -420,6 +425,7 @@ export const pagesService = {
     return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageAvatarFile(id), formData, {
       token,
       retry: false,
+      suppressErrorModal: true,
     })
   },
 
@@ -430,6 +436,7 @@ export const pagesService = {
     return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageCoverFile(id), formData, {
       token,
       retry: false,
+      suppressErrorModal: true,
     })
   },
 

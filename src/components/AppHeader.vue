@@ -693,7 +693,7 @@ onMounted(() => {
 
           <RouterLink
             to="/mobile/account"
-            class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open account menu"
             title="Open account menu"
           >
@@ -861,7 +861,7 @@ onMounted(() => {
           <div ref="userMenuRoot" class="relative">
             <button
               type="button"
-              class="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
+              class="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
               @click="toggleUserMenu"
             >
               <span
@@ -896,7 +896,7 @@ onMounted(() => {
                 <div class="flex min-w-0 items-center gap-2">
                   <span
                     v-if="props.isAuthenticated && !userImageSrc"
-                    class="flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] text-xs font-bold text-white"
+                    class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white"
                   >
                     {{ userInitials }}
                   </span>
@@ -904,11 +904,11 @@ onMounted(() => {
                     v-else-if="props.isAuthenticated && userImageSrc"
                     :src="userImageSrc"
                     :alt="userName"
-                    class="h-10 w-10 rounded-[0.75rem] object-cover"
+                    class="h-10 w-10 rounded-full object-cover object-center"
                   />
                   <span
                     v-else
-                    class="flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-[var(--surface-primary)] text-[var(--text-secondary)]"
+                    class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-secondary)]"
                   >
                     <CircleUserRound class="h-5 w-5" />
                   </span>

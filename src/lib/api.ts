@@ -67,14 +67,11 @@ const HIGH_PRIORITY_ENDPOINTS = [
 ]
 
 // Retry configuration
-const MAX_RETRIES = 3
+const MAX_RETRIES = 1
 const RETRY_BASE_DELAY = 1000 // 1 second
 const RETRY_MAX_DELAY = 10000 // 10 seconds
 const AUTH_EXPIRED_STATUSES = new Set([401, 419])
 
-// Temporary API debug modal toggle.
-const SHOW_API_DEBUG_MODAL =
-  import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
 const SHOW_API_REQUEST_LOGS =
   import.meta.env.VITE_SHOW_API_REQUEST_LOGS === undefined
     ? import.meta.env.DEV
@@ -213,36 +210,18 @@ const getErrorMessage = (payload: ApiErrorPayload | null, status: number, fallba
 }
 
 const reportApiError = ({
-  method,
-  url,
-  status,
-  payload,
-  description,
+  method: _method,
+  url: _url,
+  status: _status,
+  payload: _payload,
+  description: _description,
 }: {
   method: ApiMethod
   url: string
   status?: string | number
   payload?: unknown
   description: string
-}) => {
-  if (!SHOW_API_DEBUG_MODAL) {
-    return
-  }
-
-  try {
-    // Temporary API debug modal reporting. Safe to remove later together with appStore.showApiError usage.
-    const appStore = useAppStore()
-    appStore.showApiError({
-      method,
-      url,
-      status,
-      payload,
-      description,
-    })
-  } catch {
-    // Ignore store access failures outside an active Pinia context.
-  }
-}
+}) => undefined
 
 const reportOfflineState = () => {
   try {
@@ -407,7 +386,7 @@ const getTimeoutForEndpoint = (path: string, timeoutOverride?: number) => {
   }
 
   if (path.startsWith('/posts')) {
-    return 45000
+    return 20000
   }
 
   if (path.includes('/avatar-file') || path.includes('/cover-file')) {
@@ -416,7 +395,7 @@ const getTimeoutForEndpoint = (path: string, timeoutOverride?: number) => {
 
   // Longer timeout for data-heavy endpoints
   if (path.includes('/portfolios') || path.includes('/communities')) {
-    return 40000
+    return 20000
   }
 
   return API_TIMEOUT_MS

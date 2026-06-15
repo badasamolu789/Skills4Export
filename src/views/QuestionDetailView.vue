@@ -970,7 +970,7 @@ onBeforeUnmount(() => {
           <RouterLink
             v-if="questionAuthor"
             :to="questionAuthor.to"
-            class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-[0.68rem] font-bold text-white"
+            class="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-[0.68rem] font-bold text-white"
           >
             <img loading="lazy" decoding="async"
               v-if="questionAuthor.avatarSrc"
@@ -1045,7 +1045,7 @@ onBeforeUnmount(() => {
               <div class="flex min-w-0 items-start gap-3">
                 <RouterLink
                   :to="answer.authorTo"
-                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
                   <img loading="lazy" decoding="async"
                     v-if="answer.avatarSrc"
@@ -1233,7 +1233,7 @@ onBeforeUnmount(() => {
         <div class="flex min-w-0 items-center gap-3">
           <RouterLink
             :to="answererProfilePath"
-            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
+            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
             <img loading="lazy" decoding="async"
               v-if="answererAvatar"

@@ -49,7 +49,7 @@ const activeActionClass =
       <div class="flex items-start gap-2.5">
         <RouterLink
           :to="comment.authorTo || '/profile'"
-          class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.62rem] font-semibold text-[var(--text-tertiary)]"
+          class="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.62rem] font-semibold text-[var(--text-tertiary)]"
         >
           <img loading="lazy" decoding="async"
             v-if="comment.avatarSrc"

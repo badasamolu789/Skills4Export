@@ -1203,7 +1203,7 @@ const submitAnswer = async () => {
     <article class="overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <div class="space-y-5 border-b border-[color:var(--border-soft)] p-4 sm:p-5">
         <div class="flex animate-pulse flex-col gap-4 sm:flex-row sm:items-start">
-          <div class="h-14 w-14 shrink-0 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+          <div class="h-14 w-14 shrink-0 rounded-full bg-[var(--surface-muted)]" />
           <div class="min-w-0 flex-1 space-y-3">
             <div class="flex flex-wrap gap-2">
               <div class="h-3 w-28 rounded-full bg-[var(--surface-muted)]" />
@@ -1284,7 +1284,7 @@ const submitAnswer = async () => {
           <RouterLink
             v-if="author"
             :to="author.to"
-            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent)] text-sm font-bold text-white sm:h-12 sm:w-12"
+            class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent)] text-sm font-bold text-white sm:h-12 sm:w-12"
           >
             <img loading="lazy" decoding="async"
               v-if="author.avatarSrc"
@@ -1420,7 +1420,7 @@ const submitAnswer = async () => {
                 <div class="flex min-w-0 items-start gap-3">
                 <RouterLink
                   :to="answer.authorTo"
-                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                  class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
                     <img loading="lazy" decoding="async"
                       v-if="answer.avatarSrc"
@@ -1581,7 +1581,7 @@ const submitAnswer = async () => {
               <div class="flex items-start gap-2.5">
                 <RouterLink
                   :to="comment.authorTo"
-                  class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-primary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
+                  class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-primary)] text-[0.68rem] font-semibold text-[var(--text-tertiary)]"
                 >
                   <img loading="lazy" decoding="async"
                     v-if="comment.avatarSrc"
@@ -1730,7 +1730,7 @@ const submitAnswer = async () => {
         <div class="flex min-w-0 items-center gap-3">
           <RouterLink
             :to="answererProfilePath"
-            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
+            class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)] text-sm font-semibold text-[var(--accent-strong)]"
           >
             <img loading="lazy" decoding="async"
               v-if="answererAvatar"

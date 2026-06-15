@@ -35,9 +35,6 @@ const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const router = useRouter()
 const isMobileSidebarOpen = ref(false)
-// Temporary API debug modal toggle. Remove this with the debug modal overlay when no longer needed.
-const showApiDebugModal =
-  import.meta.env.VITE_SHOW_API_DEBUG_MODAL === 'true'
 
 const currentUser = useCurrentUserIdentity()
 const isLoadingCurrentUserProfile = ref(false)
@@ -391,38 +388,6 @@ const handleMenuAction = async (action: 'logout') => {
       logo-alt="Skills4Export logo"
       @close="isMobileSidebarOpen = false"
     />
-  </ResponsiveOverlay>
-
-  <!-- Temporary API debug modal. Remove this whole overlay block after backend work is complete. -->
-  <ResponsiveOverlay
-    v-if="showApiDebugModal"
-    v-model="appStore.apiErrorModal.open"
-    label="API Error"
-    :title="appStore.apiErrorModal.title"
-    :description="appStore.apiErrorModal.description"
-    max-width-class="sm:max-w-3xl"
-  >
-    <div class="space-y-4">
-      <div class="grid gap-3 sm:grid-cols-3">
-        <div class="rounded-2xl bg-(--surface-secondary) p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-(--text-tertiary)">Method</p>
-          <p class="mt-2 text-sm font-semibold text-(--text-primary)]">{{ appStore.apiErrorModal.method }}</p>
-        </div>
-        <div class="rounded-2xl bg-(--surface-secondary) p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-(--text-tertiary)">Status</p>
-          <p class="mt-2 text-sm font-semibold text-(--text-primary)">{{ appStore.apiErrorModal.status }}</p>
-        </div>
-        <div class="rounded-2xl bg-(--surface-secondary) p-4">
-          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-(--text-tertiary)">URL</p>
-          <p class="mt-2 break-all text-sm font-semibold text-(--text-primary)">{{ appStore.apiErrorModal.url }}</p>
-        </div>
-      </div>
-
-      <div class="rounded-2xl border border-[color:var(--border-soft) bg-(--surface-secondary) p-4">
-        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-(--text-tertiary)]">Response / Error</p>
-        <pre class="mt-3 overflow-x-auto whitespace-pre-wrap wrap-break-word text-sm leading-6 text-(--text-primary)">{{ appStore.apiErrorModal.payload }}</pre>
-      </div>
-    </div>
   </ResponsiveOverlay>
 
   <Toaster

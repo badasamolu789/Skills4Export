@@ -408,7 +408,7 @@ onMounted(() => {
         </RouterLink>
       </div>
 
-      <nav class="flex gap-5 overflow-x-auto border-b border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
+      <nav class="flex gap-5 overflow-x-auto border-b border-[color:var(--border-soft)] bg-transparent">
         <button
           v-for="tab in tabs"
           :key="tab.id"

@@ -339,6 +339,20 @@ export const usePagesStore = defineStore('pages', () => {
     return page
   }
 
+  const updatePageAvatar = (idOrSlug: string, avatar: string) => {
+    if (!avatar) {
+      return
+    }
+
+    const update = (page: ManagedPage) =>
+      page.id === idOrSlug || page.slug === idOrSlug
+        ? { ...page, avatar, updatedAt: new Date().toISOString() }
+        : page
+
+    pages.value = pages.value.map(update)
+    publicPages.value = publicPages.value.map(update)
+  }
+
   const loadRememberedOwnedPages = async () => {
     const references = Array.from(getOwnedPageReferences()).filter(isUuid)
 
@@ -360,6 +374,10 @@ export const usePagesStore = defineStore('pages', () => {
   const loadPages = async () => {
     if (!authStore.authToken || !currentUserId.value) {
       clearPages()
+      return
+    }
+
+    if (isLoadingPages.value) {
       return
     }
 
@@ -467,18 +485,9 @@ export const usePagesStore = defineStore('pages', () => {
     const payloadCategory = getPayloadPageCategory(payload)
     pagePersistenceWarning.value = ''
     const response = await pagesService.createPage(payload, authStore.authToken)
-    const verifiedResponse = response.data.id
-      ? await pagesService.getPage(response.data.id, authStore.authToken).catch(() => null)
-      : null
-    const persistenceIssues = getPagePersistenceIssues(payload, verifiedResponse?.data)
-
-    if (persistenceIssues.length) {
-      pagePersistenceWarning.value = `The backend created the page but did not return these saved fields: ${persistenceIssues.join(', ')}.`
-    }
-
     const record = {
-      ...(verifiedResponse?.data || response.data),
-      ownerId: verifiedResponse?.data.ownerId || response.data.ownerId || currentUserId.value,
+      ...response.data,
+      ownerId: response.data.ownerId || currentUserId.value,
     }
     const page = addPageFromApi(record, { trustAsOwned: true }) ?? mapPageRecordToManagedPage(record)
 
@@ -566,6 +575,7 @@ export const usePagesStore = defineStore('pages', () => {
     getPublicPageByIdOrSlug,
     setPagesFromApi,
     addPageFromApi,
+    updatePageAvatar,
     rememberOwnedPage,
     clearPages,
     loadPages,

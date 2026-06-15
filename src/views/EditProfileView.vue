@@ -321,6 +321,13 @@ const loadProfile = async () => {
   try {
     const response = await usersService.getMyProfile(authStore.authToken)
     const profile = response.data?.profile ?? null
+    const responseBio =
+      getProfileBio(profile) ||
+      getStringField(
+        response.data as Record<string, unknown> | null,
+        ['bio', 'description', 'about', 'aboutMe', 'about_me'],
+      )
+    form.value.bio = responseBio
     authStore.setCurrentUser(response.data?.user ?? null)
     authStore.setUserProfile(profile)
 
@@ -356,7 +363,6 @@ const loadProfile = async () => {
       form.value.name = profile.displayName || form.value.name
       form.value.username = profile.username || form.value.username
       form.value.location = authStore.userProfile?.location || ''
-      form.value.bio = getProfileBio(profile)
       form.value.website = profile.website || form.value.website
       form.value.linkedin = profile.linkedin || form.value.linkedin
       form.value.github = profile.github || form.value.github
@@ -374,6 +380,10 @@ const loadProfile = async () => {
         authStore.signUpDraft.banner = profile.banner
       }
     }
+
+    // The primary identity and public information are ready. Load the heavier
+    // profile sections without keeping the top-level page in a loading state.
+    isLoadingProfile.value = false
 
     if (loadedUserId) {
       const [skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
@@ -891,16 +901,6 @@ const loadPortfolios = async () => {
 
 onMounted(() => {
   void loadProfile()
-})
-
-onMounted(() => {
-  if (authStore.userId) {
-    void loadSkills()
-    void loadPortfolios()
-    void loadCertifications()
-    void loadEducations()
-    void loadExperiences()
-  }
 })
 
 const addSkill = async () => {
@@ -1448,7 +1448,6 @@ const saveContactSection = async () => {
     }
     authStore.signUpDraft.location = toInitialCaps(form.value.location)
     authStore.setUserProfileOverride(savedProfile)
-    await loadProfile()
 
     toast.success('Contact details updated successfully.')
   } catch (error) {
@@ -1503,7 +1502,6 @@ const saveProfessionalSection = async () => {
     authStore.signUpDraft.location = toInitialCaps(form.value.location)
     authStore.signUpDraft.headline = form.value.bio
     authStore.setUserProfileOverride(savedProfile)
-    await loadProfile()
 
     toast.success('Professional profile updated successfully.')
   } catch (error) {
@@ -1649,7 +1647,7 @@ const addExperienceFromModal = async () => {
 
       <div class="relative px-5 py-5 sm:px-7 sm:py-7">
         <div class="mb-4">
-          <div class="relative h-32 w-32 overflow-hidden rounded-[0.75rem] border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
+          <div class="relative h-32 w-32 overflow-hidden rounded-full border-4 border-[var(--surface-primary)] bg-[var(--surface-secondary)] shadow-[var(--shadow-elevated)] sm:h-36 sm:w-36">
             <img loading="lazy" decoding="async"
               v-if="avatarPreviewUrl"
               :src="avatarPreviewUrl"
@@ -1783,7 +1781,7 @@ const addExperienceFromModal = async () => {
           <div class="absolute inset-0 bg-[#12121f]" />
 
           <div class="absolute left-5 bottom-5 flex items-center gap-4">
-            <div class="relative h-20 w-20 overflow-hidden rounded-[0.75rem] border border-white bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
+            <div class="relative h-20 w-20 overflow-hidden rounded-full border border-white bg-[var(--surface-primary)] shadow-[var(--shadow-soft)]">
               <img loading="lazy" decoding="async" v-if="avatarPreviewUrl" :src="avatarPreviewUrl" alt="Avatar preview" class="h-full w-full object-cover" />
               <span v-else class="flex h-full w-full items-center justify-center text-xl font-semibold text-white">
                 {{ profileInitials }}

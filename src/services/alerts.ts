@@ -3,6 +3,7 @@ import { api } from '@/lib/api'
 export type AlertPreferences = {
   contestAlert: boolean
   sponsorshipAlert: boolean
+  scholarshipTypes?: string[]
   scholarshipType?: string | null
   jobAlert: boolean
   jobSearchTags: string[]
@@ -13,6 +14,7 @@ export type AlertPreferences = {
 export type AlertPreferencesRequest = {
   contestAlert: boolean
   sponsorshipAlert: boolean
+  scholarshipTypes?: string[]
   scholarshipType?: string | null
   jobAlert: boolean
   jobSearchTags: string[]

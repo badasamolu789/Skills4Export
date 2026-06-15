@@ -231,8 +231,8 @@ export const useAuthStore = defineStore('auth', () => {
     const override = userId.value ? getProfileOverrides()[userId.value] : null
     const mergedProfile = profile
       ? {
-          ...profile,
           ...(override ?? {}),
+          ...profile,
         }
       : override
         ? { ...override }
