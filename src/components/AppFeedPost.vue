@@ -1445,19 +1445,19 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         </div>
       </div>
 
-      <div class="mt-5 flex flex-wrap gap-1.5 sm:gap-2">
+      <div class="mt-3 flex flex-wrap gap-1 sm:mt-5 sm:gap-2">
         <button
           type="button"
-          class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+          class="inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
           @click="openAnswerModal"
         >
-          <Reply class="mr-1 h-3.5 w-3.5" />
+          <Reply class="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" />
           Answer
         </button>
         <button
           v-if="showFollowAction"
           type="button"
-          class="inline-flex h-9 items-center rounded-[1rem] border px-3 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+          class="inline-flex h-6 items-center rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
           :class="
             isFollowing
               ? activeActionClass
@@ -1468,7 +1468,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           {{ followLabel }}
         </button>
         <span
-          class="inline-flex h-9 items-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-medium text-[var(--text-secondary)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+          class="inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
         >
           {{ displayedAnswers }} Answers
         </span>
@@ -1554,12 +1554,12 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 </div>
               </div>
 
-              <div class="mt-2 flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-                <div class="flex min-w-0 flex-1 items-center gap-2">
+              <div class="mt-1 flex items-center gap-1.5 text-xs leading-none text-[var(--text-secondary)] sm:mt-2 sm:gap-2 sm:text-sm">
+                <div class="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
                   <button
                     v-if="showFollowAction"
                     type="button"
-                    class="inline-flex h-9 shrink-0 items-center rounded-[1rem] border px-3 text-[0.9rem] font-medium transition sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+                    class="inline-flex h-6 shrink-0 items-center rounded-[0.65rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
                     :class="
                       isFollowing
                         ? activeActionClass
@@ -1579,7 +1579,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   <RouterLink
                     v-if="post.type === 'community'"
                     :to="detailPath"
-                    class="inline-flex h-9 shrink-0 items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] px-3 text-[0.9rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:px-3.5 sm:text-[0.84rem]"
+                    class="inline-flex h-6 shrink-0 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
                   >
                     View post
                   </RouterLink>
@@ -1655,7 +1655,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             v-if="primaryMedia?.isVideo"
             :src="primaryMedia.url"
             controls
-            preload="none"
+            preload="metadata"
             playsinline
             class="-mx-3 mt-4 aspect-video w-[calc(100%+1.5rem)] max-w-none bg-black object-contain sm:-mx-4 sm:w-[calc(100%+2rem)]"
           />
@@ -1668,10 +1668,10 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             class="-mx-3 mt-4 aspect-[4/5] w-[calc(100%+1.5rem)] max-w-none bg-[var(--surface-secondary)] object-cover sm:-mx-4 sm:aspect-[1.91/1] sm:w-[calc(100%+2rem)]"
           />
 
-          <div class="mt-4 flex flex-wrap gap-1.5">
+          <div class="mt-2.5 flex flex-wrap gap-1 sm:mt-4 sm:gap-1.5">
             <button
               type="button"
-              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border px-2 text-[0.78rem] font-medium transition sm:h-8 sm:px-2.5"
+              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               :class="
                 !canScorePost
                   ? 'cursor-not-allowed border-[color:var(--border-soft)] text-[var(--text-tertiary)] opacity-70'
@@ -1688,7 +1688,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             <button
               v-if="canEditPost"
               type="button"
-              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:px-2.5"
+              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               @click="openEditModal"
             >
               <Edit2 class="h-3 w-3" />
@@ -1696,7 +1696,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             </button>
             <button
               type="button"
-              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:px-2.5"
+              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               @click="openShareModal"
             >
               <Share2 class="h-3 w-3" />
@@ -1704,7 +1704,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             </button>
             <button
               type="button"
-              class="inline-flex h-8 items-center gap-1 rounded-[0.8rem] border border-[color:var(--border-soft)] px-2 text-[0.78rem] font-medium text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:px-2.5"
+              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               @click="toggleComments"
             >
               <MessageSquare class="h-3 w-3" />
@@ -2086,6 +2086,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 class="mx-auto aspect-[4/3] max-h-72 w-full bg-black object-contain"
                 controls
                 playsinline
+                preload="metadata"
               />
               <div class="flex items-center justify-between gap-2 px-3 py-2">
                 <p class="truncate text-xs font-semibold text-[var(--text-primary)]">{{ file.name }}</p>
@@ -2259,19 +2260,19 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             Thank you for reporting {{ contentLabel.toLowerCase() }}s that break the rules. Let us know which of the rules applies.
           </p>
 
-          <button
-            type="button"
-            class="mt-3 inline-flex items-center rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 text-[0.84rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+          <RouterLink
+            to="/community-regulations"
+            class="mt-3 inline-flex items-center rounded-[0.7rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-2.5 py-1.5 text-[0.78rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
           >
             Review community rules
-          </button>
+          </RouterLink>
 
           <div class="mt-5 flex flex-wrap gap-2">
             <button
               v-for="reason in reportReasons"
               :key="reason"
               type="button"
-              class="inline-flex items-center rounded-[0.75rem] border px-3 py-2 text-[0.82rem] font-semibold transition"
+              class="inline-flex items-center rounded-[0.6rem] border px-2 py-1.5 text-[0.74rem] font-semibold transition sm:rounded-[0.7rem] sm:px-2.5 sm:text-[0.8rem]"
               :class="
                 selectedReportReason === reason
                   ? 'border-[var(--accent)] bg-[var(--accent)] text-white shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent)_18%,transparent)]'

@@ -678,12 +678,36 @@ export type LoginHistoryResponse = {
   data: LoginHistoryRecord[]
 }
 
+export type UserPrivacyLevel = 1 | 2 | 3
+
+export type UserPrivacySettings = {
+  picture?: UserPrivacyLevel | number | string | null
+  country?: UserPrivacyLevel | number | string | null
+  biography?: UserPrivacyLevel | number | string | null
+  [key: string]: unknown
+}
+
+export type UserPrivacyResponse = {
+  success?: boolean
+  message?: string
+  data?: {
+    user_id?: string
+    privacy?: UserPrivacySettings | null
+    picture?: UserPrivacyLevel | number | string | null
+    country?: UserPrivacyLevel | number | string | null
+    biography?: UserPrivacyLevel | number | string | null
+    [key: string]: unknown
+  } | null
+}
+
 const USER_ROUTES = {
   users: '/users',
   myProfile: '/user/profile/me',
   myStats: '/user/stats/me',
   privacy: '/user/privacy',
   settings: '/user/settings',
+  notificationEmailOtp: '/user/notification-email/send-otp',
+  notificationEmailVerify: '/user/notification-email/verify',
   userById: (id: string) => `/users/${id}`,
   userProfile: (id: string) => `/users/${id}/profile`,
   userAvatar: (id: string) => `/users/${id}/profile/avatar`,
@@ -718,11 +742,28 @@ export const usersService = {
   getMyStats(token?: string | null, options?: UserRequestOptions) {
     return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token, ...options })
   },
+  getPrivacy(token?: string | null) {
+    return api.get<UserPrivacyResponse>(USER_ROUTES.privacy, { token })
+  },
   updatePrivacy(payload: Record<string, unknown>, token?: string | null) {
     return api.put<{ success?: boolean; message?: string; data?: unknown[] }>(USER_ROUTES.privacy, payload, { token })
   },
   updateSettings(payload: Record<string, unknown>, token?: string | null) {
     return api.put<{ success?: boolean; message?: string; data?: Record<string, unknown> }>(USER_ROUTES.settings, payload, { token })
+  },
+  sendNotificationEmailOtp(payload: { notification_email: string }, token?: string | null) {
+    return api.post<{ success?: boolean; message?: string; data?: Record<string, unknown> }>(
+      USER_ROUTES.notificationEmailOtp,
+      payload,
+      { token },
+    )
+  },
+  verifyNotificationEmail(payload: { otp: string }, token?: string | null) {
+    return api.post<{ success?: boolean; message?: string; data?: Record<string, unknown> }>(
+      USER_ROUTES.notificationEmailVerify,
+      payload,
+      { token },
+    )
   },
   getUser(id: string, token?: string | null) {
     return api.get<UserResponse>(USER_ROUTES.userById(id), { token })

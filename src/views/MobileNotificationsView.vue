@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, Bell } from 'lucide-vue-next'
+import { ArrowLeft } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -59,36 +59,23 @@ onMounted(() => {
 
 <template>
   <section class="mx-auto max-w-3xl space-y-5">
-    <div class="rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)] sm:p-5">
-      <div class="flex items-start justify-between gap-4">
-        <div class="flex items-start gap-3">
-          <RouterLink
-            to="/"
-            class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            aria-label="Go back"
-          >
-            <ArrowLeft class="h-5 w-5" />
-          </RouterLink>
-
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
-              Mobile Notifications
-            </p>
-            <h1 class="mt-2 text-[1.45rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.6rem]">
-              Notifications
-            </h1>
-            <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-              Keep up with mentions, recruiter activity, and platform updates from one place.
-            </p>
-          </div>
-        </div>
-
-        <span
-          class="inline-flex items-center rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-sm font-medium text-[var(--text-secondary)]"
+    <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <RouterLink
+          to="/"
+          class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+          aria-label="Go back"
         >
-          {{ notificationsStore.unreadCount }} unread
-        </span>
+          <ArrowLeft class="h-5 w-5" />
+        </RouterLink>
+        <h1 class="text-[1.35rem] font-semibold leading-tight text-[var(--text-primary)]">Notifications</h1>
       </div>
+
+      <span
+        class="inline-flex items-center rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-sm font-medium text-[var(--text-secondary)]"
+      >
+        {{ notificationsStore.unreadCount }} unread
+      </span>
     </div>
 
     <div class="flex items-center justify-between gap-3">

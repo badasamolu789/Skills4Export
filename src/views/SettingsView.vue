@@ -12,25 +12,19 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import AppFeedPost from '@/components/AppFeedPost.vue'
-import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { authService } from '@/services/auth'
-import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { notificationsService, type NotificationPreferences } from '@/services/notifications'
-import { postsService, type PostRecord } from '@/services/posts'
-import { usersService } from '@/services/users'
+import { usersService, type UserPrivacyResponse } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore } from '@/stores/pages'
-import { getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 
 type SettingsTab =
   | 'theme'
   | 'change-password'
   | 'email-settings'
   | 'privacy'
-  | 'saved-post'
   | 'delete-account'
   | 'delete-page'
 
@@ -45,17 +39,17 @@ const showPasswordFields = ref({
 const deleteAccountConfirmed = ref(false)
 const deletePageConfirmed = ref(false)
 const emailAddress = ref(authStore.currentUser?.email || authStore.signUpDraft.email || '')
+const notificationEmailOtp = ref('')
+const isNotificationEmailOtpSent = ref(false)
 const selectedDeletePageId = ref('')
 const isSavingPassword = ref(false)
 const isSavingEmail = ref(false)
+const isVerifyingEmail = ref(false)
 const isLoadingNotificationPreferences = ref(false)
 const isSavingNotificationPreferences = ref(false)
+const isLoadingPrivacy = ref(false)
 const isSavingPrivacy = ref(false)
 const isDeletingPage = ref(false)
-const isLoadingSavedPosts = ref(false)
-const savedPosts = ref<FeedPost[]>([])
-const savedPostsError = ref('')
-const communitiesById = ref(new Map<string, CommunityRecord>())
 const passwordForm = ref({
   current: '',
   next: '',
@@ -82,7 +76,6 @@ const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'change-password', label: 'Change Password' },
   { id: 'email-settings', label: 'Email Settings' },
   { id: 'privacy', label: 'Privacy' },
-  { id: 'saved-post', label: 'Saved Post' },
   // The current API spec does not expose account deletion, so this tab is not rendered.
   { id: 'delete-page', label: 'Delete Page' },
 ]
@@ -128,10 +121,44 @@ const notificationPreferenceOptions = [
   { key: 'system', label: 'Features & Announcements', description: 'Product updates and occasional announcements' },
 ] as const
 
-const privacySettings = ref({
+type PrivacyUiValue = 'public' | 'followers' | 'private'
+
+const privacySettings = ref<{
+  profilePicture: PrivacyUiValue
+  country: PrivacyUiValue
+  biography: PrivacyUiValue
+}>({
   profilePicture: 'public',
   country: 'public',
   biography: 'public',
+})
+
+const privacyValueToApi: Record<PrivacyUiValue, 1 | 2 | 3> = {
+  public: 1,
+  followers: 2,
+  private: 3,
+}
+
+const privacyValueFromApi = (value: unknown): PrivacyUiValue => {
+  const numericValue = Number(value)
+
+  if (numericValue === 2) {
+    return 'followers'
+  }
+
+  if (numericValue === 3) {
+    return 'private'
+  }
+
+  return 'public'
+}
+
+const getPrivacyData = (response: UserPrivacyResponse) => response.data?.privacy ?? response.data ?? null
+
+const buildPrivacyPayload = () => ({
+  picture: privacyValueToApi[privacySettings.value.profilePicture],
+  country: privacyValueToApi[privacySettings.value.country],
+  biography: privacyValueToApi[privacySettings.value.biography],
 })
 
 const resolvedThemeLabel = computed(() =>
@@ -165,54 +192,6 @@ const requireAuthToken = () => {
   return false
 }
 
-const mapSavedPost = async (post: PostRecord) => {
-  const postUserId = getPostUserId(post)
-  const [mediaResponse, authorResponse] = await Promise.all([
-    postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
-    postUserId
-      ? usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
-      : Promise.resolve(null),
-  ])
-
-  return mapApiPostToFeedPost(
-    post,
-    mediaResponse?.data ?? [],
-    authorResponse?.data ?? null,
-    communitiesById.value.get(post.community_id || post.communityId || '')?.name,
-  )
-}
-
-const loadSavedPosts = async () => {
-  if (!requireAuthToken() || isLoadingSavedPosts.value) {
-    return
-  }
-
-  isLoadingSavedPosts.value = true
-  savedPostsError.value = ''
-
-  try {
-    const communitiesResponse = await communitiesService
-      .listCommunities({ per_page: 100, limit: 100 }, authStore.authToken)
-      .catch(() => null)
-    communitiesById.value = new Map(
-      (communitiesResponse?.data ?? []).map((community) => [community.id, community]),
-    )
-
-    const response = await postsService
-      .listSavedPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken)
-      .catch(() => postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken))
-    const records = response.data ?? []
-    const savedRecords = records.some((post) => post.is_saved) ? records.filter((post) => post.is_saved) : records
-    savedPosts.value = await Promise.all(savedRecords.map(mapSavedPost))
-  } catch (error) {
-    savedPosts.value = []
-    savedPostsError.value =
-      error instanceof ApiError ? error.message : 'Unable to load saved posts.'
-  } finally {
-    isLoadingSavedPosts.value = false
-  }
-}
-
 const loadNotificationPreferences = async () => {
   if (!authStore.authToken || isLoadingNotificationPreferences.value) {
     return
@@ -230,6 +209,33 @@ const loadNotificationPreferences = async () => {
     return
   } finally {
     isLoadingNotificationPreferences.value = false
+  }
+}
+
+const loadPrivacySettings = async () => {
+  if (!authStore.authToken || isLoadingPrivacy.value) {
+    return
+  }
+
+  isLoadingPrivacy.value = true
+
+  try {
+    const response = await usersService.getPrivacy(authStore.authToken)
+    const data = getPrivacyData(response)
+
+    if (!data) {
+      return
+    }
+
+    privacySettings.value = {
+      profilePicture: privacyValueFromApi(data.picture),
+      country: privacyValueFromApi(data.country),
+      biography: privacyValueFromApi(data.biography),
+    }
+  } catch {
+    return
+  } finally {
+    isLoadingPrivacy.value = false
   }
 }
 
@@ -300,7 +306,7 @@ const changePassword = async () => {
   }
 }
 
-const changeEmail = async () => {
+const sendNotificationEmailOtp = async () => {
   if (!requireAuthToken() || isSavingEmail.value) {
     return
   }
@@ -315,17 +321,42 @@ const changeEmail = async () => {
   isSavingEmail.value = true
 
   try {
-    await authService.changeEmail({ new_email: email }, authStore.authToken)
-    authStore.signUpDraft.email = email
-    if (authStore.currentUser) {
-      authStore.setCurrentUser({ ...authStore.currentUser, email })
-    }
-    toast.success('Email address saved.')
+    await usersService.sendNotificationEmailOtp({ notification_email: email }, authStore.authToken)
+    isNotificationEmailOtpSent.value = true
+    notificationEmailOtp.value = ''
+    toast.success('Verification code sent.')
   } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to change email.'
-    toast.error('Email failed', { description: message })
+    const message = error instanceof ApiError ? error.message : 'Unable to send verification code.'
+    toast.error('Email verification failed', { description: message })
   } finally {
     isSavingEmail.value = false
+  }
+}
+
+const verifyNotificationEmailOtp = async () => {
+  if (!requireAuthToken() || isVerifyingEmail.value) {
+    return
+  }
+
+  const otp = notificationEmailOtp.value.trim()
+
+  if (!otp) {
+    toast.error('Enter the verification code.')
+    return
+  }
+
+  isVerifyingEmail.value = true
+
+  try {
+    await usersService.verifyNotificationEmail({ otp }, authStore.authToken)
+    isNotificationEmailOtpSent.value = false
+    notificationEmailOtp.value = ''
+    toast.success('Notification email verified.')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to verify this code.'
+    toast.error('Verification failed', { description: message })
+  } finally {
+    isVerifyingEmail.value = false
   }
 }
 
@@ -364,7 +395,7 @@ const savePrivacy = async () => {
 
   isSavingPrivacy.value = true
   try {
-    await usersService.updatePrivacy(privacySettings.value, authStore.authToken)
+    await usersService.updatePrivacy(buildPrivacyPayload(), authStore.authToken)
     toast.success('Privacy settings saved.')
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save privacy settings.'
@@ -376,8 +407,8 @@ const savePrivacy = async () => {
 
 onMounted(() => {
   void pagesStore.loadPages()
-  void loadSavedPosts()
   void loadNotificationPreferences()
+  void loadPrivacySettings()
 })
 </script>
 
@@ -568,13 +599,38 @@ onMounted(() => {
                 type="button"
                 :disabled="isSavingEmail"
                 class="inline-flex items-center gap-2 border-l border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-                @click="changeEmail"
+                @click="sendNotificationEmailOtp"
               >
                 <Loader2 v-if="isSavingEmail" class="h-4 w-4 animate-spin" />
-                {{ isSavingEmail ? 'Saving...' : 'Save' }}
+                {{ isSavingEmail ? 'Sending...' : 'Send code' }}
               </button>
             </div>
           </label>
+
+          <form
+            v-if="isNotificationEmailOtpSent"
+            class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
+            @submit.prevent="verifyNotificationEmailOtp"
+          >
+            <label class="block">
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Verification code</span>
+              <input
+                v-model="notificationEmailOtp"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
+                placeholder="Enter the code sent to your email"
+              />
+            </label>
+            <button
+              type="submit"
+              :disabled="isVerifyingEmail"
+              class="mt-4 inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Loader2 v-if="isVerifyingEmail" class="h-4 w-4 animate-spin" />
+              {{ isVerifyingEmail ? 'Verifying...' : 'Verify email' }}
+            </button>
+          </form>
 
           <article class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
             <div class="flex items-center justify-between gap-3">
@@ -614,51 +670,12 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="activeTab === 'saved-post'" class="space-y-5">
-        <div class="rounded-[0.9rem] bg-[var(--surface-secondary)] p-5">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)]">Saved Post</h2>
-          <p class="mt-1 text-sm text-[var(--text-secondary)]">Posts you have saved appear here.</p>
-        </div>
-
-        <div
-          v-if="savedPostsError"
-          class="rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)]"
-        >
-          {{ savedPostsError }}
-        </div>
-
-        <div v-if="isLoadingSavedPosts" class="space-y-4">
-          <article
-            v-for="item in 3"
-            :key="item"
-            class="animate-pulse rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
-          >
-            <div class="h-4 w-44 rounded-full bg-[var(--surface-muted)]" />
-            <div class="mt-4 h-5 w-3/4 rounded-full bg-[var(--surface-muted)]" />
-            <div class="mt-3 h-32 rounded-[0.8rem] bg-[var(--surface-muted)]" />
-          </article>
-        </div>
-
-        <div v-else-if="savedPosts.length" class="space-y-4">
-          <AppFeedPost
-            v-for="post in savedPosts"
-            :key="post.apiId || post.slug"
-            :post="post"
-          />
-        </div>
-
-        <div
-          v-else
-          class="rounded-[0.9rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center"
-        >
-          <p class="text-sm font-semibold text-[var(--text-primary)]">No saved posts yet.</p>
-          <p class="mt-1 text-sm text-[var(--text-secondary)]">Save posts from the feed to collect them here.</p>
-        </div>
-      </section>
-
       <section v-else-if="activeTab === 'privacy'" class="space-y-7">
         <div class="rounded-[0.9rem] bg-[var(--surface-secondary)] p-5">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)]">Privacy Settings</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-[var(--text-primary)]">Privacy Settings</h2>
+            <Loader2 v-if="isLoadingPrivacy" class="h-4 w-4 animate-spin text-[var(--accent)]" />
+          </div>
           <p class="mt-1 text-sm text-[var(--text-secondary)]">Select who may see your profile details</p>
         </div>
 
@@ -671,6 +688,7 @@ onMounted(() => {
             <span class="text-sm font-semibold text-[var(--text-primary)]">{{ field.label }}</span>
             <select
               v-model="privacySettings[field.key as keyof typeof privacySettings]"
+              :disabled="isLoadingPrivacy"
               class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
             >
               <option value="public">Public</option>
@@ -680,7 +698,7 @@ onMounted(() => {
           </label>
           <button
             type="button"
-            :disabled="isSavingPrivacy"
+            :disabled="isLoadingPrivacy || isSavingPrivacy"
             class="inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:opacity-60"
             @click="savePrivacy"
           >

@@ -168,6 +168,7 @@ const getPagePersistenceIssues = (
   if (payload.name !== undefined && !valuesMatch(payload.name, persisted.name)) issues.push('name')
   if (payload.slug !== undefined && !valuesMatch(payload.slug, persisted.slug)) issues.push('slug')
   if (payload.description !== undefined && !valuesMatch(payload.description, persisted.description)) issues.push('description')
+  if (payload.categoryId !== undefined && !valuesMatch(payload.categoryId, persisted.categoryId || persisted.category_id)) issues.push('category')
   const submittedType = payload.type || payload.pageType || payload.page_type
   const persistedType = persisted.type || persisted.pageType || persisted.page_type
   if (submittedType && !valuesMatch(submittedType, persistedType)) issues.push('page type')

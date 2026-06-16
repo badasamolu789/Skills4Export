@@ -1704,7 +1704,7 @@ const submitAnswer = async () => {
     </article>
   </section>
 
-  <section v-else-if="!isLoadingPost" class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
+  <section v-else-if="!isLoadingPost" class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 text-center shadow-[var(--shadow-soft)] sm:p-8">
     <h1 class="text-xl font-semibold text-[var(--text-primary)]">Post not found</h1>
     <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
       The post you are looking for is not available in this starter dataset.
@@ -1802,6 +1802,7 @@ const submitAnswer = async () => {
                 class="aspect-[4/3] w-full bg-black object-cover"
                 controls
                 playsinline
+                preload="metadata"
               />
               <div class="flex items-center justify-between gap-2 px-3 py-2">
                 <p class="truncate text-xs font-semibold text-[var(--text-primary)]">{{ file.name }}</p>

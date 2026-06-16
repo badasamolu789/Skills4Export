@@ -117,6 +117,7 @@ const postImageSizeReferences = [
   '1200 x 627 (1.91:1)',
 ] as const
 const postContentInput = ref<HTMLTextAreaElement | null>(null)
+const searchQuery = ref('')
 const unreadCount = computed(() => notificationsStore.unreadCount || props.notifications.filter((item) => item.unread).length)
 const postFileKind = computed(() => {
   if (!postFile.value) {
@@ -169,6 +170,14 @@ const handleHeaderLinkAction = (link: HeaderLink) => {
   if (link.action) {
     openComposer(link.action)
   }
+}
+
+const submitSearch = async () => {
+  const query = searchQuery.value.trim()
+  await router.push({
+    path: '/mobile/search',
+    query: query ? { q: query } : {},
+  })
 }
 
 const handlePostFileChange = (event: Event) => {
@@ -644,7 +653,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-40 border-b border-(--border-soft) bg-(--header-bg)">
+  <header class="sticky top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]/95 backdrop-blur">
     <div class="mx-auto w-full max-w-[86rem] px-3 py-2 sm:px-4 lg:px-6 xl:px-8">
       <div class="relative flex items-center justify-between gap-2 md:hidden">
         <div class="flex min-w-0 items-center gap-2">
@@ -669,11 +678,11 @@ onMounted(() => {
         <div class="flex items-center gap-1.5">
           <RouterLink
             to="/mobile/notifications"
-            class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open notifications"
             title="Open notifications"
           >
-            <Bell class="h-4 w-4" />
+            <Bell class="h-[1.05rem] w-[1.05rem]" />
             <span
               v-if="unreadCount"
               class="absolute -right-0.5 -top-0.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white"
@@ -682,6 +691,7 @@ onMounted(() => {
             </span>
           </RouterLink>
 
+          <!--
           <RouterLink
             to="/mobile/search"
             class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--search-bg)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -690,16 +700,17 @@ onMounted(() => {
           >
             <Search class="h-4 w-4 text-[var(--text-tertiary)]" />
           </RouterLink>
+          -->
 
           <RouterLink
             to="/mobile/account"
-            class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open account menu"
             title="Open account menu"
           >
             <span
               v-if="props.isAuthenticated && !userImageSrc"
-              class="flex h-full w-full items-center justify-center bg-[var(--accent)] text-xs font-bold text-white"
+              class="flex h-full w-full items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white"
             >
               {{ userInitials }}
             </span>
@@ -707,17 +718,17 @@ onMounted(() => {
               v-else-if="props.isAuthenticated && userImageSrc"
               :src="userImageSrc"
               :alt="userName"
-              class="h-full w-full object-cover"
+              class="h-full w-full rounded-full object-cover"
             />
             <span
               v-else
-              class="flex h-full w-full items-center justify-center bg-[var(--surface-primary)] text-[var(--text-secondary)]"
+              class="flex h-full w-full items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-secondary)]"
             >
               <CircleUserRound class="h-5 w-5" />
             </span>
             <span
               v-if="props.isAuthenticated"
-              class="absolute bottom-1 right-1 h-3 w-3 rounded-full border-2 border-[var(--surface-primary)] bg-green-500"
+              class="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-[var(--surface-primary)] bg-green-500"
             />
           </RouterLink>
         </div>
@@ -833,23 +844,28 @@ onMounted(() => {
         </nav>
 
         <div class="hidden items-center gap-3 justify-self-end md:flex">
-          <label
+          <!--
+          <form
             class="flex h-9 w-[13rem] items-center gap-2 rounded-full bg-[var(--search-bg)] px-3 text-[var(--text-secondary)] lg:w-[15rem] xl:w-[17rem]"
+            role="search"
+            @submit.prevent="submitSearch"
           >
             <Search class="h-4 w-4 text-[var(--text-tertiary)]" />
             <input
+              v-model="searchQuery"
               type="search"
               :placeholder="searchPlaceholder"
               class="w-full bg-[var(--search-bg)] text-[0.82rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             />
-          </label>
+          </form>
+          -->
 
           <button
             type="button"
-            class="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             @click="openNotifications"
           >
-            <Bell class="h-4 w-4" />
+            <Bell class="h-[1.05rem] w-[1.05rem]" />
             <span
               v-if="unreadCount"
               class="absolute -right-0.5 -top-0.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white"
@@ -861,12 +877,12 @@ onMounted(() => {
           <div ref="userMenuRoot" class="relative">
             <button
               type="button"
-              class="relative inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
+              class="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition"
               @click="toggleUserMenu"
             >
               <span
                 v-if="props.isAuthenticated && !userImageSrc"
-                class="flex h-full w-full items-center justify-center bg-[var(--accent)] text-xs font-bold text-white"
+                class="flex h-full w-full items-center justify-center rounded-full bg-[var(--accent)] text-xs font-bold text-white"
               >
                 {{ userInitials }}
               </span>
@@ -874,11 +890,11 @@ onMounted(() => {
                 v-else-if="props.isAuthenticated && userImageSrc"
                 :src="userImageSrc"
                 :alt="userName"
-                class="h-full w-full object-cover"
+                class="h-full w-full rounded-full object-cover"
               />
               <span
                 v-else
-                class="flex h-full w-full items-center justify-center bg-[var(--surface-primary)] text-[var(--text-secondary)]"
+                class="flex h-full w-full items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-secondary)]"
               >
                 <CircleUserRound class="h-5 w-5" />
               </span>

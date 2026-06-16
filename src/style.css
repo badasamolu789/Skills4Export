@@ -220,6 +220,15 @@ textarea[data-state='success'],
     background-color 180ms ease;
 }
 
+.avatar-fit-cover {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  object-position: center;
+}
+
 .input-shell:focus-within,
 .input-shell[data-state='active'] {
   border-color: var(--accent) !important;

@@ -21,6 +21,7 @@ import {
   type FreelanceJobRecord,
   type FreelancerRecord,
 } from '@/services/freelancers'
+import { nigeriaStates } from '@/data/locations'
 import { useAuthStore } from '@/stores/auth'
 import { useFreelancersStore } from '@/stores/freelancers'
 import { slugify } from '@/utils/slugify'
@@ -611,12 +612,15 @@ const clearPassportUpload = () => {
           </label>
           <label class="flex h-11 items-center gap-2 rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-[var(--text-secondary)]">
             <MapPin class="h-4 w-4 text-[var(--text-tertiary)]" />
-            <input
+            <select
               v-model="locationQuery"
-              type="search"
-              placeholder="Located anywhere"
               class="min-w-0 flex-1 bg-transparent text-[0.86rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-            />
+            >
+              <option value="">All locations</option>
+              <option v-for="state in nigeriaStates" :key="state" :value="state">
+                {{ state }}
+              </option>
+            </select>
           </label>
           <select
             v-model="availabilityFilter"
@@ -926,7 +930,12 @@ const clearPassportUpload = () => {
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location:<span class="text-[var(--danger)]">*</span></span>
-          <input v-model="freelanceJobForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Abuja" />
+          <select v-model="freelanceJobForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+            <option value="">Select location</option>
+            <option v-for="state in nigeriaStates" :key="state" :value="state">
+              {{ state }}
+            </option>
+          </select>
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Type:<span class="text-[var(--danger)]">*</span></span>
@@ -995,7 +1004,7 @@ const clearPassportUpload = () => {
     max-width-class="sm:max-w-4xl"
   >
     <form class="space-y-4" @submit.prevent="submitFreelancerRegistration">
-      <div class="mx-auto max-w-3xl rounded-[0.95rem] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-soft)] sm:p-6">
+      <div class="space-y-4">
         <div class="space-y-4">
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Your Name</span>
@@ -1013,47 +1022,51 @@ const clearPassportUpload = () => {
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location</span>
             <select v-model="freelancerForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
               <option value="">Select location</option>
-              <option>Abuja</option>
-              <option>Lagos</option>
-              <option>Remote</option>
-              <option>Accra</option>
+              <option v-for="state in nigeriaStates" :key="state" :value="state">
+                {{ state }}
+              </option>
             </select>
           </label>
         </div>
 
-        <div class="mt-6 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-          <div class="hidden sm:block" />
-          <div class="flex h-44 w-44 items-center justify-center overflow-hidden justify-self-center rounded-full bg-[var(--surface-secondary)] text-xl font-bold text-[var(--text-secondary)]">
-            <img loading="lazy" decoding="async"
-              v-if="passportPreviewUrl"
-              :src="passportPreviewUrl"
-              alt="Passport preview"
-              class="h-full w-full object-cover object-center"
-            />
-            <span v-else>300 x 270</span>
-          </div>
-          <div class="justify-self-start">
-            <label class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]">
-              <Image class="h-4 w-4" />
-              Upload Passport
-              <input type="file" accept="image/*" class="sr-only" @change="handlePassportUpload" />
-            </label>
-            <p class="mt-2 text-[0.78rem] text-[var(--text-secondary)]">Maximum file size: 10 MB.</p>
-            <div v-if="passportFileName" class="mt-2 flex flex-wrap items-center gap-2">
-              <p class="inline-flex items-center gap-1 text-[0.76rem] font-medium text-[var(--accent-strong)]">
-                <Upload class="h-3.5 w-3.5" />
-                {{ passportFileName }}
+        <section class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+          <div class="grid gap-4 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center">
+            <div class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-sm font-semibold tracking-[0.04em] text-[var(--text-secondary)] sm:h-32 sm:w-32">
+              <img loading="lazy" decoding="async"
+                v-if="passportPreviewUrl"
+                :src="passportPreviewUrl"
+                alt="Passport preview"
+                class="h-full w-full object-cover object-center"
+              />
+              <span v-else>300 x 270</span>
+            </div>
+            <div class="min-w-0 space-y-3">
+              <div>
+                <p class="text-sm font-semibold text-[var(--text-primary)]">Passport photo</p>
+                <p class="mt-1 text-[0.78rem] leading-5 text-[var(--text-secondary)]">Maximum file size: 10 MB.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="inline-flex h-10 cursor-pointer items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]">
+                  <Image class="h-4 w-4" />
+                  Upload Passport
+                  <input type="file" accept="image/*" class="sr-only" @change="handlePassportUpload" />
+                </label>
+                <button
+                  v-if="passportFileName"
+                  type="button"
+                  class="inline-flex h-10 items-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-[0.78rem] font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
+                  @click="clearPassportUpload"
+                >
+                  Remove
+                </button>
+              </div>
+              <p v-if="passportFileName" class="flex min-w-0 items-center gap-1 text-[0.76rem] font-medium text-[var(--accent-strong)]">
+                <Upload class="h-3.5 w-3.5 shrink-0" />
+                <span class="truncate">{{ passportFileName }}</span>
               </p>
-              <button
-                type="button"
-                class="inline-flex h-8 items-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-3 text-[0.76rem] font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
-                @click="clearPassportUpload"
-              >
-                Remove
-              </button>
             </div>
           </div>
-        </div>
+        </section>
 
         <label class="mt-6 block">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">

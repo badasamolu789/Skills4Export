@@ -512,7 +512,7 @@ watch(
 
 <template>
   <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
-    <div v-if="loadError && !isLoadingProfile" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-elevated)]">
+    <div v-if="loadError && !isLoadingProfile" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 text-center shadow-[var(--shadow-elevated)] sm:p-8">
       <p class="text-lg font-semibold text-[var(--text-primary)]">Profile unavailable</p>
       <p class="mt-2 text-sm text-[var(--text-secondary)]">{{ loadError }}</p>
     </div>
@@ -679,11 +679,11 @@ watch(
             <Award class="h-5 w-5 text-[var(--accent-strong)]" />
           </div>
 
-          <div v-if="displaySkills.length > 0" class="flex flex-wrap gap-3">
+          <div v-if="displaySkills.length > 0" class="flex flex-wrap gap-2 sm:gap-3">
             <div
               v-for="skill in displaySkills"
               :key="skill.id || skill.name"
-              class="inline-flex max-w-full items-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 shadow-[var(--shadow-soft)]"
+              class="inline-flex max-w-full items-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 shadow-[var(--shadow-soft)] sm:px-4 sm:py-3"
             >
               <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">{{ skill.name }}</span>
             </div>
@@ -703,14 +703,16 @@ watch(
             <article
               v-for="portfolio in portfolios"
               :key="portfolio.id || portfolio.title"
-              class="flex h-full flex-col rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 transition hover:border-[var(--accent)]"
+              class="min-w-0 overflow-hidden flex h-full flex-col rounded-[1.1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 transition hover:border-[var(--accent)] sm:p-5"
             >
-              <div v-if="portfolio.pictures?.[0]" class="-mx-5 -mt-5 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)]">
+              <div v-if="portfolio.pictures?.[0]" class="-mx-4 -mt-4 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)] sm:-mx-5 sm:-mt-5">
                 <video
                   v-if="isVideoMediaUrl(portfolio.pictures[0])"
                   :src="portfolio.pictures[0]"
                   class="h-full w-full object-cover"
                   controls
+                  playsinline
+                  preload="metadata"
                 />
                 <img loading="lazy" decoding="async"
                   v-else
@@ -720,7 +722,7 @@ watch(
                 />
               </div>
               <p class="break-words text-lg font-semibold text-[var(--text-primary)]">{{ portfolio.title }}</p>
-              <p v-if="portfolio.description" class="mt-3 line-clamp-5 text-sm leading-6 text-[var(--text-secondary)]">{{ portfolio.description }}</p>
+              <p v-if="portfolio.description" class="mt-3 line-clamp-5 break-words text-sm leading-6 text-[var(--text-secondary)]">{{ portfolio.description }}</p>
               <a
                 v-if="portfolio.link"
                 :href="portfolio.link"
@@ -839,6 +841,8 @@ watch(
                   :src="item.url"
                   class="h-full w-full object-cover"
                   controls
+                  playsinline
+                  preload="metadata"
                 />
               </div>
               <div class="px-4 py-3">
@@ -856,7 +860,7 @@ watch(
             </article>
           </div>
 
-          <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-8 text-center">
+          <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 text-center sm:p-8">
             <ImageIcon class="mx-auto h-9 w-9 text-[var(--text-tertiary)]" />
             <p class="mt-3 text-base font-semibold text-[var(--text-primary)]">No profile uploads yet</p>
             <p class="mt-1 text-sm text-[var(--text-secondary)]">Uploaded images and videos will appear here.</p>

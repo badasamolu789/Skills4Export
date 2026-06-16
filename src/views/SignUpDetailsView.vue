@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { BookOpen, BriefcaseBusiness } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
-import { countryLocationOptions, getStatesForCountry } from '@/data/locations'
+import { NIGERIA_COUNTRY, nigeriaStates } from '@/data/locations'
 import { ApiError } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
@@ -21,7 +21,7 @@ const form = ref({
   is16OrAbove: authStore.signUpDraft.is16OrAbove,
   accountType: authStore.signUpDraft.accountType,
   state: authStore.signUpDraft.state,
-  country: authStore.signUpDraft.country,
+  country: NIGERIA_COUNTRY,
   jobTitle: authStore.signUpDraft.jobTitle,
   workplace: authStore.signUpDraft.workplace,
   university: authStore.signUpDraft.university,
@@ -49,22 +49,8 @@ if (!canAccessDetails.value) {
 }
 
 const isStudentAccount = computed(() => form.value.accountType === 'student')
-const countryOptions = computed(() => {
-  const options = countryLocationOptions.map((option) => option.name)
-  const currentCountry = form.value.country.trim()
-
-  return currentCountry && !options.includes(currentCountry)
-    ? [currentCountry, ...options]
-    : options
-})
-const stateOptions = computed(() => {
-  const options = getStatesForCountry(form.value.country)
-  const currentState = form.value.state.trim()
-
-  return currentState && !options.includes(currentState)
-    ? [currentState, ...options]
-    : options
-})
+const countryOptions = computed(() => [NIGERIA_COUNTRY])
+const stateOptions = computed(() => nigeriaStates)
 
 watch(
   () => form.value.country,
@@ -216,7 +202,7 @@ const submitDetails = async () => {
           </div>
 
           <div class="space-y-2">
-            <label class="text-sm font-semibold text-[var(--text-primary)]">State or region</label>
+            <label class="text-sm font-semibold text-[var(--text-primary)]">State</label>
             <select
               v-model="form.state"
               required
@@ -224,7 +210,7 @@ const submitDetails = async () => {
               class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">
-                {{ form.country ? 'Select state or region' : 'Select a country first' }}
+                {{ form.country ? 'Select state' : 'Select a country first' }}
               </option>
               <option v-for="state in stateOptions" :key="state" :value="state">
                 {{ state }}

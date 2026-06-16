@@ -1054,7 +1054,7 @@ watch(pagePostFile, (file, previousFile) => {
         <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div class="flex min-w-0 items-center gap-4">
             <span class="page-avatar">
-              <img loading="lazy" decoding="async" v-if="pageImage" :src="pageImage" :alt="page.name" class="h-full w-full object-contain object-center p-1.5" />
+              <img loading="lazy" decoding="async" v-if="pageImage" :src="pageImage" :alt="page.name" class="avatar-fit-cover" />
               <span v-else>{{ pageInitials }}</span>
             </span>
             <div class="min-w-0">
@@ -1220,6 +1220,8 @@ watch(pagePostFile, (file, previousFile) => {
                 :src="item.url"
                 class="h-full w-full object-cover"
                 controls
+                playsinline
+                preload="metadata"
               />
             </div>
             <h3 class="px-4 py-3 text-base font-semibold text-[var(--text-primary)]">{{ item.title }}</h3>
@@ -1542,7 +1544,7 @@ watch(pagePostFile, (file, previousFile) => {
             v-if="editAvatarPreviewUrl || pageImage"
             :src="editAvatarPreviewUrl || pageImage"
             alt="Page image preview"
-            class="h-full w-full object-contain object-center p-2"
+            class="avatar-fit-cover"
           />
           <span v-else>300 x 270</span>
         </div>
@@ -1637,6 +1639,7 @@ watch(pagePostFile, (file, previousFile) => {
               class="mx-auto aspect-[4/3] max-h-72 w-full rounded-[0.6rem] bg-black object-contain"
               controls
               playsinline
+              preload="metadata"
             />
           </span>
           <span class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1732,6 +1735,8 @@ watch(pagePostFile, (file, previousFile) => {
             :src="uploadPreviewUrl"
             class="max-h-56 w-full rounded-[0.55rem] object-cover"
             controls
+            playsinline
+            preload="metadata"
           />
           <span v-else class="inline-flex items-center gap-3 text-sm font-medium text-[var(--text-secondary)]">
             <UploadCloud class="h-5 w-5 text-[var(--accent-strong)]" />

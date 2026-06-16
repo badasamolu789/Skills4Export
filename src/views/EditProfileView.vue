@@ -4,6 +4,7 @@ import { Briefcase, Camera, Globe, Mail, MapPin, Phone, ShieldCheck, Sparkles, U
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
+import { nigeriaProfileLocationOptions } from '@/data/locations'
 import { ApiError } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { mediaService } from '@/services/media'
@@ -1738,7 +1739,12 @@ const addExperienceFromModal = async () => {
           </label>
           <label class="block">
             <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
-            <input v-model="form.location" type="text" class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]" />
+            <select v-model="form.location" class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]">
+              <option value="">Select location</option>
+              <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+                {{ location }}
+              </option>
+            </select>
           </label>
         </div>
         <div class="space-y-5">
@@ -1882,7 +1888,12 @@ const addExperienceFromModal = async () => {
             <label class="text-sm font-semibold text-[var(--text-primary)]">Location</label>
             <div class="relative">
               <MapPin class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-tertiary)]" />
-              <input v-model="form.location" type="text" class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+              <select v-model="form.location" class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] pl-11 pr-4 text-sm outline-none transition focus:border-[var(--accent)]">
+                <option value="">Select location</option>
+                <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+                  {{ location }}
+                </option>
+              </select>
             </div>
           </div>
 

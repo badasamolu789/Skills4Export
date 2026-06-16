@@ -35,6 +35,22 @@ export type PageRecord = {
   updatedAt: string
 }
 
+export type PageCategoryRecord = {
+  id: string
+  name: string
+  slug: string
+  description?: string | null
+  icon?: string | null
+  is_active?: number | null
+  rules?: Record<string, unknown> | null
+  max_pages_per_user?: number | null
+  requires_approval?: number | null
+  validation_rules?: Record<string, unknown> | null
+  total_pages?: number | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 export type CreatePageRequest = {
   type?: 'business' | 'student'
   pageType?: 'business' | 'student'
@@ -210,6 +226,7 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
 const PAGE_ROUTES = {
   pages: '/pages',
   myPages: '/me/pages',
+  pageCategories: '/page-categories',
   pagePrefill: '/pages/prefill',
   pageById: (id: string) => `/pages/${id}`,
   pageFollow: (id: string) => `/pages/${id}/follow`,
@@ -254,6 +271,30 @@ const readNumber = (...values: unknown[]) => {
   }
 
   return 0
+}
+
+const readOptionalNumber = (...values: unknown[]) => {
+  const value = values.find((item) => {
+    if (typeof item === 'number') {
+      return Number.isFinite(item)
+    }
+
+    if (typeof item === 'string' && item.trim()) {
+      return Number.isFinite(Number(item))
+    }
+
+    return false
+  })
+
+  if (typeof value === 'number') {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    return Number(value)
+  }
+
+  return null
 }
 
 const readMetadata = (...values: unknown[]) => {
@@ -342,12 +383,48 @@ const normalizePaginator = (response: PaginatorPayload<PageRecord>): PaginatorPa
   data: Array.isArray(response.data) ? response.data.map(normalizePage) : [],
 })
 
+const normalizeCategory = (category: unknown): PageCategoryRecord => {
+  const record = asRecord(category)
+
+  return {
+    ...(record as PageCategoryRecord),
+    id: readString(record.id, record.uuid, record.categoryId, record.category_id),
+    name: readString(record.name, record.title),
+    slug: readString(record.slug, record.name).toLowerCase(),
+    description: readNullableString(record.description),
+    icon: readNullableString(record.icon),
+    is_active: readNumber(record.is_active, record.isActive, 1),
+    rules: readMetadata(record.rules),
+    max_pages_per_user: readOptionalNumber(record.max_pages_per_user, record.maxPagesPerUser),
+    requires_approval: readOptionalNumber(record.requires_approval, record.requiresApproval),
+    validation_rules: readMetadata(record.validation_rules, record.validationRules),
+    total_pages: readOptionalNumber(record.total_pages, record.totalPages),
+    created_at: readNullableString(record.created_at, record.createdAt),
+    updated_at: readNullableString(record.updated_at, record.updatedAt),
+  }
+}
+
+const normalizeCategoryPaginator = (
+  response: PaginatorPayload<PageCategoryRecord>,
+): PaginatorPayload<PageCategoryRecord> => ({
+  ...response,
+  data: Array.isArray(response.data) ? response.data.map(normalizeCategory) : [],
+})
+
 const normalizeSuccess = (response: ApiSuccessResponse<PageRecord>): ApiSuccessResponse<PageRecord> => ({
   ...response,
   data: normalizePage(response.data),
 })
 
 export const pagesService = {
+  async listPageCategories(token?: string | null) {
+    const response = await api.get<PaginatorPayload<PageCategoryRecord>>(PAGE_ROUTES.pageCategories, {
+      token,
+      suppressErrorModal: true,
+    })
+    return normalizeCategoryPaginator(response)
+  },
+
   getPagePrefill(type: 'business' | 'student', token?: string | null) {
     return api.get<ApiSuccessResponse<PagePrefillRecord>>(
       withQuery(PAGE_ROUTES.pagePrefill, {

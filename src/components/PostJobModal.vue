@@ -4,6 +4,7 @@ import { BriefcaseBusiness, Mail, MapPin, Wallet, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import RichTextEditor from '@/components/RichTextEditor.vue'
+import { nigeriaStates } from '@/data/locations'
 import type { JobRecord } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
 import { useJobsStore } from '@/stores/jobs'
@@ -303,12 +304,15 @@ watch(
                 <MapPin class="h-4 w-4 text-[var(--accent-strong)]" />
                 <span>Location:*</span>
               </span>
-              <input
+              <select
                 v-model="form.location"
-                type="text"
-                placeholder="Lagos, Nigeria"
                 :class="inputClass"
-              />
+              >
+                <option value="">Select location</option>
+                <option v-for="state in nigeriaStates" :key="state" :value="state">
+                  {{ state }}
+                </option>
+              </select>
             </label>
 
             <label class="space-y-2">

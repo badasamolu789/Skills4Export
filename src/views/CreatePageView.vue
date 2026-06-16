@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import {
@@ -14,7 +14,7 @@ import {
 import { ApiError } from '@/lib/api'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
-import { pagesService, type PagePrefillRecord } from '@/services/pages'
+import { pagesService, type PageCategoryRecord, type PagePrefillRecord } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore, type PageCategory } from '@/stores/pages'
 import { slugify } from '@/utils/slugify'
@@ -27,9 +27,13 @@ type PageTypeOption = {
   label: string
   value: PageCategory
   icon: unknown
+  category?: PageCategoryRecord | null
+  description?: string
+  isLimitReached?: boolean
+  limitText?: string
 }
 
-const pageTypes: PageTypeOption[] = [
+const fallbackPageTypes: PageTypeOption[] = [
   {
     label: 'Create Business page',
     value: 'business',
@@ -43,6 +47,10 @@ const pageTypes: PageTypeOption[] = [
 ]
 
 const selectedPageType = ref<PageCategory | null>(null)
+const selectedPageCategory = ref<PageCategoryRecord | null>(null)
+const pageCategories = ref<PageCategoryRecord[]>([])
+const isLoadingPageCategories = ref(false)
+const pageCategoriesError = ref('')
 const agreedToTerms = ref(false)
 const isSubmitting = ref(false)
 const isLoadingPrefill = ref(false)
@@ -73,15 +81,47 @@ const studentForm = ref({
 })
 
 const currentTitle = computed(() => {
-  if (selectedPageType.value === 'business') {
-    return 'Create Business Page'
+  if (selectedPageCategory.value?.name) {
+    return `Create ${selectedPageCategory.value.name} Page`
   }
 
-  if (selectedPageType.value === 'student') {
-    return 'Students Page Form'
+  if (selectedPageType.value === 'business') return 'Create Business Page'
+  if (selectedPageType.value === 'student') return 'Students Page Form'
+  return 'Choose a Page Category'
+})
+
+const categoryToPageType = (category?: PageCategoryRecord | null): PageCategory => {
+  const signal = `${category?.slug || ''} ${category?.name || ''}`.toLowerCase()
+  return signal.includes('student') ? 'student' : 'business'
+}
+
+const getCategoryIcon = (type: PageCategory) => type === 'student' ? GraduationCap : Building2
+
+const pageTypes = computed<PageTypeOption[]>(() => {
+  const activeCategories = pageCategories.value.filter((category) => category.is_active !== 0)
+
+  if (!activeCategories.length) {
+    return fallbackPageTypes
   }
 
-  return 'Choose a Page Type'
+  return activeCategories.map((category) => {
+    const value = categoryToPageType(category)
+    const maxPages = category.max_pages_per_user
+    const totalPages = category.total_pages ?? 0
+    const isLimitReached = typeof maxPages === 'number' && maxPages > 0 && totalPages >= maxPages
+
+    return {
+      label: `Create ${category.name} page`,
+      value,
+      icon: getCategoryIcon(value),
+      category,
+      description: category.description || undefined,
+      isLimitReached,
+      limitText: typeof maxPages === 'number' && maxPages > 0
+        ? `${totalPages}/${maxPages} created`
+        : undefined,
+    }
+  })
 })
 
 const currentDescription = computed(() =>
@@ -152,6 +192,7 @@ const resetUpload = () => {
 
 const goBackToOptions = () => {
   selectedPageType.value = null
+  selectedPageCategory.value = null
   agreedToTerms.value = false
   resetUpload()
 }
@@ -262,11 +303,37 @@ const loadPagePrefill = async (type: PageCategory) => {
   }
 }
 
-const selectPageType = (type: PageCategory) => {
-  selectedPageType.value = type
+const selectPageType = (item: PageTypeOption) => {
+  if (item.isLimitReached) {
+    toast.error('Page limit reached', {
+      description: `You have reached the limit for ${item.category?.name || item.value} pages.`,
+    })
+    return
+  }
+
+  selectedPageType.value = item.value
+  selectedPageCategory.value = item.category || null
   agreedToTerms.value = false
   resetUpload()
-  void loadPagePrefill(type)
+  void loadPagePrefill(item.value)
+}
+
+const loadPageCategories = async () => {
+  if (!authStore.authToken) {
+    return
+  }
+
+  isLoadingPageCategories.value = true
+  pageCategoriesError.value = ''
+
+  try {
+    const response = await pagesService.listPageCategories(authStore.authToken)
+    pageCategories.value = response.data
+  } catch {
+    pageCategoriesError.value = 'Page categories could not load. Showing default options.'
+  } finally {
+    isLoadingPageCategories.value = false
+  }
 }
 
 const handleAvatarFileChange = (event: Event) => {
@@ -408,6 +475,7 @@ const submitPage = async () => {
     try {
       page = await pagesStore.createPageFromApi({
         type: selectedPageType.value,
+        categoryId: selectedPageCategory.value?.id || undefined,
         name,
         slug,
         description,
@@ -486,6 +554,10 @@ watch(selectedPageType, () => {
 onBeforeUnmount(() => {
   if (avatarPreviewUrl.value) URL.revokeObjectURL(avatarPreviewUrl.value)
 })
+
+onMounted(() => {
+  void loadPageCategories()
+})
 </script>
 
 <template>
@@ -499,22 +571,40 @@ onBeforeUnmount(() => {
             <span class="font-medium text-[var(--accent-strong)]">Create page options</span>
           </div>
           <h1 class="text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-[var(--text-primary)] sm:text-[2.7rem]">
-            Choose a Page Type
+            Choose a Page Category
           </h1>
+          <div
+            v-if="isLoadingPageCategories"
+            class="mt-4 inline-flex items-center gap-2 text-sm text-[var(--text-secondary)]"
+            aria-live="polite"
+          >
+            <Loader2 class="h-4 w-4 animate-spin" />
+            Loading page categories...
+          </div>
+          <p v-else-if="pageCategoriesError" class="mt-4 text-sm text-[var(--text-secondary)]">
+            {{ pageCategoriesError }}
+          </p>
         </div>
 
         <div class="grid gap-5 md:grid-cols-2">
           <button
             v-for="item in pageTypes"
-            :key="item.value"
+            :key="item.category?.id || item.value"
             type="button"
-            class="group flex min-h-[19rem] flex-col items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-elevated)] transition hover:-translate-y-0.5 hover:border-[color:var(--accent-soft)]"
-            @click="selectPageType(item.value)"
+            :disabled="item.isLimitReached"
+            class="group flex min-h-[19rem] flex-col items-center justify-center rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-elevated)] transition hover:-translate-y-0.5 hover:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            @click="selectPageType(item)"
           >
             <span class="flex h-20 w-20 items-center justify-center rounded-[1rem] bg-[var(--surface-secondary)] text-[var(--text-primary)] transition group-hover:text-[var(--accent-strong)]">
               <component :is="item.icon" class="h-11 w-11" />
             </span>
             <span class="mt-7 text-xl font-semibold text-[var(--text-primary)]">{{ item.label }}</span>
+            <span v-if="item.description" class="mt-3 max-w-sm text-sm leading-6 text-[var(--text-secondary)]">
+              {{ item.description }}
+            </span>
+            <span v-if="item.limitText" class="mt-4 rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]">
+              {{ item.limitText }}
+            </span>
           </button>
         </div>
       </div>
@@ -544,7 +634,7 @@ onBeforeUnmount(() => {
             Create page options
           </button>
           <ChevronRight class="h-4 w-4" />
-          <span>{{ selectedPageType === 'business' ? 'Create business page' : 'students page form' }}</span>
+          <span>{{ selectedPageCategory?.name || (selectedPageType === 'business' ? 'Create business page' : 'students page form') }}</span>
         </div>
       </div>
 
@@ -644,7 +734,7 @@ onBeforeUnmount(() => {
 
         <div class="mt-6 grid gap-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-center">
           <div class="flex h-36 w-36 items-center justify-center overflow-hidden rounded-full border border-[color:var(--border-soft)] bg-white text-xl font-semibold tracking-[0.08em] text-[var(--text-secondary)]">
-            <img v-if="currentAvatarUrl" loading="lazy" decoding="async" :src="currentAvatarUrl" alt="Page image preview" class="h-full w-full object-contain object-center p-2" />
+            <img v-if="currentAvatarUrl" loading="lazy" decoding="async" :src="currentAvatarUrl" alt="Page image preview" class="avatar-fit-cover" />
             <span v-else>300 x 270</span>
           </div>
 

@@ -88,7 +88,7 @@ const footerLinks = [
   { label: 'Terms', to: '/terms-and-conditions' },
   { label: 'Privacy', to: '/privacy-policy' },
   { label: 'Cookie Policy', to: '/cookie-policy' },
-  { label: 'Community Rules', to: '/' },
+  { label: 'Community Rules', to: '/community-regulations' },
 ]
 
 const pagesStore = usePagesStore()
@@ -539,7 +539,7 @@ watch(isFreelancersRoute, (isActive) => {
                     v-if="page.avatar"
                     :src="page.avatar"
                     :alt="page.name"
-                    class="block h-full w-full rounded-full object-contain object-center p-1"
+                    class="avatar-fit-cover"
                     loading="lazy"
                     decoding="async"
                   />

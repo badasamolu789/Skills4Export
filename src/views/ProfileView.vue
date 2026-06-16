@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, Image as ImageIcon, MoreHorizontal, Rocket, Sparkles, Trash2, UploadCloud, UserCheck, UserPlus, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import { nigeriaProfileLocationOptions } from '@/data/locations'
 import { ApiError } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { normalizeUserSkills, usersService } from '@/services/users'
@@ -1650,11 +1651,11 @@ const editModalTitle = computed(() => {
             <div v-for="item in 4" :key="item" class="h-11 w-32 rounded-full bg-[var(--surface-muted)]" />
           </div>
 
-          <div v-else-if="skills.length > 0" class="flex flex-wrap gap-3">
+          <div v-else-if="skills.length > 0" class="flex flex-wrap gap-2 sm:gap-3">
             <div
               v-for="skill in skills"
               :key="skill.id"
-              class="inline-flex max-w-full items-center gap-3 rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 shadow-[var(--shadow-soft)]"
+              class="inline-flex max-w-full items-center gap-2 rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 shadow-[var(--shadow-soft)] sm:gap-3 sm:px-4 sm:py-3"
             >
               <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
                 {{ skill.name }}
@@ -1662,11 +1663,11 @@ const editModalTitle = computed(() => {
               <div class="relative" data-profile-action-menu>
                 <button
                   type="button"
-                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)]"
+                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)] sm:h-7 sm:w-7"
                   @click.stop="toggleActionMenu('skill', skill.id)"
                   aria-label="Open skill actions"
                 >
-                  <MoreHorizontal class="h-4 w-4" />
+                  <MoreHorizontal class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
 
                 <div
@@ -1736,14 +1737,16 @@ const editModalTitle = computed(() => {
             <article
               v-for="portfolio in portfolios"
               :key="portfolio.id"
-              class="flex h-full flex-col rounded-[1.1rem] bg-[var(--surface-secondary)] p-5 border border-[color:var(--border-soft)] transition hover:border-[var(--accent)]"
+              class="min-w-0 overflow-hidden flex h-full flex-col rounded-[1.1rem] bg-[var(--surface-secondary)] p-4 border border-[color:var(--border-soft)] transition hover:border-[var(--accent)] sm:p-5"
             >
-              <div v-if="portfolio.pictures?.[0]" class="-mx-5 -mt-5 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)]">
+              <div v-if="portfolio.pictures?.[0]" class="-mx-4 -mt-4 mb-4 aspect-video overflow-hidden rounded-t-[1.1rem] bg-[var(--surface-muted)] sm:-mx-5 sm:-mt-5">
                 <video
                   v-if="isVideoMediaUrl(portfolio.pictures[0])"
                   :src="portfolio.pictures[0]"
                   class="h-full w-full object-cover"
                   controls
+                  playsinline
+                  preload="metadata"
                 />
                 <img loading="lazy" decoding="async"
                   v-else
@@ -1755,7 +1758,7 @@ const editModalTitle = computed(() => {
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
                   <p class="text-lg font-semibold text-[var(--text-primary)] break-words">{{ portfolio.title }}</p>
-                  <p v-if="portfolio.description" class="mt-3 line-clamp-5 text-sm leading-6 text-[var(--text-secondary)]">
+                  <p v-if="portfolio.description" class="mt-3 line-clamp-5 break-words text-sm leading-6 text-[var(--text-secondary)]">
                     {{ portfolio.description }}
                   </p>
                   <a
@@ -2086,6 +2089,8 @@ const editModalTitle = computed(() => {
                   :src="item.url"
                   class="h-full w-full object-cover"
                   controls
+                  playsinline
+                  preload="metadata"
                 />
               </div>
               <div class="px-4 py-3">
@@ -2103,7 +2108,7 @@ const editModalTitle = computed(() => {
             </article>
           </div>
 
-          <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-8 text-center">
+          <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 text-center sm:p-8">
             <ImageIcon class="mx-auto h-9 w-9 text-[var(--text-tertiary)]" />
             <p class="mt-3 text-base font-semibold text-[var(--text-primary)]">No profile uploads yet</p>
             <p class="mt-1 text-sm text-[var(--text-secondary)]">Your uploaded images and videos will appear here.</p>
@@ -2164,6 +2169,8 @@ const editModalTitle = computed(() => {
             :src="uploadPreviewUrl"
             class="max-h-56 w-full rounded-[0.55rem] object-cover"
             controls
+            playsinline
+            preload="metadata"
           />
           <span v-else class="inline-flex items-center gap-3 text-sm font-medium text-[var(--text-secondary)]">
             <UploadCloud class="h-4 w-4" />
@@ -2225,11 +2232,15 @@ const editModalTitle = computed(() => {
 
         <label class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
-          <input
+          <select
             v-model="profileDetailsForm.location"
-            type="text"
             class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
-          />
+          >
+            <option value="">Select location</option>
+            <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+              {{ location }}
+            </option>
+          </select>
         </label>
 
         <label class="block space-y-2">
