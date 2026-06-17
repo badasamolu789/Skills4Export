@@ -31,6 +31,7 @@ import { questionsService, type QuestionAnswerRecord } from '@/services/question
 import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
+import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
@@ -832,7 +833,7 @@ const loadShareCommunities = async () => {
 
   try {
     const response = await communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken)
-    shareCommunities.value = response.data ?? []
+    shareCommunities.value = (response.data ?? []).filter((community) => !isPrivateCommunity(community))
     hasLoadedShareCommunities.value = true
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to load communities.'
@@ -848,6 +849,16 @@ const submitShare = async () => {
   }
 
   if (shareCommunity.value) {
+    const selectedCommunity = shareCommunities.value.find((community) => community.id === shareCommunity.value)
+
+    if (!selectedCommunity || isPrivateCommunity(selectedCommunity)) {
+      toast.error('Choose a public community.', {
+        description: 'Private communities cannot receive shared posts.',
+      })
+      shareCommunity.value = ''
+      return
+    }
+
     if (!apiPostId.value) {
       toast.error('Share needs a post ID', {
         description: 'Only API posts can be shared into a community.',

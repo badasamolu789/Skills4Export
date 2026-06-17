@@ -31,6 +31,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
+import { isPrivateCommunity } from '@/utils/communityFilters'
 import { mapApiPostToFeedPost } from '@/utils/postMapper'
 import { mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
@@ -144,9 +145,27 @@ const postFileRecommendation = computed(() => {
 const communityOptions = computed(() =>
   communities.value
     .filter((community) => community.id && community.name)
+    .filter((community) => !isPrivateCommunity(community))
     .filter((community, index, list) => list.findIndex((item) => item.id === community.id) === index)
     .sort((first, second) => first.name.localeCompare(second.name)),
 )
+
+const getSelectedCommunity = () =>
+  postAudienceId.value ? communities.value.find((community) => community.id === postAudienceId.value) ?? null : null
+
+const selectedCommunityAllowsActions = () => {
+  const community = getSelectedCommunity()
+
+  if (!community || !isPrivateCommunity(community)) {
+    return true
+  }
+
+  toast.error('Choose a public community.', {
+    description: 'Private communities cannot receive posts or questions.',
+  })
+  postAudienceId.value = ''
+  return false
+}
 
 const iconByLink = {
   Home: House,
@@ -411,6 +430,10 @@ const submitQuestion = async () => {
     return
   }
 
+  if (!selectedCommunityAllowsActions()) {
+    return
+  }
+
   if (isSubmittingQuestion.value) {
     return
   }
@@ -516,6 +539,14 @@ const submitPost = async () => {
     toast.error('Sign in required', {
       description: 'Please sign in again before creating posts.',
     })
+    return
+  }
+
+  if (!selectedCommunityAllowsActions()) {
+    return
+  }
+
+  if (isSubmittingPost.value) {
     return
   }
 
