@@ -1,6 +1,6 @@
 import { api } from '@/lib/api'
 import type { ApiRequestOptions } from '@/lib/api'
-import type { ApiSuccessResponse, PaginatorPayload, PostMediaRecord } from '@/services/posts'
+import type { ApiSuccessResponse, PaginatorPayload, PostMediaRecord, ToggleReactionResponse } from '@/services/posts'
 
 export type QuestionAnswerRecord = {
   id: string
@@ -270,7 +270,7 @@ export const questionsService = {
   },
 
   toggleQuestionReaction(questionId: string, payload: { userId?: string; type?: 'like' | 'love' | 'clap' | 'dislike' }, token?: string | null) {
-    return api.post<ApiSuccessResponse<{ result: object; count: number }>>(
+    return api.post<ToggleReactionResponse>(
       QUESTION_ROUTES.questionReactions(questionId),
       payload,
       { token },

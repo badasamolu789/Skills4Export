@@ -12,7 +12,6 @@ import {
   Loader2,
 } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
-import RichTextEditor from '@/components/RichTextEditor.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
 import { pagesService, type PageCategoryRecord, type PagePrefillRecord } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
@@ -32,19 +31,6 @@ type PageTypeOption = {
   isLimitReached?: boolean
   limitText?: string
 }
-
-const fallbackPageTypes: PageTypeOption[] = [
-  {
-    label: 'Create Business page',
-    value: 'business',
-    icon: Building2,
-  },
-  {
-    label: 'Create Student page',
-    value: 'student',
-    icon: GraduationCap,
-  },
-]
 
 const selectedPageType = ref<PageCategory | null>(null)
 const selectedPageCategory = ref<PageCategoryRecord | null>(null)
@@ -99,10 +85,6 @@ const getCategoryIcon = (type: PageCategory) => type === 'student' ? GraduationC
 
 const pageTypes = computed<PageTypeOption[]>(() => {
   const activeCategories = pageCategories.value.filter((category) => category.is_active !== 0)
-
-  if (!activeCategories.length) {
-    return fallbackPageTypes
-  }
 
   return activeCategories.map((category) => {
     const value = categoryToPageType(category)
@@ -164,9 +146,15 @@ const normalizeWebsiteUrl = (value: string) => {
     return ''
   }
 
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`
+  const startsWithAllowedPrefix = /^https?:\/\//i.test(trimmed) || /^www\./i.test(trimmed)
+
+  if (!startsWithAllowedPrefix) {
+    throw new Error('Invalid website URL')
+  }
+
+  const candidate = /^www\./i.test(trimmed)
+    ? `https://${trimmed}`
+    : trimmed
   const parsed = new URL(candidate)
 
   if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname.includes('.')) {
@@ -405,7 +393,7 @@ const validateCurrentForm = () => {
       try {
         businessForm.value.website = normalizeWebsiteUrl(businessForm.value.website)
       } catch {
-        toast.error('Enter a valid website address.')
+        toast.error('Website must start with http://, https:// or www.')
         return false
       }
     }
@@ -584,6 +572,9 @@ onMounted(() => {
           <p v-else-if="pageCategoriesError" class="mt-4 text-sm text-[var(--text-secondary)]">
             {{ pageCategoriesError }}
           </p>
+          <p v-else-if="!pageTypes.length" class="mt-4 text-sm text-[var(--text-secondary)]">
+            No page categories are available yet.
+          </p>
         </div>
 
         <div class="grid gap-5 md:grid-cols-2">
@@ -676,8 +667,9 @@ onMounted(() => {
                 inputmode="url"
                 autocomplete="url"
                 class="s4e-page-input"
-                placeholder="https://www.example.com"
+                placeholder="Start with http://, https:// or www"
               />
+              <span class="block text-xs text-[var(--text-secondary)]">Start with http://, https:// or www</span>
             </label>
 
             <label class="space-y-2">
@@ -756,14 +748,16 @@ onMounted(() => {
           <div class="mb-2 text-sm font-semibold text-[var(--text-primary)]">
             {{ selectedPageType === 'business' ? 'Describe your business/organisation' : 'About - Describe your self' }}<span v-if="selectedPageType === 'student'" class="text-[var(--danger)]">*</span>
           </div>
-          <RichTextEditor
+          <textarea
             v-if="selectedPageType === 'business'"
             v-model="businessForm.description"
+            class="min-h-40 w-full resize-y rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-secondary)] focus:border-[color:var(--accent-soft)]"
             placeholder="Describe the business, services, audience, and what people should expect."
           />
-          <RichTextEditor
+          <textarea
             v-else
             v-model="studentForm.about"
+            class="min-h-40 w-full resize-y rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-secondary)] focus:border-[color:var(--accent-soft)]"
             placeholder="Describe your academic achievements, skills, interests, and experience."
           />
         </div>

@@ -54,8 +54,8 @@ const emit = defineEmits<{
 }>()
 
 const trendingLinks = [
-  { label: 'Popular', to: '/feed' },
   { label: 'Latest', to: '/feed' },
+  { label: 'Popular', to: '/feed' },
 ]
 
 const menuGroups: SidebarMenuGroup[] = [
@@ -211,15 +211,19 @@ const isRouteActive = (target: string) => {
 }
 
 const isGroupActive = (group: SidebarMenuGroup) => {
+  if (group.to === '/communities') {
+    return route.path === '/communities'
+  }
+
   return group.to ? isRouteActive(group.to) : false
 }
 
 const isFeedLinkActive = (label: string) => {
   if (label === 'Latest') {
-    return route.path === '/feed' && getCurrentQueryValue('feed') === 'latest'
+    return route.path === '/feed' && getCurrentQueryValue('feed') !== 'popular'
   }
 
-  return route.path === '/feed' && (getCurrentQueryValue('feed') === 'popular' || getCurrentQueryValue('feed') !== 'latest')
+  return route.path === '/feed' && getCurrentQueryValue('feed') === 'popular'
 }
 
 const getTopLevelLinkClasses = (isActive: boolean) =>

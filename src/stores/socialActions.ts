@@ -10,6 +10,7 @@ import type {
 } from '@/services/questions'
 import { socialActionsApi } from '@/services/socialActionsApi'
 import { useAuthStore } from '@/stores/auth'
+import { mapCompactFeedItemToFeedPost } from '@/utils/feedMapper'
 
 const getFeedId = (item: FeedPost) => item.apiId || item.slug
 
@@ -253,8 +254,22 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
       const response = type === 'question'
         ? await socialActionsApi.toggleQuestionReaction(contentId, payload, authStore.authToken)
         : await socialActionsApi.togglePostReaction(contentId, payload, authStore.authToken)
-      applyState(!wasScored, response.data.count)
-      return response.data.count
+      const nextScored =
+        response.data.is_liked ??
+        response.data.isLiked ??
+        !wasScored
+      const nextScore = response.data.score ?? response.data.count
+      applyState(Boolean(nextScored), nextScore)
+
+      const refreshedItem = response.data.item || response.data.post
+
+      if (refreshedItem && typeof refreshedItem === 'object') {
+        upsertFeedItem(mapCompactFeedItemToFeedPost(refreshedItem as Parameters<typeof mapCompactFeedItemToFeedPost>[0]), {
+          prepend: false,
+        })
+      }
+
+      return nextScore
     } catch (error) {
       applyState(wasScored, previousScore)
       if (contentAuthorId) {

@@ -201,6 +201,7 @@ export type ReportPostRequest = {
 
 export type SharePostRequest = {
   communityId: string
+  community_id?: string
   comment?: string
 }
 
@@ -221,6 +222,11 @@ export type AttachPostMediaResponse = ApiSuccessResponse<{
 export type ToggleReactionResponse = ApiSuccessResponse<{
   result: object
   count: number
+  is_liked?: boolean
+  isLiked?: boolean
+  score?: number
+  item?: unknown
+  post?: unknown
 }>
 
 export type ToggleSaveResponse = ApiSuccessResponse<{

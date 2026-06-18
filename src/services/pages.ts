@@ -227,6 +227,7 @@ const PAGE_ROUTES = {
   pages: '/pages',
   myPages: '/me/pages',
   pageCategories: '/page-categories',
+  allPageCategories: '/page-categories/all',
   pagePrefill: '/pages/prefill',
   pageById: (id: string) => `/pages/${id}`,
   pageFollow: (id: string) => `/pages/${id}/follow`,
@@ -419,6 +420,14 @@ const normalizeSuccess = (response: ApiSuccessResponse<PageRecord>): ApiSuccessR
 export const pagesService = {
   async listPageCategories(token?: string | null) {
     const response = await api.get<PaginatorPayload<PageCategoryRecord>>(PAGE_ROUTES.pageCategories, {
+      token,
+      suppressErrorModal: true,
+    })
+    return normalizeCategoryPaginator(response)
+  },
+
+  async listAllPageCategories(token?: string | null) {
+    const response = await api.get<PaginatorPayload<PageCategoryRecord>>(PAGE_ROUTES.allPageCategories, {
       token,
       suppressErrorModal: true,
     })

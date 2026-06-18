@@ -8,6 +8,7 @@ import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { feedsService } from '@/services/feeds'
 import { pagesService, type PageRecord } from '@/services/pages'
 import { postsService, type PostMediaRecord, type PostRecord } from '@/services/posts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
@@ -15,6 +16,7 @@ import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { mapWithConcurrency } from '@/utils/async'
+import { mapCompactFeedItemToFeedPost } from '@/utils/feedMapper'
 import { getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
@@ -69,7 +71,7 @@ const currentUser = useCurrentUserIdentity()
 const route = useRoute()
 const activeFeedMode = computed(() => {
   const value = route.query.feed
-  return (Array.isArray(value) ? value[0] : value) === 'latest' ? 'latest' : 'popular'
+  return (Array.isArray(value) ? value[0] : value) === 'popular' ? 'popular' : 'latest'
 })
 const activeFeedSort = computed(() => (activeFeedMode.value === 'latest' ? '-createdAt' : '-score'))
 
@@ -483,6 +485,53 @@ const loadFeed = async (options: {
           ),
         ])
       : null
+
+    try {
+      const compactFeedResponse = await feedsService.listCompactFeed(
+        {
+          mode: activeFeedMode.value,
+          page: requestedPage,
+          per_page: FEED_PAGE_SIZE,
+        },
+        authStore.authToken,
+      )
+
+      if (requestVersion !== feedRequestVersion) {
+        return
+      }
+
+      currentFeedPage.value = compactFeedResponse.current_page || requestedPage
+      lastFeedPage.value = compactFeedResponse.last_page || 1
+      publishFeed(
+        (compactFeedResponse.data ?? []).map(mapCompactFeedItemToFeedPost),
+        Boolean(options.append),
+      )
+      isLoadingFeed.value = false
+
+      if (supportingDataPromise) {
+        void (async () => {
+          const [communitiesResult, advertsResult] = await supportingDataPromise
+
+          if (requestVersion !== feedRequestVersion) {
+            return
+          }
+
+          if (communitiesResult.status === 'fulfilled') {
+            communitiesById.value = new Map(
+              (communitiesResult.value.data ?? []).map((community) => [community.id, community]),
+            )
+          }
+          adverts.value = advertsResult.status === 'fulfilled' ? advertsResult.value.data ?? [] : []
+        })()
+      }
+
+      return
+    } catch {
+      if (requestVersion !== feedRequestVersion) {
+        return
+      }
+    }
+
     const [postsResult, questionsResult] = await Promise.allSettled([
       postsService.listPosts(
         { page: requestedPage, per_page: FEED_PAGE_SIZE, sort: feedSort },
