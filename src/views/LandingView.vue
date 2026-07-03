@@ -1,72 +1,59 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { Sun, Moon } from 'lucide-vue-next'
+import { useTheme } from '@/composables/useTheme'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { MessageSquareMore, Users, Trophy, Laugh, Quote } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
-import { useAuthStore } from '@/stores/auth'
+import combinedScreenImage from '@/assets/combined_screen.png'
 import { authService, extractAuthSession } from '@/services/auth'
-import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
+import { useAuthStore } from '@/stores/auth'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
+import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const isRedirectingToGoogle = ref(false)
+
+const { resolvedTheme, setTheme } = useTheme()
+
+const toggleTheme = () => {
+  const next = resolvedTheme.value === 'dark' ? 'light' : 'dark'
+  setTheme(next)
+}
 
 if (authStore.isAuthenticated) {
   const redirect = (route.query.redirect as string) || '/feed'
   router.push(redirect)
 }
 
-const featureGroups = [
-  {
-    icon: MessageSquareMore,
-    title: 'Participate',
-    description:
-      'Share posts, showcase your skills, ask better questions, and join conversations that move your work forward.',
-  },
-  {
-    icon: Users,
-    title: 'Explore Communities',
-    description:
-      'Find communities that match your interests and use them to navigate people, discussions, and opportunities.',
-  },
-  {
-    icon: Trophy,
-    title: 'Contest',
-    description:
-      'Join contests across sub-communities and compete for visibility, recognition, and practical rewards.',
-  },
-  {
-    icon: Laugh,
-    title: 'Jokes Community',
-    description:
-      'Take a breather, read light posts, and enjoy the social side of the platform without losing the sense of community.',
-  },
+const navLinks = [
+  { label: 'Communities', to: '/communities' },
+  { label: 'Jokes', to: '/jokes' },
+  { label: 'Headlines', to: '/headlines' },
+  { label: 'Questions', to: '/answers' },
+  { label: 'Freelancers', to: '/freelancers' },
+  { label: 'Contests', to: '/contest' },
+  { label: 'Posts', to: '/post' },
 ]
 
 const footerLinks = [
-  { label: 'Privacy Policy', to: '/privacy-policy' },
-  { label: 'Terms', to: '/terms-and-conditions' },
-  { label: 'About', to: '' },
-  { label: 'Careers', to: '' },
-  { label: 'Advertising', to: '' },
-  { label: 'Contact', to: '' },
-  { label: 'Cookie Policy', to: '/cookie-policy' },
+  { label: 'Showcase Skills', to: '/freelancers', requiresAuth: true },
+  { label: 'Career Pathways', to: '/communities', requiresAuth: true },
+  { label: 'Student Page', to: { path: '/pages/create', query: { type: 'student' } }, requiresAuth: true },
+  { label: 'Art&Character', to: '/communities', requiresAuth: true },
+  { label: 'Jokes', to: '/jokes', requiresAuth: true },
+  { label: 'Headlines', to: '/headlines', requiresAuth: true },
+  { label: 'Product Page', to: { path: '/pages/create', query: { type: 'business' } }, requiresAuth: true },
+  { label: 'Privacy Policy', to: '/privacy-policy', requiresAuth: false },
+  { label: 'Terms', to: '/terms-and-conditions', requiresAuth: false },
+  { label: 'About', to: '', requiresAuth: false },
+  { label: 'Careers', to: '', requiresAuth: false },
+  { label: 'Advertising', to: '', requiresAuth: false },
+  { label: 'Contact', to: '', requiresAuth: false },
+  { label: 'Cookie Policy', to: '/cookie-policy', requiresAuth: false },
 ]
-
-const currentQuoteIndex = ref(0)
-const isRedirectingToGoogle = ref(false)
-let autoScrollInterval: ReturnType<typeof setInterval> | null = null
-
-const quotes = [
-  'As the population grows, so should job opportunities to match the demand created by the growth in population. Unemployment should be a choice.',
-  'Unemployment is an anomaly. Human Capital development and job switch is required to correct the in-balance of underemployment and job loss.',
-  // 'A stronger network gives talent a better chance to be seen, trusted, and hired across industries.',
-  // 'When skills are shared in the right spaces, collaboration and opportunity tend to follow naturally.',
-]
-
-const currentQuote = computed(() => quotes[currentQuoteIndex.value])
 
 const redirectQuery = computed(() =>
   typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
@@ -74,32 +61,27 @@ const redirectQuery = computed(() =>
     : {},
 )
 
-const nextQuote = () => {
-  currentQuoteIndex.value = (currentQuoteIndex.value + 1) % quotes.length
-}
-
-const startAutoScroll = () => {
-  autoScrollInterval = setInterval(() => {
-    nextQuote()
-  }, 3500)
-}
-
-const stopAutoScroll = () => {
-  if (autoScrollInterval) {
-    clearInterval(autoScrollInterval)
-    autoScrollInterval = null
+const handleProtectedNav = (
+  event: MouseEvent,
+  target: string,
+  navigate: (event?: MouseEvent) => void,
+) => {
+  if (authStore.isAuthenticated) {
+    navigate(event)
+    return
   }
+
+  event.preventDefault()
+  toast.info('Sign in required', {
+    description: 'Please log in or create an account to view that page.',
+  })
+  router.push({
+    path: '/auth/login',
+    query: { redirect: target },
+  })
 }
 
-onMounted(() => {
-  startAutoScroll()
-})
-
-onBeforeUnmount(() => {
-  stopAutoScroll()
-})
-
-const continueWithGoogle = async () => {
+const signUpWithGoogle = async () => {
   if (isRedirectingToGoogle.value) {
     return
   }
@@ -126,17 +108,17 @@ const continueWithGoogle = async () => {
     toast.success('Signed in with Google', {
       id: loadingToastId,
       description: redirectTarget === '/auth/signup/details'
-        ? 'Finish your profile details to continue.'
+        ? 'Add a few profile details to finish your setup.'
         : 'Your account session is ready. Redirecting now.',
     })
-    await router.push(redirectTarget)
+    router.push(redirectTarget)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
         ? error.message
-        : 'Google sign-in could not be completed.'
+        : 'Google sign-up could not be completed.'
 
-    toast.error('Google sign-in failed', {
+    toast.error('Google sign-up failed', {
       id: loadingToastId,
       description: message,
     })
@@ -146,138 +128,145 @@ const continueWithGoogle = async () => {
 </script>
 
 <template>
-  <section
-    class="min-h-screen bg-[var(--landing-bg)] text-[var(--landing-text)]"
-  >
-    <div class="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-      <main class="flex-1">
-        <div class="pt-5 sm:pt-7 lg:pt-8">
-          <div class="flex justify-center">
-            <img loading="eager" decoding="async" fetchpriority="high" src="/nlogo.png" alt="Skills4Export logo" class="h-16 w-auto sm:h-20 lg:h-24" />
-          </div>
+  <section class="min-h-screen bg-[var(--landing-bg)] text-[var(--landing-text)]">
+    <header class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_94%,transparent)] px-4 py-2 shadow-[var(--shadow-soft)] backdrop-blur sm:px-6 lg:px-8">
+      <RouterLink to="/" class="flex items-center gap-3" aria-label="Skills4Export home">
+        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-12 w-auto object-contain sm:h-14" />
+      </RouterLink>
 
-          <div class="grid gap-8 py-8 sm:py-10 lg:grid-cols-[minmax(20rem,0.92fr)_minmax(24rem,1.08fr)] lg:gap-12 lg:py-12">
-            <div class="flex flex-col justify-start lg:pt-8">
-              <div class="mx-auto w-full max-w-xl lg:mx-0 lg:max-w-[38rem]">
-                <div class="text-center">
-                  <h1 class="landing-hero-title mx-auto max-w-[40rem] text-[#5a5a5a] dark:text-[var(--landing-heading)]">
-                    <span class="landing-title-line block">Join Skills4Export</span>
-                    <span class="block">Community</span>
-                  </h1>
-                </div>
+      <nav class="hidden min-w-0 flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--landing-muted)] lg:flex" aria-label="Landing navigation">
+        <RouterLink
+          v-for="item in navLinks"
+          :key="item.label"
+          :to="item.to"
+          custom
+          v-slot="{ href, navigate }"
+        >
+          <a
+            :href="href"
+            class="rounded-full px-2.5 py-2 transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] xl:px-3"
+            @click="handleProtectedNav($event, item.to, navigate)"
+          >
+            {{ item.label }}
+          </a>
+        </RouterLink>
+      </nav>
 
-                <!-- <p class="mx-auto mt-8 max-w-2xl text-base leading-8 text-[var(--landing-muted)] lg:mx-0 lg:max-w-[32rem] lg:text-lg">
-                  A career and business-focused community where people showcase skills, share experience, discover communities, ask questions, and find real opportunities.
-                </p> -->
+      <div class="flex items-center gap-2">
+        <RouterLink
+          :to="{ path: '/auth/signup', query: redirectQuery }"
+          class="hidden h-10 items-center justify-center rounded-full px-4 text-sm font-semibold text-[var(--landing-muted)] transition hover:text-[var(--accent-strong)] sm:inline-flex"
+        >
+          Sign up
+        </RouterLink>
+        <RouterLink
+          :to="{ path: '/auth/login', query: redirectQuery }"
+          class="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--landing-heading)] transition hover:border-[color:var(--accent)] hover:text-[var(--accent-strong)]"
+        >
+          Sign in
+        </RouterLink>
+        <button
+          type="button"
+          @click="toggleTheme"
+          :aria-pressed="resolvedTheme === 'dark'"
+          class="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--landing-muted)] hover:bg-[var(--surface-muted)]"
+          title="Toggle theme"
+        >
+          <Sun v-if="resolvedTheme === 'dark'" class="h-5 w-5" />
+          <Moon v-else class="h-5 w-5" />
+        </button>
+      </div>
+    </header>
 
-                <div class="mt-9 max-w-[38rem] space-y-3.5">
-                  <RouterLink
-                    :to="{ path: '/auth/login', query: redirectQuery }"
-                    class="inline-flex h-14 w-full items-center justify-center rounded-full bg-[var(--accent)] px-6 text-base font-semibold text-white shadow-[var(--shadow-accent)] transition hover:bg-[var(--accent-strong)]"
-                  >
-                    Login
-                  </RouterLink>
+    <div class="flex min-h-screen w-full max-w-none flex-col px-4 pb-5 pt-20 sm:px-6 sm:pt-24 lg:px-8">
+      <main class="grid flex-1 items-center">
+        <section id="overview" class="landing-auth-hero mx-auto grid w-full max-w-[96rem] scroll-mt-28 items-center justify-center gap-8 px-2 py-6 sm:px-6 sm:py-8 md:gap-10 lg:grid-cols-[minmax(17rem,31rem)_minmax(24rem,40rem)] lg:gap-16 lg:px-8 xl:gap-24 xl:px-10 2xl:gap-28">
+          <div class="landing-auth-panel mx-auto w-full max-w-[31rem] text-left lg:mx-0 lg:justify-self-start">
+            <h1 class="landing-join-title text-[var(--landing-heading)]">
+              <span class="block">Join Skills4Export</span>
+              <span class="block">Community</span>
+            </h1>
 
-                  <RouterLink
-                    :to="{ path: '/auth/signup', query: redirectQuery }"
-                    class="inline-flex h-14 w-full items-center justify-center rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent)] hover:bg-[var(--surface-muted)]"
-                  >
-                    Create Account
-                  </RouterLink>
-                </div>
+            <div class="mt-5 space-y-3">
+              <RouterLink
+                :to="{ path: '/auth/login', query: redirectQuery }"
+                class="inline-flex h-11 w-full items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+              >
+                Login
+              </RouterLink>
 
-                <p class="mt-3 max-w-[38rem] text-center text-sm leading-7 text-[var(--landing-muted)]">
-                  By signing up, you agree to the
-                  <RouterLink to="/terms-and-conditions" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Terms of Service</RouterLink>
-                  and
-                  <RouterLink to="/privacy-policy" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Privacy Policy</RouterLink>,
-                  including
-                  <RouterLink to="/cookie-policy" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Cookie Use</RouterLink>.
-                </p>
-
-                <div class="mt-8 max-w-[38rem] flex items-center gap-4">
-                  <span class="h-px flex-1 bg-[var(--landing-rule)]" />
-                  <span class="text-sm font-medium uppercase tracking-[0.24em] text-[var(--landing-muted)]">Or</span>
-                  <span class="h-px flex-1 bg-[var(--landing-rule)]" />
-                </div>
-
-                <button
-                  type="button"
-                  :disabled="isRedirectingToGoogle"
-                  class="mt-6 inline-flex h-14 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-[var(--surface-primary)] px-6 text-base font-semibold text-[var(--accent)] transition hover:bg-[var(--surface-muted)]"
-                  @click="continueWithGoogle"
-                >
-                  <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="#4285F4" d="M21.6 12.23c0-.68-.06-1.33-.17-1.96H12v3.71h5.39a4.61 4.61 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.97-4.33 2.97-7.27Z" />
-                    <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.44l-3.24-2.5c-.9.6-2.05.96-3.37.96-2.59 0-4.79-1.75-5.57-4.11H3.08v2.58A9.98 9.98 0 0 0 12 22Z" />
-                    <path fill="#FBBC04" d="M6.43 13.91A5.98 5.98 0 0 1 6.12 12c0-.66.11-1.3.31-1.91V7.51H3.08A9.98 9.98 0 0 0 2 12c0 1.61.39 3.13 1.08 4.49l3.35-2.58Z" />
-                    <path fill="#EA4335" d="M12 5.98c1.47 0 2.78.5 3.81 1.48l2.86-2.86C16.95 2.99 14.69 2 12 2A9.98 9.98 0 0 0 3.08 7.51l3.35 2.58C7.21 7.73 9.41 5.98 12 5.98Z" />
-                  </svg>
-                  {{ isRedirectingToGoogle ? 'Connecting to Google...' : 'Signup with Google' }}
-                </button>
-              </div>
+              <RouterLink
+                :to="{ path: '/auth/signup', query: redirectQuery }"
+                class="inline-flex h-11 w-full items-center justify-center rounded-full border border-[color:var(--accent)] bg-transparent px-5 text-sm font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-muted)]"
+              >
+                Create Account
+              </RouterLink>
             </div>
 
-            <div class="flex flex-col justify-start lg:pl-4 lg:pt-7">
-              <div class="mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-152">
-                <p class="landing-intro-text max-w-[40rem] text-[var(--landing-text)]">
-                  A career and business focused Community. where users: showcase skills, share experiences, share ideas, ask and answer career related questions, score & comment others, partake in contests, subscribe to services. Apply for jobs, internships, Freelance jobs.
-                </p>
+            <p class="mt-2 max-w-[31rem] text-sm leading-5 text-[var(--landing-muted)]">
+              By signing up, you agree to the
+              <RouterLink to="/terms-and-conditions" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Terms of Service</RouterLink>
+              and
+              <RouterLink to="/privacy-policy" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Privacy Policy</RouterLink>, including
+              <RouterLink to="/cookie-policy" class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Cookie Use</RouterLink>.
+            </p>
 
-                <div class="mt-7">
-                  <div class="space-y-5">
-                    <article
-                      v-for="feature in featureGroups"
-                      :key="feature.title"
-                      class="grid gap-4 sm:grid-cols-[3.25rem_minmax(0,1fr)] sm:items-start"
-                    >
-                      <div class="flex items-start justify-start pt-1">
-                        <div class="flex h-11 w-11 items-center justify-center rounded-lg border border-[color:color-mix(in_srgb,var(--accent)_24%,var(--surface-primary))] bg-[color:color-mix(in_srgb,var(--accent)_12%,var(--surface-primary))] text-[var(--accent-strong)]">
-                          <component :is="feature.icon" class="h-4.5 w-4.5" />
-                        </div>
-                      </div>
-                      <div class="max-w-[32rem]">
-                        <h2 class="landing-feature-title text-[var(--landing-heading)]">
-                          {{ feature.title }}
-                        </h2>
-                        <p class="landing-feature-text mt-2 text-[var(--landing-text)]">
-                          {{ feature.description }}
-                        </p>
-                      </div>
-                    </article>
-                  </div>
-                </div>
-
-                <div class="mt-8 w-full">
-                  <div class="relative max-w-[38rem] rounded-md bg-white px-7 py-7 text-[#5a5a5a] dark:bg-[var(--surface-primary)] dark:text-[var(--landing-muted)] sm:px-9 sm:py-8">
-                    <div class="absolute -bottom-8 left-20 h-0 w-0 border-l-[1.8rem] border-r-[0.35rem] border-t-[2rem] border-l-transparent border-r-transparent border-t-white dark:border-t-[var(--surface-primary)]" />
-                    <div class="relative grid grid-cols-[3.25rem_minmax(0,1fr)] gap-3">
-                      <Quote class="mt-1 h-9 w-9 fill-[var(--accent)] text-[var(--accent)]" />
-                      <p class="landing-quote-text">
-                        {{ currentQuote }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <div class="mx-auto mt-5 flex max-w-[18rem] items-center gap-5">
+              <span class="h-px flex-1 bg-[var(--landing-rule)]" />
+              <span class="text-sm font-semibold uppercase text-[var(--landing-muted)]">OR</span>
+              <span class="h-px flex-1 bg-[var(--landing-rule)]" />
             </div>
+
+            <button
+              type="button"
+              :disabled="isRedirectingToGoogle"
+              class="mt-5 inline-flex h-11 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-transparent px-5 text-sm font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-muted)] disabled:cursor-not-allowed disabled:opacity-70"
+              @click="signUpWithGoogle"
+            >
+              <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4" d="M21.6 12.23c0-.68-.06-1.33-.17-1.96H12v3.71h5.39a4.61 4.61 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.97-4.33 2.97-7.27Z" />
+                <path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.61-2.44l-3.24-2.5c-.9.6-2.05.96-3.37.96-2.59 0-4.79-1.75-5.57-4.11H3.08v2.58A9.98 9.98 0 0 0 12 22Z" />
+                <path fill="#FBBC04" d="M6.43 13.91A5.98 5.98 0 0 1 6.12 12c0-.66.11-1.3.31-1.91V7.51H3.08A9.98 9.98 0 0 0 2 12c0 1.61.39 3.13 1.08 4.49l3.35-2.58Z" />
+                <path fill="#EA4335" d="M12 5.98c1.47 0 2.78.5 3.81 1.48l2.86-2.86C16.95 2.99 14.69 2 12 2A9.98 9.98 0 0 0 3.08 7.51l3.35 2.58C7.21 7.73 9.41 5.98 12 5.98Z" />
+              </svg>
+              {{ isRedirectingToGoogle ? 'Connecting to Google...' : 'Signup with Google' }}
+            </button>
           </div>
-        </div>
+
+          <div class="landing-preview mx-auto hidden w-full max-w-[20rem] sm:max-w-[28rem] md:block md:max-w-[34rem] lg:mx-0 lg:max-w-[36rem] xl:max-w-[40rem] lg:justify-self-stretch">
+            <img
+              :src="combinedScreenImage"
+              alt="Skills4Export app preview"
+              class="block w-full h-auto object-contain"
+              loading="eager"
+              decoding="async"
+              fetchpriority="high"
+            />
+          </div>
+        </section>
+
       </main>
 
-      <footer class="mt-6 rounded-[1.5rem] border border-[color:var(--landing-border)] bg-[var(--surface-primary)] px-6 py-5 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-elevated)] sm:px-8">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex flex-wrap gap-x-5 gap-y-2">
+      <footer class="mx-auto w-full max-w-[96rem] px-2 py-4 text-sm text-[var(--text-secondary)] sm:px-6 lg:px-8">
+        <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <div class="flex flex-wrap justify-center gap-x-5 gap-y-2 sm:justify-start">
             <RouterLink
               v-for="item in footerLinks"
               :key="item.label"
               :to="item.to || '/'"
-              class="transition hover:text-[var(--accent-strong)]"
+              custom
+              v-slot="{ href, navigate }"
             >
-              {{ item.label }}
+              <a
+                :href="href"
+                class="transition hover:text-[var(--accent-strong)]"
+                @click="item.requiresAuth ? handleProtectedNav($event, href, navigate) : navigate($event)"
+              >
+                {{ item.label }}
+              </a>
             </RouterLink>
           </div>
-          <p class="text-[var(--text-secondary)]">© 2026 Skills4Export</p>
+          <p class="text-center text-[var(--text-secondary)] sm:text-right">© 2026 Skills4Export</p>
         </div>
       </footer>
     </div>

@@ -3,23 +3,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import FeedAdvertCard from '@/components/FeedAdvertCard.vue'
-import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
-import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { feedsService } from '@/services/feeds'
-import { pagesService, type PageRecord } from '@/services/pages'
-import { postsService, type PostMediaRecord, type PostRecord } from '@/services/posts'
-import { questionsService, type QuestionRecord } from '@/services/questions'
-import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
-import { mapWithConcurrency } from '@/utils/async'
 import { mapCompactFeedItemToFeedPost } from '@/utils/feedMapper'
-import { getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
-import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
-import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
 type FeedItem = {
   id: string
@@ -43,17 +33,8 @@ type FeedRenderItem =
 const INITIAL_POST_COUNT = 4
 const LOAD_BATCH_SIZE = 3
 const FEED_PAGE_SIZE = 10
-const ENRICHMENT_CONCURRENCY = 4
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000
 const POST_CREATED_EVENT = 'skills4export:post-created'
-const RECENT_CREATED_POSTS_KEY = 'skills4export:recent-created-posts'
-const RECENT_CREATED_POST_TTL_MS = 30 * 60 * 1000
-
-type RecentCreatedPost = {
-  storedAt: string
-  post: PostRecord
-  media: PostMediaRecord[]
-}
 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 const visiblePostCount = ref(INITIAL_POST_COUNT)
@@ -61,32 +42,16 @@ const isLoadingMore = ref(false)
 const isLoadingFeed = ref(false)
 const feedError = ref('')
 const adverts = ref<AdvertRecord[]>([])
-const communitiesById = ref(new Map<string, CommunityRecord>())
 const currentFeedPage = ref(1)
 const lastFeedPage = ref(1)
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const apiPosts = computed(() => socialActionsStore.feed)
-const currentUser = useCurrentUserIdentity()
 const route = useRoute()
 const activeFeedMode = computed(() => {
   const value = route.query.feed
   return (Array.isArray(value) ? value[0] : value) === 'popular' ? 'popular' : 'latest'
 })
-const activeFeedSort = computed(() => (activeFeedMode.value === 'latest' ? '-createdAt' : '-score'))
-
-const shuffleFeedPosts = (items: FeedPost[]) => {
-  const shuffled = [...items]
-
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1))
-    const current = shuffled[index]
-    shuffled[index] = shuffled[swapIndex]
-    shuffled[swapIndex] = current
-  }
-
-  return shuffled
-}
 
 const feedItems = computed<FeedItem[]>(() => {
   return apiPosts.value.map((post) => ({
@@ -137,7 +102,7 @@ const visibleFeedItems = computed<FeedRenderItem[]>(() => {
       entries.push({
         id: feedAdverts.value[advertIndex]?.id
           ? `advert-${feedAdverts.value[advertIndex]?.id}-${index + 1}`
-          : `advert-placeholder-${index + 1}`,
+          : `advert-empty-${index + 1}`,
         type: 'advert',
         advert: feedAdverts.value[advertIndex] ?? null,
       })
@@ -154,9 +119,6 @@ const hasMorePosts = computed(() =>
 let observer: IntersectionObserver | null = null
 let realtimeTimer: ReturnType<typeof window.setInterval> | null = null
 let feedRequestVersion = 0
-
-type AuthorLookup = Awaited<ReturnType<typeof buildAuthorLookup>>
-type PageLookup = Awaited<ReturnType<typeof buildPageLookup>>
 
 const getFeedSignature = (items: FeedPost[]) =>
   items
@@ -211,9 +173,56 @@ const sortFeedItems = (items: FeedPost[]) => {
 const getFeedCacheKey = () =>
   `skills4export:feed:${authStore.userId || 'anonymous'}:${activeFeedMode.value}`
 
+const getFeedViewStateKey = () =>
+  `skills4export:feed-view:${authStore.userId || 'anonymous'}:${activeFeedMode.value}`
+
+const restoreFeedViewState = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    const cached = JSON.parse(window.sessionStorage.getItem(getFeedViewStateKey()) || 'null') as {
+      visiblePostCount?: number
+      currentFeedPage?: number
+      lastFeedPage?: number
+    } | null
+
+    if (!cached) {
+      return
+    }
+
+    if (typeof cached.visiblePostCount === 'number' && Number.isFinite(cached.visiblePostCount)) {
+      visiblePostCount.value = Math.max(INITIAL_POST_COUNT, Math.floor(cached.visiblePostCount))
+    }
+
+    if (typeof cached.currentFeedPage === 'number' && Number.isFinite(cached.currentFeedPage)) {
+      currentFeedPage.value = Math.max(1, Math.floor(cached.currentFeedPage))
+    }
+
+    if (typeof cached.lastFeedPage === 'number' && Number.isFinite(cached.lastFeedPage)) {
+      lastFeedPage.value = Math.max(1, Math.floor(cached.lastFeedPage))
+    }
+  } catch {
+    window.sessionStorage.removeItem(getFeedViewStateKey())
+  }
+}
+
+const cacheFeedViewState = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.sessionStorage.setItem(getFeedViewStateKey(), JSON.stringify({
+    visiblePostCount: visiblePostCount.value,
+    currentFeedPage: currentFeedPage.value,
+    lastFeedPage: lastFeedPage.value,
+  }))
+}
+
 const restoreCachedFeed = () => {
   if (typeof window === 'undefined' || apiPosts.value.length) {
-    return
+    return false
   }
 
   try {
@@ -228,10 +237,13 @@ const restoreCachedFeed = () => {
       Date.now() - cached.storedAt < FEED_CACHE_TTL_MS
     ) {
       socialActionsStore.setFeed(cached.items)
+      return true
     }
   } catch {
     window.sessionStorage.removeItem(getFeedCacheKey())
   }
+
+  return false
 }
 
 const cacheFeed = (items: FeedPost[]) => {
@@ -243,30 +255,6 @@ const cacheFeed = (items: FeedPost[]) => {
     storedAt: Date.now(),
     items,
   }))
-}
-
-const getRecentCreatedPosts = () => {
-  if (typeof window === 'undefined') {
-    return [] as RecentCreatedPost[]
-  }
-
-  try {
-    const now = Date.now()
-    const items = JSON.parse(window.sessionStorage.getItem(RECENT_CREATED_POSTS_KEY) || '[]') as RecentCreatedPost[]
-    const freshItems = items.filter((item) => {
-      const storedTime = new Date(item.storedAt).getTime()
-      return item.post?.id && Number.isFinite(storedTime) && now - storedTime < RECENT_CREATED_POST_TTL_MS
-    })
-
-    if (freshItems.length !== items.length) {
-      window.sessionStorage.setItem(RECENT_CREATED_POSTS_KEY, JSON.stringify(freshItems))
-    }
-
-    return freshItems
-  } catch {
-    window.sessionStorage.removeItem(RECENT_CREATED_POSTS_KEY)
-    return []
-  }
 }
 
 const loadMorePosts = async () => {
@@ -286,6 +274,7 @@ const loadMorePosts = async () => {
       visiblePostCount.value + LOAD_BATCH_SIZE,
       feedItems.value.length,
     )
+    cacheFeedViewState()
     isLoadingMore.value = false
     await nextTick()
     return
@@ -296,118 +285,10 @@ const loadMorePosts = async () => {
       visiblePostCount.value + LOAD_BATCH_SIZE,
       feedItems.value.length,
     )
+    cacheFeedViewState()
     isLoadingMore.value = false
     await nextTick()
   }, 150)
-}
-
-const buildAuthorLookup = async (posts: PostRecord[], questions: QuestionRecord[]) => {
-  const userIds = Array.from(new Set([
-    ...posts.filter((post) => !(post.pageId || post.page_id)).map(getPostUserId),
-    ...questions.map(getQuestionUserId),
-  ].filter(Boolean)))
-  const entries = await mapWithConcurrency(
-    userIds,
-    ENRICHMENT_CONCURRENCY,
-    async (userId) => {
-      const authorData = await loadQuestionAuthorProfile(
-        userId,
-        authStore.userId,
-        currentUser.profileData.value,
-        authStore.authToken,
-      )
-
-      return [userId, authorData] as const
-    },
-  )
-
-  return new Map(entries)
-}
-
-const buildPageLookup = async (posts: PostRecord[]) => {
-  const pagePosts = posts.filter((post) => post.pageId || post.page_id)
-  const lookup = new Map<string, NonNullable<PostRecord['page']> | PageRecord>()
-
-  pagePosts.forEach((post) => {
-    const pageId = post.pageId || post.page_id
-
-    if (pageId && post.page?.name) {
-      lookup.set(pageId, post.page)
-    }
-  })
-
-  const missingPageIds = Array.from(new Set(
-    pagePosts
-      .map((post) => post.pageId || post.page_id)
-      .filter((pageId): pageId is string => Boolean(pageId && !lookup.has(pageId))),
-  ))
-  const entries = await mapWithConcurrency(
-    missingPageIds,
-    ENRICHMENT_CONCURRENCY,
-    async (pageId) => {
-      const response = await pagesService.getPage(pageId, authStore.authToken).catch(() => null)
-      return [pageId, response?.data ?? null] as const
-    },
-  )
-
-  entries.forEach(([pageId, page]) => {
-    if (page) {
-      lookup.set(pageId, page)
-    }
-  })
-
-  return lookup
-}
-
-const loadFeedPost = async (post: PostRecord, authorLookup: AuthorLookup, pageLookup: PageLookup) => {
-  const hasEmbeddedMedia = [
-    post.media_path,
-    post.mediaPath,
-    post.file_path,
-    post.filePath,
-    post.media,
-    post.attachments,
-  ].some((value) => Array.isArray(value) && value.length > 0)
-  const mediaResponse = hasEmbeddedMedia
-    ? null
-    : await postsService.listPostMedia(post.id, authStore.authToken).catch(() => null)
-  const pageId = post.pageId || post.page_id
-
-  return mapApiPostToFeedPost(
-    post,
-    mediaResponse?.data ?? [],
-    authorLookup.get(getPostUserId(post)) ?? null,
-    communitiesById.value.get(post.community_id || post.communityId || '')?.name,
-    pageId ? pageLookup.get(pageId) ?? null : null,
-  )
-}
-
-const loadFeedQuestion = async (question: QuestionRecord, authorLookup: AuthorLookup) => {
-  const userId = getQuestionUserId(question)
-  const community = communitiesById.value.get(question.communityId || question.community_id || '')
-
-  return mapApiQuestionToFeedPost(
-    question,
-    userId ? authorLookup.get(userId) ?? null : null,
-    community?.name,
-    community,
-  )
-}
-
-const mergeRecentPosts = (posts: FeedPost[]) => {
-  const apiPostIds = new Set(posts.map((post) => post.apiId || post.slug))
-  const recentPosts = getRecentCreatedPosts()
-    .filter((item) => !apiPostIds.has(item.post.id))
-    .map((item) =>
-      mapApiPostToFeedPost(
-        item.post,
-        item.media ?? [],
-        currentUser.profileData.value,
-        communitiesById.value.get(item.post.community_id || item.post.communityId || '')?.name,
-      ),
-    )
-
-  return sortFeedItems([...recentPosts, ...posts])
 }
 
 const publishFeed = (items: FeedPost[], append = false) => {
@@ -418,7 +299,7 @@ const publishFeed = (items: FeedPost[], append = false) => {
     byId.set(item.apiId || item.slug, item)
   })
 
-  const nextPosts = mergeRecentPosts(Array.from(byId.values()))
+  const nextPosts = sortFeedItems(Array.from(byId.values()))
 
   if (getFeedSignature(apiPosts.value) !== getFeedSignature(nextPosts)) {
     socialActionsStore.setFeed(nextPosts)
@@ -428,6 +309,7 @@ const publishFeed = (items: FeedPost[], append = false) => {
   visiblePostCount.value = apiPosts.value.length
     ? Math.max(visiblePostCount.value, INITIAL_POST_COUNT)
     : INITIAL_POST_COUNT
+  cacheFeedViewState()
 }
 
 const setupObserver = () => {
@@ -469,162 +351,39 @@ const loadFeed = async (options: {
   feedError.value = ''
 
   try {
-    const feedSort = activeFeedSort.value
-    const supportingDataPromise = requestedPage === 1
-      ? Promise.allSettled([
-          communitiesService.listCommunities(
-            { per_page: 100, limit: 100 },
-            authStore.authToken,
-          ),
-          advertsService.listAdverts(
-            {
-              per_page: 20,
-              sort: '-createdAt',
-            },
-            authStore.authToken,
-          ),
-        ])
+    const advertsResponse = requestedPage === 1
+      ? await advertsService.listAdverts(
+          {
+            per_page: 20,
+            sort: '-createdAt',
+          },
+        )
       : null
 
-    try {
-      const compactFeedResponse = await feedsService.listCompactFeed(
-        {
-          mode: activeFeedMode.value,
-          page: requestedPage,
-          per_page: FEED_PAGE_SIZE,
-        },
-        authStore.authToken,
-      )
-
-      if (requestVersion !== feedRequestVersion) {
-        return
-      }
-
-      currentFeedPage.value = compactFeedResponse.current_page || requestedPage
-      lastFeedPage.value = compactFeedResponse.last_page || 1
-      publishFeed(
-        (compactFeedResponse.data ?? []).map(mapCompactFeedItemToFeedPost),
-        Boolean(options.append),
-      )
-      isLoadingFeed.value = false
-
-      if (supportingDataPromise) {
-        void (async () => {
-          const [communitiesResult, advertsResult] = await supportingDataPromise
-
-          if (requestVersion !== feedRequestVersion) {
-            return
-          }
-
-          if (communitiesResult.status === 'fulfilled') {
-            communitiesById.value = new Map(
-              (communitiesResult.value.data ?? []).map((community) => [community.id, community]),
-            )
-          }
-          adverts.value = advertsResult.status === 'fulfilled' ? advertsResult.value.data ?? [] : []
-        })()
-      }
-
-      return
-    } catch {
-      if (requestVersion !== feedRequestVersion) {
-        return
-      }
-    }
-
-    const [postsResult, questionsResult] = await Promise.allSettled([
-      postsService.listPosts(
-        { page: requestedPage, per_page: FEED_PAGE_SIZE, sort: feedSort },
-        authStore.authToken,
-      ),
-      questionsService.listQuestions(
-        { page: requestedPage, per_page: FEED_PAGE_SIZE, sort: feedSort },
-        authStore.authToken,
-      ),
-    ])
+    const compactFeedResponse = await feedsService.listCompactFeed(
+      {
+        mode: activeFeedMode.value,
+        page: requestedPage,
+        per_page: FEED_PAGE_SIZE,
+      },
+      authStore.authToken,
+    )
 
     if (requestVersion !== feedRequestVersion) {
       return
     }
 
-    const rawPosts = postsResult.status === 'fulfilled' ? postsResult.value.data ?? [] : []
-    const rawQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data ?? [] : []
-    currentFeedPage.value = Math.max(
-      postsResult.status === 'fulfilled' ? postsResult.value.current_page : requestedPage,
-      questionsResult.status === 'fulfilled' ? questionsResult.value.current_page : requestedPage,
+    currentFeedPage.value = compactFeedResponse.current_page || requestedPage
+    lastFeedPage.value = compactFeedResponse.last_page || 1
+    publishFeed(
+      (compactFeedResponse.data ?? []).map(mapCompactFeedItemToFeedPost),
+      Boolean(options.append),
     )
-    lastFeedPage.value = Math.max(
-      postsResult.status === 'fulfilled' ? postsResult.value.last_page : 1,
-      questionsResult.status === 'fulfilled' ? questionsResult.value.last_page : 1,
-    )
-    const immediatePosts = rawPosts.map((post) =>
-      mapApiPostToFeedPost(
-        post,
-        [],
-        null,
-        post.community?.name ?? undefined,
-        post.page ?? null,
-      ),
-    )
-    const immediateQuestions = rawQuestions.map((question) =>
-      mapApiQuestionToFeedPost(question, null),
-    )
-
-    publishFeed([...immediatePosts, ...immediateQuestions], Boolean(options.append))
     isLoadingFeed.value = false
 
-    if (postsResult.status === 'rejected' && questionsResult.status === 'rejected') {
-      throw postsResult.reason
+    if (advertsResponse) {
+      adverts.value = advertsResponse.data ?? []
     }
-
-    if (postsResult.status === 'rejected' || questionsResult.status === 'rejected') {
-      const failed =
-        postsResult.status === 'rejected'
-          ? postsResult.reason
-          : questionsResult.status === 'rejected'
-            ? questionsResult.reason
-            : null
-      feedError.value =
-        failed instanceof ApiError
-          ? failed.message
-          : 'Some feed items could not be loaded from the server.'
-    }
-
-    if (supportingDataPromise) {
-      void (async () => {
-        const [communitiesResult, advertsResult] = await supportingDataPromise
-
-        if (requestVersion !== feedRequestVersion) {
-          return
-        }
-
-        if (communitiesResult.status === 'fulfilled') {
-          communitiesById.value = new Map(
-            (communitiesResult.value.data ?? []).map((community) => [community.id, community]),
-          )
-        }
-        adverts.value = advertsResult.status === 'fulfilled' ? advertsResult.value.data ?? [] : []
-      })()
-    }
-
-    void (async () => {
-      const [authorLookup, pageLookup] = await Promise.all([
-        buildAuthorLookup(rawPosts, rawQuestions),
-        buildPageLookup(rawPosts),
-      ])
-      const posts = await mapWithConcurrency(
-        rawPosts,
-        ENRICHMENT_CONCURRENCY,
-        (post) => loadFeedPost(post, authorLookup, pageLookup),
-      )
-      const questions = await Promise.all(
-        rawQuestions.map((question) => loadFeedQuestion(question, authorLookup)),
-      )
-
-      if (requestVersion === feedRequestVersion) {
-        publishFeed([...posts, ...questions], Boolean(options.append))
-      }
-    })()
   } catch (error) {
     if (!options.background) {
       feedError.value =
@@ -643,12 +402,16 @@ const loadFeed = async (options: {
 
 const handlePostCreated = () => {
   visiblePostCount.value = INITIAL_POST_COUNT
+  cacheFeedViewState()
   void loadFeed({ background: true })
 }
 
 onMounted(() => {
-  restoreCachedFeed()
-  void loadFeed()
+  restoreFeedViewState()
+  const restoredFeed = restoreCachedFeed()
+  if (!restoredFeed) {
+    void loadFeed()
+  }
   setupObserver()
   window.addEventListener(POST_CREATED_EVENT, handlePostCreated)
   realtimeTimer = window.setInterval(() => {
@@ -668,11 +431,15 @@ watch(activeFeedMode, () => {
   currentFeedPage.value = 1
   lastFeedPage.value = 1
   socialActionsStore.setFeed([])
-  restoreCachedFeed()
-  void loadFeed()
+  restoreFeedViewState()
+  const restoredFeed = restoreCachedFeed()
+  if (!restoredFeed) {
+    void loadFeed()
+  }
 })
 
 onBeforeUnmount(() => {
+  cacheFeedViewState()
   observer?.disconnect()
   window.removeEventListener(POST_CREATED_EVENT, handlePostCreated)
   if (realtimeTimer) {

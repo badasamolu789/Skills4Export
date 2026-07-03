@@ -61,8 +61,12 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
     displayName: identity.displayName || undefined,
     bio,
     location,
-    currentJobTitle: draft.accountType === 'student' ? undefined : draft.jobTitle.trim() || undefined,
-    currentWorkspace: draft.accountType === 'student' ? undefined : draft.workplace.trim() || undefined,
+    currentJobTitle: draft.accountType === 'student'
+      ? draft.courseOfStudy.trim() || undefined
+      : draft.jobTitle.trim() || undefined,
+    currentWorkspace: draft.accountType === 'student'
+      ? draft.university.trim() || undefined
+      : draft.workplace.trim() || undefined,
   }
 
   if (identity.displayName) {
@@ -85,10 +89,15 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
     profilePayload,
     Boolean(authStore.userProfile?.id),
     authStore.authToken,
-    { suppressErrorModal: true },
   )
+  const responseRecord = profileResponse.data && typeof profileResponse.data === 'object'
+    ? profileResponse.data as Record<string, unknown>
+    : null
+  const responseProfile = responseRecord?.profile && typeof responseRecord.profile === 'object'
+    ? responseRecord.profile as Partial<UserProfile>
+    : profileResponse.data as Partial<UserProfile> | null
   const savedProfile: Partial<UserProfile> = {
-    ...(profileResponse.data ?? {}),
+    ...(responseProfile ?? {}),
     ...profilePayload,
   }
 
@@ -98,15 +107,7 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
   authStore.signUpDraft.location = location
   authStore.signUpDraft.headline = bio
 
-  let profileData: MyProfileData | null = null
-  try {
-    profileData = (await usersService.getMyProfile(
-      authStore.authToken,
-      { suppressErrorModal: true },
-    )).data ?? null
-  } catch {
-    profileData = null
-  }
+  const profileData = (await usersService.getMyProfile(authStore.authToken)).data ?? null
 
   if (draft.accountType === 'student') {
     const school = draft.university.trim()
@@ -121,7 +122,6 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
           startDate: draft.yearStarted ? `${draft.yearStarted}-01-01` : undefined,
         },
         authStore.authToken,
-        { suppressErrorModal: true },
       )
     }
   } else {
@@ -137,7 +137,6 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
           isCurrent: true,
         },
         authStore.authToken,
-        { suppressErrorModal: true },
       )
     }
   }

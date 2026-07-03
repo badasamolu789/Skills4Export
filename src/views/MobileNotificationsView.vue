@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import type { NotificationItem } from '@/services/notifications'
+import { richTextToPlainText } from '@/utils/richText'
 
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
@@ -155,7 +156,7 @@ onMounted(() => {
               </span>
               <div>
                 <p class="text-sm font-semibold text-[var(--text-primary)]">{{ item.title }}</p>
-                <p class="mt-1 text-sm leading-7 text-[var(--text-secondary)]">{{ item.description }}</p>
+                <p class="mt-1 text-sm leading-7 text-[var(--text-secondary)]">{{ richTextToPlainText(item.description) }}</p>
                 <p class="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
                   {{ item.time }}
                 </p>

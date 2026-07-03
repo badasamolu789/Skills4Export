@@ -285,30 +285,26 @@ export const notificationsService = {
   async listNotifications(
     params: NotificationsListParams = {},
     token?: string | null,
-    options?: { signal?: AbortSignal; suppressErrorModal?: boolean },
   ) {
     return api.get<NotificationsListResponse>(
       `${NOTIFICATION_ROUTES.notifications}${buildQuery(params)}`,
-      { token, signal: options?.signal, suppressErrorModal: options?.suppressErrorModal },
+      { token },
     )
   },
 
   async listUserNotifications(
     params: NotificationsListParams = {},
     token?: string | null,
-    options?: { signal?: AbortSignal; suppressErrorModal?: boolean },
   ) {
     return api.get<NotificationsListResponse>(
       `${NOTIFICATION_ROUTES.userNotifications}${buildQuery(params)}`,
-      { token, signal: options?.signal, suppressErrorModal: options?.suppressErrorModal },
+      { token },
     )
   },
 
-  async getUnreadCount(token?: string | null, options?: { signal?: AbortSignal; suppressErrorModal?: boolean }) {
+  async getUnreadCount(token?: string | null) {
     return api.get<UnreadCountResponse>(NOTIFICATION_ROUTES.unreadCount, {
       token,
-      signal: options?.signal,
-      suppressErrorModal: options?.suppressErrorModal,
     })
   },
 

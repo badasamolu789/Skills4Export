@@ -216,8 +216,8 @@ const sortedByDate = <T,>(items: T[], getDate: (item: T) => string) =>
 const hydratePostMedia = async (posts: PostRecord[]) => {
   const entries = await Promise.all(
     posts.map(async (post) => {
-      const response = await postsService.listPostMedia(post.id, authStore.authToken).catch(() => null)
-      return [post.id, response?.data ?? []] as const
+      const response = await postsService.listPostMedia(post.id, authStore.authToken)
+      return [post.id, response.data ?? []] as const
     }),
   )
 
@@ -242,9 +242,7 @@ const loadActivities = async () => {
     const [postsResponse, questionsResponse, savedPostsResponse] = await Promise.all([
       postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
       questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-      postsService
-        .listSavedPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken)
-        .catch(() => null),
+      postsService.listSavedPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
     ])
 
     const allPosts = postsResponse.data ?? []
@@ -252,15 +250,14 @@ const loadActivities = async () => {
     const ownPosts = allPosts.filter((post) => getPostUserId(post) === userId)
     const ownQuestions = allQuestions.filter((question) => getQuestionUserId(question) === userId)
     const nextScoredPosts = allPosts.filter((post) => Boolean(post.is_liked))
-    const nextSavedPosts = (savedPostsResponse?.data ?? allPosts.filter((post) => post.is_saved))
-      .filter((post) => savedPostsResponse || post.is_saved)
+    const nextSavedPosts = savedPostsResponse.data ?? []
     const nextSavedQuestions = allQuestions.filter((question) => question.is_saved)
 
     await hydratePostMedia([...ownPosts, ...nextScoredPosts, ...nextSavedPosts])
 
     const [commentResults, answerResults] = await Promise.all([
-      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),
-      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken).catch(() => null))),
+      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken))),
+      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken))),
     ])
 
     const postTitleById = new Map(allPosts.map((post) => [post.id, post.title || 'Post']))
@@ -381,7 +378,6 @@ const submitEdit = async () => {
       userComments.value = userComments.value.map((comment) =>
         comment.id === editModal.value.id ? { ...comment, content: body } : comment,
       )
-      toast.success('Comment updated.')
     } else {
       const question = userQuestions.value.find((item) => item.id === editModal.value.id)
       await questionsService.updateQuestion(editModal.value.id, {
@@ -396,7 +392,6 @@ const submitEdit = async () => {
       savedQuestions.value = savedQuestions.value.map((item) =>
         item.id === editModal.value.id ? { ...item, title, body } : item,
       )
-      toast.success('Question updated.')
     }
 
     closeEditModal({ force: true })
@@ -452,12 +447,10 @@ const confirmDelete = async () => {
     if (deleteModal.value.type === 'comment') {
       await postsService.deleteComment(deleteModal.value.id, { userId: authStore.userId }, authStore.authToken)
       userComments.value = userComments.value.filter((comment) => comment.id !== deleteModal.value.id)
-      toast.success('Comment deleted.')
     } else {
       await questionsService.deleteQuestion(deleteModal.value.id, { userId: authStore.userId }, authStore.authToken)
       userQuestions.value = userQuestions.value.filter((question) => question.id !== deleteModal.value.id)
       savedQuestions.value = savedQuestions.value.filter((question) => question.id !== deleteModal.value.id)
-      toast.success('Question deleted.')
     }
 
     closeDeleteModal({ force: true })

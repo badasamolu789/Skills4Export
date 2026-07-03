@@ -5,6 +5,7 @@ import { communitiesService, type CommunityRecord } from '@/services/communities
 import { useAuthStore } from '@/stores/auth'
 import { isPublicCommunity } from '@/utils/communityFilters'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { richTextToPlainText } from '@/utils/richText'
 
 const authStore = useAuthStore()
 const searchQuery = ref('')
@@ -123,7 +124,7 @@ onMounted(() => {
               class="mt-2 overflow-hidden text-sm leading-7 text-[var(--text-secondary)]"
               style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;"
             >
-              {{ community.description || 'No community description has been added yet.' }}
+              {{ richTextToPlainText(community.description) || 'No community description has been added yet.' }}
             </p>
           </div>
         </RouterLink>

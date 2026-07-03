@@ -37,6 +37,10 @@ export type CompactFeedRecord = {
   id: string
   userId?: string | null
   user_id?: string | null
+  parentPostId?: string | null
+  parent_post_id?: string | null
+  originalPostId?: string | null
+  original_post_id?: string | null
   communityId?: string | null
   community_id?: string | null
   pageId?: string | null
@@ -93,8 +97,25 @@ export type CompactFeedParams = {
   mode?: 'latest' | 'popular'
   page?: number
   per_page?: number
+  perPage?: number
+  limit?: number
+  offset?: number
   q?: string
+  search?: string
+  sort?: string
+  status?: string
   communityId?: string | null
+  community_id?: string | null
+  'filters[search]'?: string
+  'filters[community_id]'?: string | null
+  sortField?: string
+  sortDirection?: 'asc' | 'desc' | string
+  'sort[field]'?: string
+  'sort[direction]'?: 'asc' | 'desc' | string
+  lastCreatedAt?: string
+  last_created_at?: string
+  lastId?: string
+  last_id?: string
 }
 
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
@@ -112,11 +133,68 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
   return value ? `${path}?${value}` : path
 }
 
+const SORT_FIELD_ALIASES: Record<string, string> = {
+  createdAt: 'created_at',
+  created_at: 'created_at',
+  updatedAt: 'updated_at',
+  updated_at: 'updated_at',
+  commentsCount: 'comment_count',
+  commentCount: 'comment_count',
+  comment_count: 'comment_count',
+  title: 'title',
+  score: 'score',
+}
+
+const normalizeSortField = (field: string) => SORT_FIELD_ALIASES[field] || field
+
+const normalizeFeedQueryParams = (params: CompactFeedParams = {}) => {
+  const normalized: Record<string, unknown> = { ...params }
+
+  if (params.q && !normalized['filters[search]']) {
+    normalized['filters[search]'] = params.q
+  }
+
+  if (params.search && !normalized['filters[search]']) {
+    normalized['filters[search]'] = params.search
+  }
+
+  if (params.communityId && !normalized['filters[community_id]']) {
+    normalized['filters[community_id]'] = params.communityId
+    normalized.community_id = params.communityId
+  }
+
+  if (params.community_id && !normalized['filters[community_id]']) {
+    normalized['filters[community_id]'] = params.community_id
+  }
+
+  if (params.sort && !normalized['sort[field]']) {
+    const descending = params.sort.startsWith('-')
+    const field = descending ? params.sort.slice(1) : params.sort
+    normalized['sort[field]'] = normalizeSortField(field)
+    normalized['sort[direction]'] = descending ? 'desc' : 'asc'
+  }
+
+  if (params.sortField && !normalized['sort[field]']) {
+    normalized['sort[field]'] = normalizeSortField(params.sortField)
+  }
+
+  if (params.sortDirection && !normalized['sort[direction]']) {
+    normalized['sort[direction]'] = params.sortDirection
+  }
+
+  if (typeof normalized['sort[field]'] === 'string') {
+    normalized['sort[field]'] = normalizeSortField(normalized['sort[field]'])
+    delete normalized.sort
+  }
+
+  return normalized
+}
+
 export const feedsService = {
   listCompactFeed(params: CompactFeedParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<CompactFeedRecord>>(
-      withQuery('/feed', params),
-      { token, suppressErrorModal: true },
+      withQuery('/feed', normalizeFeedQueryParams(params)),
+      { token },
     )
   },
 }

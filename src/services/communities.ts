@@ -18,6 +18,12 @@ export type CommunityRecord = {
     iconClass?: string | null
     icon_class?: string | null
   } | null
+  slug?: string | null
+  url?: string | null
+  community_type?: 'regular' | 'channel' | 'topic' | string | null
+  communityType?: 'regular' | 'channel' | 'topic' | string | null
+  parent_community_id?: string | null
+  parentCommunityId?: string | null
   icon?: string | null
   iconName?: string | null
   icon_name?: string | null

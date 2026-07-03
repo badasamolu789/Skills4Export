@@ -25,7 +25,7 @@ const headerLinks: Array<{ label: string; to?: string; action?: 'ask' | 'post'; 
   { label: 'Ask', action: 'ask', iconClass: 'las la-question-circle' },
   { label: 'Post', action: 'post' },
   { label: 'Answer', to: '/answers', target: '_blank', iconClass: 'las la-book' },
-  { label: 'Communities', to: '/communities', iconClass: 'las la-users' },
+  // { label: 'Communities', to: '/communities', iconClass: 'las la-users' },
 ]
 
 const authStore = useAuthStore()
@@ -42,7 +42,6 @@ const profileName = currentUser.displayName
 const profileRole = currentUser.role
 const profileInitials = currentUser.initials
 const profileImage = currentUser.avatarSrc
-const notifications = computed(() => notificationsStore.visibleNotifications)
 
 const userMenu = computed(() => [
   { label: 'Profile', to: '/profile' },
@@ -75,7 +74,9 @@ const showHeader = computed(() => currentLayout.value === 'app')
 const hideSidebar = computed(() => Boolean(route.meta.hideSidebar))
 const hideRightRail = computed(() => Boolean(route.meta.hideRightRail))
 const forceRightRail = computed(() => Boolean(route.meta.showRightRail))
-const hideRightRailQuestions = computed(() => route.path.startsWith('/communities/'))
+const hideRightRailQuestions = computed(
+  () => route.path.startsWith('/communities/') || Boolean(route.meta.hideRightRailQuestions),
+)
 const hideRightRailAdverts = computed(() => Boolean(route.meta.hideRightRailAdverts))
 const usesWorkspaceShell = computed(
   () =>
@@ -113,7 +114,9 @@ const mainClasses = computed(() =>
         'mx-auto w-full max-w-[86rem] flex-1 px-3 py-4 sm:px-4 sm:py-5 xl:px-8',
         showWorkspaceShell.value ? 'lg:px-5 lg:pt-0 lg:pb-5' : 'lg:px-6 lg:py-6',
       ].join(' ')
-    : 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl flex-1 items-center justify-center px-3 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-8',
+    : route.name === 'landing'
+      ? 'flex min-h-screen w-full flex-1 px-0 py-0'
+      : 'mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl flex-1 items-center justify-center px-3 py-5 sm:px-5 sm:py-6 lg:px-6 lg:py-8',
 )
 
 watch(
@@ -310,7 +313,6 @@ const handleMenuAction = async (action: 'logout') => {
       logo-alt="Skills4Export logo"
       platform-name="Skills4Export"
       :links="headerLinks"
-      :notifications="notifications"
       :is-authenticated="authStore.isAuthenticated"
       :user-name="profileName"
       :user-role="profileRole"

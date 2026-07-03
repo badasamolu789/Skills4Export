@@ -17,6 +17,7 @@ const JobsView = () => import('@/views/JobsView.vue')
 const CookiePolicyView = () => import('@/views/CookiePolicyView.vue')
 const LoginView = () => import('@/views/LoginView.vue')
 const MobileNotificationsView = () => import('@/views/MobileNotificationsView.vue')
+const NotificationsView = () => import('@/views/NotificationsView.vue')
 const MobileAccountView = () => import('@/views/MobileAccountView.vue')
 const MobileSearchView = () => import('@/views/MobileSearchView.vue')
 const PageDetailView = () => import('@/views/PageDetailView.vue')
@@ -35,11 +36,30 @@ const ReferralsView = () => import('@/views/ReferralsView.vue')
 const SettingsView = () => import('@/views/SettingsView.vue')
 const SignUpView = () => import('@/views/SignUpView.vue')
 const SignUpDetailsView = () => import('@/views/SignUpDetailsView.vue')
+const SpecialCommunityView = () => import('@/views/SpecialCommunityView.vue')
 const TermsConditionsView = () => import('@/views/TermsConditionsView.vue')
 const VerifyEmailView = () => import('@/views/VerifyEmailView.vue')
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) {
+      return new Promise((resolve) => {
+        window.setTimeout(() => {
+          resolve(savedPosition)
+        }, 250)
+      })
+    }
+
+    if (to.hash) {
+      return {
+        el: to.hash,
+        behavior: 'smooth',
+      }
+    }
+
+    return { top: 0 }
+  },
   routes: [
     {
       path: '/',
@@ -84,6 +104,24 @@ const router = createRouter({
     {
       path: '/feed',
       name: 'home',
+      component: HomeView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+      },
+    },
+    {
+      path: '/contest',
+      name: 'contest',
+      component: HomeView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+      },
+    },
+    {
+      path: '/post',
+      name: 'post',
       component: HomeView,
       meta: {
         layout: 'app',
@@ -183,6 +221,17 @@ const router = createRouter({
       },
     },
     {
+      path: '/notifications',
+      name: 'notifications',
+      component: NotificationsView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+        hideSidebar: true,
+        showRightRail: true,
+      },
+    },
+    {
       path: '/mobile/search',
       name: 'mobile-search',
       component: MobileSearchView,
@@ -207,6 +256,30 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+      },
+    },
+    {
+      path: '/jokes',
+      name: 'jokes-community',
+      component: SpecialCommunityView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+        specialCommunity: 'jokes',
+        hideRightRailQuestions: true,
+      },
+    },
+    {
+      path: '/headlines',
+      name: 'headlines-community',
+      component: SpecialCommunityView,
+      meta: {
+        layout: 'app',
+        requiresAuth: true,
+        specialCommunity: 'headlines',
+        hideSidebar: true,
+        showRightRail: true,
+        hideRightRailQuestions: true,
       },
     },
     {

@@ -19,6 +19,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getPostCommunityId, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionCommunityId, getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
+import { richTextToPlainText } from '@/utils/richText'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -101,14 +102,14 @@ const sortedCommunityFeed = computed(() =>
 const loadCommunityPost = async (post: PostRecord) => {
   const postUserId = getPostUserId(post)
   const [mediaResponse, authorResponse] = await Promise.all([
-    postsService.listPostMedia(post.id, authStore.authToken).catch(() => null),
+    postsService.listPostMedia(post.id, authStore.authToken),
     postUserId
-      ? usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
+      ? usersService.getUserProfile(postUserId, authStore.authToken)
       : Promise.resolve(null),
   ])
 
   return {
-    ...mapApiPostToFeedPost(post, mediaResponse?.data ?? [], authorResponse?.data ?? null),
+    ...mapApiPostToFeedPost(post, mediaResponse.data ?? [], authorResponse?.data ?? null),
     communityName: community.value?.name || 'Community post',
   } satisfies FeedPost
 }
@@ -116,7 +117,7 @@ const loadCommunityPost = async (post: PostRecord) => {
 const loadCommunityQuestion = async (question: QuestionRecord) => {
   const userId = getQuestionUserId(question)
   const authorResponse = userId
-    ? await usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
+    ? await usersService.getUserProfile(userId, authStore.authToken)
     : null
 
   return {
@@ -155,23 +156,16 @@ const loadCommunityFeed = async (communityId: string) => {
   communityFeed.value = []
 
   try {
-    const [postsResult, questionsResult] = await Promise.allSettled([
+    const [postsResponse, questionsResponse] = await Promise.all([
       postsService.listPosts({ per_page: 100, sort: '-createdAt', communityId }, authStore.authToken),
       questionsService.listQuestions(
         { per_page: 100, sort: '-createdAt', communityId },
         authStore.authToken,
-        { suppressErrorModal: true },
       ),
     ])
 
-    const communityPosts =
-      postsResult.status === 'fulfilled'
-        ? postsResult.value.data.filter((post) => getPostCommunityId(post) === communityId)
-        : []
-    const communityQuestions =
-      questionsResult.status === 'fulfilled'
-        ? questionsResult.value.data.filter((question) => getQuestionCommunityId(question) === communityId)
-        : []
+    const communityPosts = postsResponse.data.filter((post) => getPostCommunityId(post) === communityId)
+    const communityQuestions = questionsResponse.data.filter((question) => getQuestionCommunityId(question) === communityId)
 
     const [mappedPosts, mappedQuestions] = await Promise.all([
       Promise.all(communityPosts.map((post) => loadCommunityPost(post))),
@@ -208,10 +202,10 @@ const loadCommunity = async (id: string) => {
   try {
     const [communityResponse, membersResponse] = await Promise.all([
       communitiesService.getCommunity(id, authStore.authToken),
-      communitiesService.listCommunityMembers(id, authStore.authToken).catch(() => null),
+      communitiesService.listCommunityMembers(id, authStore.authToken),
     ])
     community.value = communityResponse.data
-    members.value = membersResponse?.data ?? []
+    members.value = membersResponse.data ?? []
     await loadCommunityFeed(communityResponse.data.id)
   } catch (error) {
     communityError.value = error instanceof ApiError ? error.message : 'Unable to load this community.'
@@ -239,7 +233,6 @@ const toggleMembership = async () => {
       await communitiesService.leaveCommunity(community.value.id, authStore.authToken)
       members.value = members.value.filter((member) => getMemberUserId(member) !== authStore.userId)
       setStoredCommunityFollow(community.value.id, false)
-      toast.success('Unfollowed community')
       return
     }
 
@@ -253,7 +246,6 @@ const toggleMembership = async () => {
       ...members.value.filter((member) => getMemberUserId(member) !== authStore.userId),
     ]
     setStoredCommunityFollow(community.value.id, true)
-    toast.success('Following community')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update community membership.'
     toast.error('Community failed', { description: message })
@@ -314,7 +306,7 @@ watch(
               class="mt-4 max-w-4xl overflow-hidden text-sm leading-7 text-[var(--text-secondary)] sm:text-base"
               style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;"
             >
-              {{ community.description || 'No community description has been added yet.' }}
+              {{ richTextToPlainText(community.description) || 'No community description has been added yet.' }}
             </p>
 
             <RouterLink
@@ -341,7 +333,7 @@ watch(
             title="Follow this community to get alerted with updates."
           >
             <Plus v-if="!isMember" class="h-4 w-4" />
-            {{ isJoining ? 'Updating...' : isMember ? 'Following' : 'Follow' }}
+            {{ isJoining ? 'Updating...' : isMember ? 'Unfollow' : 'Follow' }}
           </button>
         </div>
       </div>

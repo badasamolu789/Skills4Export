@@ -57,22 +57,15 @@ const enrichFreelancerProfiles = async (items: FreelancerRecord[], token?: strin
         return freelancer
       }
 
-      try {
-        const [profileResult, userResult] = await Promise.allSettled([
-          usersService.getUserProfile(freelancer.userId, token),
-          usersService.getUser(freelancer.userId, token),
-        ])
-        const profile = profileResult.status === 'fulfilled' ? profileResult.value.data : null
-        const user = userResult.status === 'fulfilled' ? userResult.value.data : null
+      const profileResponse = await usersService.getUserProfile(freelancer.userId, token)
+      const profile = profileResponse.data
+      const recordUser = freelancer.user ?? null
 
-        return {
-          ...freelancer,
-          avatar: freelancer.avatar || readProfileAvatar(profile),
-          email: freelancer.email || freelancer.userEmail || readProfileEmail(profile) || user?.email || null,
-          userEmail: freelancer.userEmail || freelancer.email || readProfileEmail(profile) || user?.email || null,
-        }
-      } catch {
-        return freelancer
+      return {
+        ...freelancer,
+        avatar: freelancer.avatar || recordUser?.avatar || readProfileAvatar(profile),
+        email: freelancer.email || freelancer.userEmail || recordUser?.email || readProfileEmail(profile),
+        userEmail: freelancer.userEmail || freelancer.email || recordUser?.email || readProfileEmail(profile),
       }
     }),
   )
@@ -127,28 +120,13 @@ export const useFreelancersStore = defineStore('freelancers', () => {
     freelanceJobsError.value = ''
 
     try {
-      const [publicJobsResult, ownPostedJobsResult] = await Promise.allSettled([
-        freelancersService.listFreelanceJobs(
-          { per_page: 100 },
-          authStore.authToken,
-          { suppressErrorModal: true },
-        ),
-        authStore.authToken
-          ? freelancersService.listMyFreelanceJobs({ per_page: 100 }, authStore.authToken)
-          : Promise.resolve({ data: [] as FreelanceJobRecord[] }),
-      ])
+      const publicJobsResponse = await freelancersService.listFreelanceJobs({ per_page: 100 }, authStore.authToken)
+      const publicJobs = publicJobsResponse.data.filter(isPublicFreelanceJob)
+      let ownPostedJobs: FreelanceJobRecord[] = []
 
-      const publicJobs =
-        publicJobsResult.status === 'fulfilled'
-          ? publicJobsResult.value.data.filter(isPublicFreelanceJob)
-          : []
-      const ownPostedJobs =
-        ownPostedJobsResult.status === 'fulfilled'
-          ? ownPostedJobsResult.value.data.filter(isPublicFreelanceJob)
-          : []
-
-      if (publicJobsResult.status === 'rejected' && !ownPostedJobs.length) {
-        throw publicJobsResult.reason
+      if (authStore.authToken) {
+        const ownPostedJobsResponse = await freelancersService.listMyFreelanceJobs({ per_page: 100 }, authStore.authToken)
+        ownPostedJobs = ownPostedJobsResponse.data.filter(isPublicFreelanceJob)
       }
 
       freelanceJobs.value = mergeFreelanceJobs(ownPostedJobs, publicJobs)

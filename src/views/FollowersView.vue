@@ -54,6 +54,11 @@ const followUser = async (targetUserId: string) => {
     return
   }
 
+  if (!authStore.userId) {
+    toast.error('Unable to follow user: missing user identity.')
+    return
+  }
+
   if (authStore.userId && targetUserId === authStore.userId) {
     toast.info('This is your profile', {
       description: 'You cannot follow your own account.',
@@ -64,10 +69,9 @@ const followUser = async (targetUserId: string) => {
   isToggling.value[targetUserId] = true
 
   try {
-    await usersService.followUser(targetUserId, {}, authStore.authToken)
+    await usersService.followUser(targetUserId, { followerId: authStore.userId }, authStore.authToken)
 
     isFollowing.value[targetUserId] = true
-    toast.success('Following user!')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -87,7 +91,6 @@ const unfollowUser = async (targetUserId: string) => {
     await usersService.unfollowUser(targetUserId, authStore.authToken)
 
     isFollowing.value[targetUserId] = false
-    toast.success('Unfollowed user!')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -185,6 +188,7 @@ onMounted(() => {
             @click="isFollowing[follower.followerId] ? unfollowUser(follower.followerId) : followUser(follower.followerId)"
           >
             <component :is="isFollowing[follower.followerId] ? UserCheck : UserPlus" class="h-4 w-4" />
+            {{ isFollowing[follower.followerId] ? 'Unfollow' : 'Follow' }}
           </button>
         </div>
       </div>

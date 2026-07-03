@@ -3,6 +3,7 @@ import type { FeedPost } from '@/data/feedPosts'
 import type { CompactFeedMedia, CompactFeedRecord } from '@/services/feeds'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getOptionalCount, isVideoPostMedia } from '@/utils/postMapper'
+import { getProfileContextTag } from '@/utils/profileContextTag'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -72,7 +73,7 @@ const getAuthorSkills = (author: unknown) => {
     })
     .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
     .slice(0, 3)
-    .join(' | ')
+    .join(' | ') || getProfileContextTag(author)
 }
 
 const normalizeMediaItem = (
@@ -107,6 +108,12 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
   const author = item.author || item.user || null
   const viewerState = item.viewerState || item.viewer_state || null
   const userId = item.userId || item.user_id || author?.id || ''
+  const originalPostId =
+    item.originalPostId ||
+    item.original_post_id ||
+    item.parentPostId ||
+    item.parent_post_id ||
+    null
   const communityId = item.communityId || item.community_id || item.community?.id || null
   const pageId = item.pageId || item.page_id || item.page?.id || null
   const title = item.title || ''
@@ -123,6 +130,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       apiId: id,
       userId,
       communityId,
+      originalPostId,
       createdAt,
       updatedAt,
       slug: id || slugify(title),
@@ -167,6 +175,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
     communityId,
     communityName: communityId ? item.community?.name || '' : undefined,
     pageId,
+    originalPostId,
     createdAt,
     updatedAt,
     slug: id || slugify(title),

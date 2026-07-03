@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, Image as ImageIcon, MoreHorizontal, Rocket, Sparkles, Trash2, UploadCloud, UserCheck, UserPlus, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
@@ -9,14 +8,11 @@ import { ApiError } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { normalizeUserSkills, usersService } from '@/services/users'
 import { mediaService } from '@/services/media'
-import { postsService, type PostRecord } from '@/services/posts'
-import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
-import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
-import { getQuestionUserId } from '@/utils/questionMapper'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
-import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower } from '@/services/users'
+import { richTextToPlainText } from '@/utils/richText'
+import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower, UserProfile } from '@/services/users'
 
 type ProfileUploadItem = {
   id: string
@@ -29,7 +25,6 @@ type ProfileUploadItem = {
 
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
-const route = useRoute()
 const isLoadingProfile = ref(false)
 const hasLoadedProfile = ref(false)
 const isLoadingFollowers = ref(false)
@@ -38,7 +33,6 @@ const isLoadingPortfolios = ref(false)
 const isLoadingCertifications = ref(false)
 const isLoadingEducations = ref(false)
 const isLoadingExperiences = ref(false)
-const isLoadingActivity = ref(false)
 const skillsLoadError = ref('')
 const isProfileDetailsModalOpen = ref(false)
 const isLoadingProfileDetails = ref(false)
@@ -272,7 +266,7 @@ const submitProfileUpload = async () => {
       portfolios.value = [portfolio, ...portfolios.value]
     }
 
-    toast.success('Upload added', { id: toastId })
+    toast.dismiss(toastId)
     isUploadModalOpen.value = false
     uploadForm.value = { title: '', externalUrl: '' }
     clearUploadSelection({ keepPreview: shouldKeepPreview })
@@ -290,6 +284,169 @@ const getSkillDisplayName = (skill: UserSkill) => skill.name || skill.skill || '
 
 const getProfileUserId = (data?: MyProfileData | null) =>
   data?.user?.id || data?.profile?.userId || authStore.userId
+
+const getNumericValue = (value: unknown) => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value
+  }
+
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) {
+    return Number(value)
+  }
+
+  return 0
+}
+
+const getProfileCount = (data: MyProfileData | null | undefined, key: string) =>
+  getNumericValue(data?.counts?.[key] ?? data?.metrics?.[key])
+
+const getFollowerUsers = (data: MyProfileData | null | undefined): UserFollower[] => {
+  const followersValue = data?.followers
+
+  if (Array.isArray(followersValue)) {
+    return followersValue
+  }
+
+  return Array.isArray(followersValue?.users) ? followersValue.users : []
+}
+
+const getFollowingUsers = (data: MyProfileData | null | undefined): UserFollower[] => {
+  const followingValue = data?.following
+
+  if (Array.isArray(followingValue)) {
+    return followingValue
+  }
+
+  return Array.isArray(followingValue?.users) ? followingValue.users : []
+}
+
+const getFollowingAccount = (value: unknown) => {
+  const record = asRecord(value)
+  const userRecord =
+    asRecord(record?.following) ||
+    asRecord(record?.user) ||
+    asRecord(record?.account) ||
+    record
+  const profileRecord =
+    asRecord(record?.followingProfile) ||
+    asRecord(record?.profile) ||
+    asRecord(userRecord?.profile)
+  const id =
+    getStringField(record, ['followingId', 'following_id']) ||
+    getStringField(userRecord, ['id', 'userId', 'user_id'])
+  const name = getDisplayName(
+    getStringField(profileRecord, ['displayName', 'display_name', 'name']),
+    getStringField(userRecord, ['name', 'displayName', 'display_name', 'fullName', 'full_name', 'username']),
+    id ? `User ${id.slice(0, 8)}` : 'User',
+  )
+  const avatar =
+    getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
+    getStringField(userRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image'])
+
+  return {
+    id,
+    name,
+    avatar,
+    initials: getAccountInitials(name),
+  }
+}
+
+const getNumberField = (record: Record<string, unknown> | null | undefined, keys: string[]) => {
+  for (const key of keys) {
+    const value = getNumericValue(record?.[key])
+    if (value) {
+      return value
+    }
+  }
+
+  return 0
+}
+
+const getProfileScoreTotal = (data: MyProfileData | null | undefined) => {
+  const scores = asRecord(data?.scores)
+  const explicitTotal = getNumericValue(
+    scores?.total ??
+      scores?.totalScore ??
+      scores?.total_score ??
+      scores?.score ??
+      data?.scores,
+  )
+
+  if (explicitTotal) {
+    return explicitTotal
+  }
+
+  return getScoreEntryArray(data).reduce((total, entry) => {
+    const record = asRecord(entry)
+
+    return total + getNumberField(record, ['score', 'total', 'points', 'value'])
+  }, 0)
+}
+
+const getScoreEntryArray = (data: MyProfileData | null | undefined) => {
+  const scores = asRecord(data?.scores)
+  const byCommunity =
+    scores?.byCommunity ??
+    scores?.by_community ??
+    scores?.communities ??
+    scores?.items ??
+    scores?.data
+
+  if (Array.isArray(byCommunity)) {
+    return byCommunity
+  }
+
+  if (byCommunity && typeof byCommunity === 'object') {
+    return Object.entries(byCommunity).map(([id, value]) => ({
+      id,
+      ...(asRecord(value) ?? { score: value }),
+    }))
+  }
+
+  return []
+}
+
+const getProfileScoreEntries = (data: MyProfileData | null | undefined) => {
+  const entries = getScoreEntryArray(data)
+    .map((entry, index) => {
+      const record = asRecord(entry)
+      const communityRecord = asRecord(record?.community)
+      const score = getNumberField(record, ['score', 'total', 'points', 'value'])
+
+      if (!record || score <= 0) {
+        return null
+      }
+
+      const title = getDisplayName(
+        getStringField(record, ['title', 'name', 'label']),
+        getStringField(communityRecord, ['name', 'title']),
+        'Community score',
+      )
+      const community = getDisplayName(
+        getStringField(communityRecord, ['name', 'title']),
+        getStringField(record, ['communityName', 'community_name', 'community']),
+        'Community activity',
+      )
+
+      return {
+        id: getStringField(record, ['id', 'communityId', 'community_id']) || `score-${index}`,
+        title,
+        community,
+        score,
+        typeLabel: getStringField(record, ['typeLabel', 'type_label', 'type']) || 'Score',
+      }
+    })
+    .filter((entry): entry is { id: string; title: string; community: string; score: number; typeLabel: string } => Boolean(entry))
+
+  if (entries.length) {
+    return entries
+  }
+
+  const total = getProfileScoreTotal(data)
+  return total > 0
+    ? [{ id: 'total-score', title: 'Total score', community: 'All profile activity', score: total, typeLabel: 'Profile' }]
+    : []
+}
 
 let skillsRequestId = 0
 
@@ -559,7 +716,6 @@ const handleDelete = async (
         break
     }
 
-    toast.success(`${label.charAt(0).toUpperCase() + label.slice(1)} deleted successfully.`)
   } catch (error) {
     const message = getErrorMessage(error, `Failed to delete ${label}.`)
     toast.error('Delete failed', { description: message })
@@ -577,71 +733,6 @@ const profileDetailsForm = ref({
   currentJobTitle: '',
 })
 
-const loadRecentActivity = async (userId: string) => {
-  isLoadingActivity.value = true
-
-  try {
-    const [postsResult, questionsResult] = await Promise.allSettled([
-      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-    ])
-    const allPosts = postsResult.status === 'fulfilled' ? postsResult.value.data : []
-    const allQuestions = questionsResult.status === 'fulfilled' ? questionsResult.value.data : []
-    const userPosts = allPosts.filter((post: PostRecord) => getPostUserId(post) === userId)
-    const userQuestions = allQuestions.filter((question: QuestionRecord) => getQuestionUserId(question) === userId)
-    const [postCommentResults, questionAnswerResults] = await Promise.all([
-      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken).catch(() => null))),
-      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken).catch(() => null))),
-    ])
-    const userCommentCount = postCommentResults.reduce((total, response) => {
-      const comments = response?.data ?? []
-      return total + comments.filter((comment) => comment.user_id === userId).length
-    }, 0)
-    const userAnswers = questionAnswerResults.flatMap((response) => response?.data ?? []).filter((answer) => {
-      const answerUserId = answer.userId || answer.user_id || ''
-      return answerUserId === userId
-    })
-
-    const postScores = userPosts.map((post) => ({
-      id: post.id,
-      title: post.title,
-      community: post.community?.name || 'Post',
-      score: getOptionalCount(post.score, post.reactions_count, post.reaction_count),
-      typeLabel: 'Post',
-    }))
-    const questionScores = userQuestions.map((question) => ({
-      id: question.id,
-      title: question.title,
-      community: 'Question',
-      score: getOptionalCount(question.score, question.reactions_count, question.reaction_count),
-      typeLabel: 'Question',
-    }))
-    const answerScores = userAnswers.map((answer) => ({
-      id: answer.id,
-      title: answer.content || answer.body || answer.answer || 'Answer',
-      community: 'Answer',
-      score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count),
-      typeLabel: 'Answer',
-    }))
-
-    stats.value = {
-      ...stats.value,
-      posts: userPosts.length,
-      questions: userQuestions.length,
-      answers: userAnswers.length,
-      comments: userCommentCount,
-    }
-    scoreEntries.value = [...postScores, ...questionScores, ...answerScores]
-    socialActionsStore.setProfileStats(userId, {
-      score: scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
-    })
-  } catch {
-    scoreEntries.value = []
-  } finally {
-    isLoadingActivity.value = false
-  }
-}
-
 const loadProfile = async () => {
   if (!authStore.isAuthenticated) {
     return
@@ -650,40 +741,32 @@ const loadProfile = async () => {
   isLoadingProfile.value = true
 
   try {
-    const [profileResult, statsResult] = await Promise.allSettled([
-      usersService.getMyProfile(authStore.authToken),
-      usersService.getMyStats(authStore.authToken, { suppressErrorModal: true }),
-    ])
+    const profileResponse = await usersService.getMyProfile(authStore.authToken)
+    const profileData = profileResponse.data ?? null
+    profileResponseData.value = profileData
 
-    if (profileResult.status === 'rejected') {
-      throw profileResult.reason
-    }
-
-    const profileResponse = profileResult.value
-    profileResponseData.value = profileResponse.data ?? null
-
-    authStore.setCurrentUser(profileResponse.data?.user ?? null)
-    authStore.setUserProfile(profileResponse.data?.profile ?? null)
+    authStore.setCurrentUser(profileData?.user ?? null)
+    authStore.setUserProfile(profileData?.profile ?? null)
     hasLoadedProfile.value = true
 
-    const loadedUserId = getProfileUserId(profileResponse.data)
+    const loadedUserId = getProfileUserId(profileData)
 
     if (loadedUserId) {
       authStore.setUserId(loadedUserId)
     }
 
-    if (profileResponse.data?.user?.email && typeof profileResponse.data.user.email === 'string') {
-      authStore.signUpDraft.email = profileResponse.data.user.email
+    if (profileData?.user?.email && typeof profileData.user.email === 'string') {
+      authStore.signUpDraft.email = profileData.user.email
     }
 
-    const responseDisplayName = getDisplayName(profileResponse.data?.user?.name)
+    const responseDisplayName = getDisplayName(profileData?.user?.name)
     if (responseDisplayName) {
       authStore.signUpDraft.name = responseDisplayName
     }
 
     // Sync profile data to store for persistence across reloads
-    if (profileResponse.data?.profile) {
-      const profile = profileResponse.data.profile
+    if (profileData?.profile) {
+      const profile = profileData.profile
       authStore.signUpDraft.name = profile.displayName || authStore.signUpDraft.name
       authStore.signUpDraft.username = profile.username || authStore.signUpDraft.username
       authStore.signUpDraft.headline = profile.bio || authStore.signUpDraft.headline
@@ -696,57 +779,25 @@ const loadProfile = async () => {
       }
     }
 
-    if (statsResult.status === 'fulfilled') {
-      stats.value = {
-        pages: statsResult.value.data?.pages ?? 0,
-        communities: statsResult.value.data?.communities ?? 0,
-        posts: statsResult.value.data?.posts ?? 0,
-        questions: 0,
-        answers: 0,
-        comments: statsResult.value.data?.comments ?? 0,
-        followers: 0,
-      }
-    } else {
-      stats.value = {
-        ...stats.value,
-        pages: 0,
-        communities: 0,
-        posts: 0,
-        questions: 0,
-        answers: 0,
-        comments: 0,
-      }
+    stats.value = {
+      pages: getProfileCount(profileData, 'pages'),
+      communities: getProfileCount(profileData, 'communities'),
+      posts: getProfileCount(profileData, 'posts'),
+      questions: getProfileCount(profileData, 'questions'),
+      answers: getProfileCount(profileData, 'answers'),
+      comments: getProfileCount(profileData, 'comments'),
+      followers: profileData?.followerCount ?? getFollowerUsers(profileData).length,
     }
 
-    if (loadedUserId) {
-      await loadUserSkills(loadedUserId)
-    } else {
-      skills.value = []
-      skillsLoadError.value = 'Unable to load skills because the profile response did not include a user id.'
-    }
+    skillsLoadError.value = ''
+    skills.value = normalizeUserSkills(profileData?.skills ?? [])
+      .map(toSkillViewItem)
+      .filter((skill) => skill.name)
 
-    const [portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
-      loadedUserId
-        ? await Promise.allSettled([
-            usersService.listUserPortfolios(loadedUserId, authStore.authToken),
-            usersService.listUserCertifications(loadedUserId, authStore.authToken),
-            usersService.listUserEducations(loadedUserId, authStore.authToken),
-            usersService.listUserExperiences(loadedUserId, authStore.authToken),
-          ])
-        : []
-
-    const sourcePortfolios = portfoliosResult?.status === 'fulfilled'
-      ? portfoliosResult.value.data
-      : profileResponse.data?.portfolios ?? []
-    const sourceCertifications = certificationsResult?.status === 'fulfilled'
-      ? certificationsResult.value.data
-      : profileResponse.data?.certifications ?? []
-    const sourceEducations = educationsResult?.status === 'fulfilled'
-      ? educationsResult.value.data
-      : profileResponse.data?.education ?? []
-    const sourceExperiences = experiencesResult?.status === 'fulfilled'
-      ? experiencesResult.value.data
-      : profileResponse.data?.experiences ?? []
+    const sourcePortfolios = profileData?.portfolios ?? []
+    const sourceCertifications = profileData?.certifications ?? []
+    const sourceEducations = profileData?.educations ?? profileData?.education ?? []
+    const sourceExperiences = profileData?.experiences ?? profileData?.activeExperiences ?? []
 
     portfolios.value = sourcePortfolios
     syncProfileUploadsFromPortfolios()
@@ -768,10 +819,45 @@ const loadProfile = async () => {
       authStore.signUpDraft.workplace = currentWorkplace
     }
 
-    // Load followers data separately
-    if (profileResponse.data?.user?.id) {
-      await loadFollowersData(profileResponse.data.user.id)
-      await loadRecentActivity(profileResponse.data.user.id)
+    const nextFollowers = getFollowerUsers(profileData)
+    const nextFollowing = getFollowingUsers(profileData)
+      .map(getFollowingAccount)
+      .filter((account) => account.id && account.id !== authStore.userId)
+    const nextFollowingIds = new Set(nextFollowing.map((account) => account.id))
+
+    followers.value = nextFollowers
+    following.value = nextFollowing
+    const nextFollowStates = { ...followStates.value }
+
+    for (const account of nextFollowing) {
+      nextFollowStates[account.id] = true
+      socialActionsStore.setUserFollowingState(account.id, true)
+    }
+
+    for (const follower of nextFollowers) {
+      const followerRecord = follower as Record<string, unknown>
+      const followerAccount = getFollowerAccount(follower)
+      const followerId =
+        getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id']) ||
+        followerAccount.id
+      const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+
+      if (followerId) {
+        const isFollowing = explicitState ?? nextFollowingIds.has(followerId)
+        nextFollowStates[followerId] = isFollowing
+        socialActionsStore.setUserFollowingState(followerId, isFollowing)
+      }
+    }
+
+    followStates.value = nextFollowStates
+
+    scoreEntries.value = getProfileScoreEntries(profileData)
+    if (loadedUserId) {
+      socialActionsStore.setProfileStats(loadedUserId, {
+        followers: profileData?.followerCount ?? nextFollowers.length,
+        following: profileData?.followingCount ?? nextFollowing.length,
+        score: getProfileScoreTotal(profileData),
+      })
     }
   } catch (error) {
     isLoadingSkills.value = false
@@ -782,71 +868,6 @@ const loadProfile = async () => {
   } finally {
     hasLoadedProfile.value = true
     isLoadingProfile.value = false
-  }
-}
-
-const loadFollowersData = async (userId: string) => {
-  isLoadingFollowers.value = true
-
-  try {
-    const response = await usersService.listFollowers(userId, authStore.authToken)
-    const followerRecords = response.data ?? []
-    const enrichedFollowers = await Promise.all(
-      followerRecords.map(async (follower) => {
-        const followerRecord = follower as Record<string, unknown>
-        const followerId = getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id'])
-
-        if (!followerId) {
-          return follower
-        }
-
-        const [profileResponse, userResponse] = await Promise.all([
-          usersService.getUserProfile(followerId, authStore.authToken).catch(() => null),
-          usersService.getUser(followerId, authStore.authToken).catch(() => null),
-        ])
-
-        return {
-          ...follower,
-          follower: profileResponse?.data?.user || userResponse?.data || follower.follower,
-          followerProfile: profileResponse?.data?.profile || follower.followerProfile,
-        }
-      }),
-    )
-
-    followers.value = enrichedFollowers
-    stats.value.followers = followers.value.length
-    const nextFollowStates = { ...followStates.value }
-
-    for (const follower of followers.value) {
-      const followerRecord = follower as Record<string, unknown>
-      const followerId = getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id'])
-      const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
-
-      if (followerId) {
-        nextFollowStates[followerId] = explicitState ?? true
-        socialActionsStore.setUserFollowingState(followerId, explicitState ?? true)
-      }
-    }
-
-    followStates.value = nextFollowStates
-    following.value = followerAccounts.value
-      .filter((account) => account.isFollowing && !account.isCurrentUser)
-      .map((account) => ({
-        id: account.id,
-        name: account.name,
-        avatar: account.avatar,
-        initials: account.initials,
-      }))
-    socialActionsStore.setProfileStats(userId, {
-      followers: followers.value.length,
-      following: following.value.length,
-    })
-  } catch (error) {
-    followers.value = []
-    stats.value.followers = 0
-    socialActionsStore.setProfileStats(userId, { followers: 0 })
-  } finally {
-    isLoadingFollowers.value = false
   }
 }
 
@@ -915,7 +936,6 @@ const toggleFollowFromModal = async (targetUserId: string) => {
         [targetUserId]: false,
       }
       following.value = following.value.filter((account) => account.id !== targetUserId)
-      toast.success('User unfollowed.')
       return
     }
 
@@ -936,7 +956,6 @@ const toggleFollowFromModal = async (targetUserId: string) => {
         },
       ]
     }
-    toast.success('Following user.')
   } catch (error) {
     const message = getErrorMessage(error, 'Unable to update follow status.')
     toast.error('Follow action failed', { description: message })
@@ -1056,7 +1075,6 @@ const upsertCurrentExperience = async () => {
       authStore.userId,
       payloadWithOptionalEndDate,
       authStore.authToken,
-      { suppressErrorModal: true },
     )
     await usersService.deleteUserExperience(authStore.userId, existingExperience.id, authStore.authToken)
     experiences.value = experiences.value.map((experience) =>
@@ -1069,7 +1087,6 @@ const upsertCurrentExperience = async () => {
     authStore.userId,
     payloadWithOptionalEndDate,
     authStore.authToken,
-    { suppressErrorModal: true },
   )
   experiences.value = [response.data, ...experiences.value]
 }
@@ -1115,9 +1132,11 @@ const saveProfileDetails = async () => {
       profilePayload,
       Boolean(authStore.userProfile?.id),
       authStore.authToken,
-      { suppressErrorModal: true },
     )
-    const savedProfile = profileResponse.data ?? authStore.userProfile
+    const responseProfile = asRecord(profileResponse.data)?.profile
+    const savedProfile = asRecord(responseProfile)
+      ? responseProfile as UserProfile
+      : (profileResponse.data as UserProfile | null) ?? authStore.userProfile
 
     try {
       await upsertCurrentExperience()
@@ -1159,7 +1178,6 @@ const saveProfileDetails = async () => {
     })
 
     isProfileDetailsModalOpen.value = false
-    toast.success('Profile updated.')
   } catch (error) {
     const message = getErrorMessage(error, 'We could not save your profile details.')
 
@@ -1302,7 +1320,6 @@ const replaceSectionItem = async () => {
     }
 
     editModal.value = { isOpen: false }
-    toast.success('Updated successfully.')
     void loadProfile()
   } catch (error) {
     const message = getErrorMessage(error, 'Failed to update item.')
@@ -1328,16 +1345,6 @@ onBeforeUnmount(() => {
     }
   })
 })
-
-// Refresh data when navigating to this route
-watch(
-  () => route.path,
-  () => {
-    if (route.path === '/profile') {
-      void loadProfile()
-    }
-  },
-)
 
 const profile = computed(() => {
   const draft = authStore.signUpDraft
@@ -1403,9 +1410,9 @@ const profileHeadlineParts = computed(() =>
 )
 
 const totalTScore = computed(() =>
-  authStore.userId
-    ? socialActionsStore.getProfileStats(authStore.userId).score
-    : scoreEntries.value.reduce((total, entry) => total + entry.score, 0),
+  getProfileScoreTotal(profileResponseData.value) ||
+    scoreEntries.value.reduce((total, entry) => total + entry.score, 0) ||
+    (authStore.userId ? socialActionsStore.getProfileStats(authStore.userId).score : 0),
 )
 
 const globalFollowerCount = computed(() =>
@@ -1599,7 +1606,7 @@ const editModalTitle = computed(() => {
       <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
         <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
           <p v-if="profile.bio" class="whitespace-pre-line">
-            {{ profile.bio }}
+            {{ richTextToPlainText(profile.bio) }}
           </p>
           <div v-else-if="isLoadingProfile && !hasLoadedProfile" class="space-y-3 py-2" aria-label="Loading profile about information">
             <span class="block h-4 w-full animate-pulse rounded-full bg-[var(--surface-muted)]" />
@@ -1655,44 +1662,20 @@ const editModalTitle = computed(() => {
             <div
               v-for="skill in skills"
               :key="skill.id"
-              class="inline-flex max-w-full items-center gap-2 rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 py-2 shadow-[var(--shadow-soft)] sm:gap-3 sm:px-4 sm:py-3"
+              class="inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 shadow-[var(--shadow-soft)] sm:h-10 sm:gap-2 sm:px-3.5"
             >
-              <span class="min-w-0 truncate text-sm font-semibold text-[var(--text-primary)]">
+              <span class="min-w-0 truncate text-[0.82rem] font-semibold leading-none text-[var(--text-primary)] sm:text-[0.88rem]">
                 {{ skill.name }}
               </span>
-              <div class="relative" data-profile-action-menu>
-                <button
-                  type="button"
-                  class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--text-tertiary)] transition hover:border-[var(--accent)] hover:text-[var(--text-primary)] sm:h-7 sm:w-7"
-                  @click.stop="toggleActionMenu('skill', skill.id)"
-                  aria-label="Open skill actions"
-                >
-                  <MoreHorizontal class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                </button>
-
-                <div
-                  v-if="activeActionMenu?.type === 'skill' && activeActionMenu?.id === skill.id"
-                  class="absolute right-0 z-10 mt-2 min-w-[10rem] overflow-hidden rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
-                >
-                  <button
-                    type="button"
-                    class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
-                    @click="openEditModal('skill', skill.id)"
-                  >
-                    <Edit2 class="h-4 w-4" />
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    class="flex w-full items-center gap-2 px-3 py-3 text-sm font-semibold text-red-500 transition hover:bg-[var(--surface-secondary)]"
-                    @click="openDeleteModal('skill', skill.id, skill.name || 'skill')"
-                    :disabled="isDeleting('skill', skill.id)"
-                  >
-                    <Trash2 class="h-4 w-4" />
-                    Delete
-                  </button>
-                </div>
-              </div>
+              <button
+                type="button"
+                class="inline-flex aspect-square h-5 w-5 shrink-0 items-center justify-center rounded-full border border-transparent bg-transparent p-0 leading-none text-[var(--text-tertiary)] transition hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60 sm:h-5 sm:w-5"
+                :aria-label="`Delete ${skill.name}`"
+                :disabled="isDeleting('skill', skill.id)"
+                @click.stop="handleDelete('skill', skill.id)"
+              >
+                <X class="h-3 w-3" />
+              </button>
             </div>
           </div>
 
@@ -1759,7 +1742,7 @@ const editModalTitle = computed(() => {
                 <div class="min-w-0 flex-1">
                   <p class="text-lg font-semibold text-[var(--text-primary)] break-words">{{ portfolio.title }}</p>
                   <p v-if="portfolio.description" class="mt-3 line-clamp-5 break-words text-sm leading-6 text-[var(--text-secondary)]">
-                    {{ portfolio.description }}
+                    {{ richTextToPlainText(portfolio.description) }}
                   </p>
                   <a
                     v-if="portfolio.link"
@@ -2006,7 +1989,7 @@ const editModalTitle = computed(() => {
                     {{ experience.isCurrent ? 'Present' : (experience.endDate ? new Date(experience.endDate).toLocaleDateString() : '') }}
                   </p>
                   <p v-if="experience.description" class="text-sm text-[var(--text-secondary)] mt-2">
-                    {{ experience.description }}
+                    {{ richTextToPlainText(experience.description) }}
                   </p>
                 </div>
 
@@ -2303,6 +2286,16 @@ const editModalTitle = computed(() => {
 
       <div class="max-h-[70vh] space-y-3 overflow-y-auto px-5 py-5 sm:px-6">
         <template v-if="profileModal === 'score'">
+          <div class="rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
+            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">Total score</p>
+            <div class="mt-2 flex items-end gap-2">
+              <span class="text-3xl font-semibold text-[var(--text-primary)]">{{ totalTScore }}</span>
+              <span class="pb-1 text-sm font-semibold text-[var(--text-secondary)]">
+                {{ totalTScore === 1 ? 'T.Score' : 'T.Scores' }}
+              </span>
+            </div>
+          </div>
+
           <div
             v-for="entry in scoreEntries"
             :key="entry.id"
@@ -2322,8 +2315,16 @@ const editModalTitle = computed(() => {
 
           <div
             v-if="scoreEntries.length === 0"
-            class="min-h-28 rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)]"
-          />
+            class="flex min-h-36 flex-col items-center justify-center rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 text-center"
+          >
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+              <Sparkles class="h-5 w-5" />
+            </span>
+            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">No score activity yet.</p>
+            <p class="mt-1 max-w-sm text-xs leading-5 text-[var(--text-secondary)]">
+              Scores from posts, answers, comments, and community activity will appear here when available.
+            </p>
+          </div>
         </template>
 
         <template v-else-if="profileModal === 'followers'">

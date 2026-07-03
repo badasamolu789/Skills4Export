@@ -25,32 +25,12 @@ export const loadQuestionAuthorProfile = async (
   }
 
   const value = (async () => {
-    const [profileResponse, userResponse, skillsResponse] = await Promise.all([
-      usersService.getUserProfile(userId, token).catch(() => null),
-      usersService.getUser(userId, token).catch(() => null),
-      usersService.listUserSkills(userId, token, { suppressErrorModal: true }).catch(() => null),
-    ])
+    const profileResponse = await usersService.getUserProfile(userId, token)
 
-    if (profileResponse?.data) {
+    if (profileResponse.data) {
       return {
         ...profileResponse.data,
-        user: {
-          ...(profileResponse.data.user ?? {}),
-          ...(userResponse?.data ?? {}),
-        },
-        skills: collectUserSkills(
-          skillsResponse?.data,
-          profileResponse.data.skills,
-          profileResponse.data,
-          userResponse?.data,
-        ),
-      }
-    }
-
-    if (userResponse?.data) {
-      return {
-        user: userResponse.data,
-        skills: collectUserSkills(skillsResponse?.data, userResponse.data),
+        skills: collectUserSkills(profileResponse.data.skills, profileResponse.data),
       }
     }
 

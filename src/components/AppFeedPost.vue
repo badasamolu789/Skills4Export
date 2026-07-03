@@ -28,7 +28,7 @@ import { pagesService } from '@/services/pages'
 import { postsService, type PostCommentRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { mediaService } from '@/services/media'
-import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
+import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
@@ -72,6 +72,7 @@ const isReportModalOpen = ref(false)
 const isAnswerModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
 const failedAuthorAvatarSrc = ref('')
+const failedSharedAuthorAvatarSrc = ref('')
 const postMenuRoot = ref<HTMLElement | null>(null)
 const isEditModalOpen = ref(false)
 const editPostTitle = ref('')
@@ -101,13 +102,14 @@ const isLoadingComments = ref(false)
 const hasLoadedComments = ref(false)
 const sharedOriginalPost = ref<FeedPost | null>(null)
 const isLoadingSharedOriginal = ref(false)
-const followLabel = computed(() => (isFollowing.value ? 'Following' : 'Follow'))
+const followLabel = computed(() => (isFollowing.value ? 'Unfollow' : 'Follow'))
 const activeActionClass =
   'border-[color:var(--accent)] bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)] hover:text-white'
 const apiPostId = computed(() => props.post.apiId)
 const detailPath = computed(() =>
   props.post.type === 'question' ? `/questions/${props.post.slug}` : `/posts/${props.post.slug}`,
 )
+const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 const shareLink = computed(() => {
   const path = detailPath.value
@@ -124,6 +126,10 @@ const sharePreviewImageAlt = computed(() =>
   'imageAlt' in props.post ? props.post.imageAlt || props.post.title : props.post.title,
 )
 const primaryMedia = computed(() => {
+  if (isSharedPost.value) {
+    return null
+  }
+
   if (props.post.type === 'question') {
     return null
   }
@@ -139,6 +145,90 @@ const primaryMedia = computed(() => {
   return props.post.imageSrc
     ? { url: props.post.imageSrc, isVideo: false }
     : null
+})
+const sharedOriginalDetailPath = computed(() => {
+  const original = sharedOriginalPost.value
+
+  if (!original) {
+    return ''
+  }
+
+  return original.type === 'question' ? `/questions/${original.slug}` : `/posts/${original.slug}`
+})
+const sharedOriginalAuthorRoute = computed(() => {
+  const original = sharedOriginalPost.value
+
+  if (!original) {
+    return ''
+  }
+
+  return original.type === 'question' ? original.authorTo : original.author.to
+})
+const sharedOriginalAuthorName = computed(() => {
+  const original = sharedOriginalPost.value
+
+  if (!original) {
+    return ''
+  }
+
+  return original.type === 'question' ? original.authorName : original.author.name
+})
+const sharedOriginalAuthorTag = computed(() => {
+  const original = sharedOriginalPost.value
+
+  if (!original) {
+    return ''
+  }
+
+  return original.type === 'question' ? original.tag : original.author.tag
+})
+const sharedOriginalAuthorAvatarText = computed(() => getInitials(sharedOriginalAuthorName.value || 'Member'))
+const sharedOriginalAuthorAvatarSrc = computed(() => {
+  const original = sharedOriginalPost.value
+
+  if (!original) {
+    return ''
+  }
+
+  const source = original.type === 'question' ? original.authorAvatarSrc || '' : original.author.avatarSrc || ''
+  return source && source !== failedSharedAuthorAvatarSrc.value ? source : ''
+})
+const sharedOriginalPrimaryMedia = computed(() => {
+  const original = sharedOriginalPost.value
+
+  if (!original || original.type === 'question') {
+    return null
+  }
+
+  const media = original.media?.find((item) => item.url)
+  if (media) {
+    return {
+      url: media.url,
+      isVideo: isVideoPostMedia(media),
+      alt: original.imageAlt || original.title,
+    }
+  }
+
+  return original.imageSrc
+    ? { url: original.imageSrc, isVideo: false, alt: original.imageAlt || original.title }
+    : null
+})
+const sharedPostComment = computed(() => {
+  if (!isSharedPost.value || props.post.type === 'question') {
+    return ''
+  }
+
+  const comment = props.post.description?.trim() || ''
+  const originalDescription =
+    sharedOriginalPost.value && sharedOriginalPost.value.type !== 'question'
+      ? sharedOriginalPost.value.description.trim()
+      : ''
+
+  if (!comment || comment === originalDescription) {
+    return ''
+  }
+
+  return comment
 })
 const reportReasons = [
   'Misinformation',
@@ -254,6 +344,10 @@ watch(
     failedAuthorAvatarSrc.value = ''
   },
 )
+
+watch(sharedOriginalPost, () => {
+  failedSharedAuthorAvatarSrc.value = ''
+})
 const usesGlobalUserFollow = computed(() =>
   Boolean(authorUserId.value && !props.post.pageId && !(props.post.type === 'question' && props.post.communityId)),
 )
@@ -283,7 +377,6 @@ const showFollowAction = computed(() =>
 )
 const canScorePost = computed(() => Boolean(!isOwnPost.value))
 const canEditPost = computed(() => Boolean(props.allowEdit && isOwnPost.value && apiPostId.value && props.post.type !== 'question'))
-const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const contentLabel = computed(() => (props.post.type === 'question' ? 'Question' : 'Post'))
 const postPlainDescription = computed(() =>
   props.post.type === 'question' ? '' : richTextToPlainText(props.post.description),
@@ -440,7 +533,7 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
   const embeddedName = getProfileDisplayName(embeddedData)
 
   const response = comment.user_id
-    ? await usersService.getUserProfile(comment.user_id, authStore.authToken).catch(() => null)
+    ? await usersService.getUserProfile(comment.user_id, authStore.authToken)
     : null
   const profile = response?.data ?? null
   const name = getProfileDisplayName(profile) || embeddedName
@@ -538,34 +631,17 @@ const loadSharedOriginalPost = async () => {
     const originalResponse = await postsService.getPost(props.post.originalPostId, authStore.authToken)
     const original = originalResponse.data
     const originalUserId = getPostUserId(original)
-    const [mediaResponse, authorResponse, userResponse, skillsResponse] = await Promise.all([
-      postsService.listPostMedia(original.id, authStore.authToken).catch(() => null),
+    const [mediaResponse, authorResponse] = await Promise.all([
+      postsService.listPostMedia(original.id, authStore.authToken),
       originalUserId
-        ? usersService.getUserProfile(originalUserId, authStore.authToken).catch(() => null)
-        : Promise.resolve(null),
-      originalUserId
-        ? usersService.getUser(originalUserId, authStore.authToken).catch(() => null)
-        : Promise.resolve(null),
-      originalUserId
-        ? usersService.listUserSkills(originalUserId, authStore.authToken).catch(() => null)
+        ? usersService.getUserProfile(originalUserId, authStore.authToken)
         : Promise.resolve(null),
     ])
-    const authorData = authorResponse?.data
-      ? {
-        ...authorResponse.data,
-        user: {
-          ...(authorResponse.data.user ?? {}),
-          ...(userResponse?.data ?? {}),
-        },
-        skills: collectUserSkills(skillsResponse?.data, authorResponse.data.skills, authorResponse.data, userResponse?.data),
-      }
-      : userResponse?.data
-        ? { user: userResponse.data, skills: collectUserSkills(skillsResponse?.data, userResponse.data) }
-        : null
+    const authorData = authorResponse?.data ?? null
 
     sharedOriginalPost.value = mapApiPostToFeedPost(
       original,
-      mediaResponse?.data ?? [],
+      mediaResponse.data ?? [],
       authorData,
     )
   } catch {
@@ -694,7 +770,6 @@ const submitPostEdit = async () => {
     }
 
     isEditModalOpen.value = false
-    toast.success('Post updated.')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update this post.'
     toast.error('Update failed', { description: message })
@@ -740,7 +815,6 @@ const toggleFollow = async () => {
     }
 
     localFollowing.value = nextValue
-    toast.success(nextValue ? 'Following' : 'Unfollowed')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
     toast.error('Follow failed', { description: message })
@@ -792,12 +866,6 @@ const toggleScore = async () => {
 const toggleSave = async () => {
   if (!apiPostId.value) {
     isSaved.value = !isSaved.value
-
-    toast.success(isSaved.value ? `${contentLabel.value} saved` : `${contentLabel.value} removed from saved`, {
-      description: isSaved.value
-        ? `This ${contentLabel.value.toLowerCase()} is now in your saved list.`
-        : `This ${contentLabel.value.toLowerCase()} has been removed from your saved list.`,
-    })
     return
   }
 
@@ -830,12 +898,6 @@ const toggleSave = async () => {
       )
       isSaved.value = response.data.saved
     }
-
-    toast.success(isSaved.value ? `${contentLabel.value} saved` : `${contentLabel.value} removed from saved`, {
-      description: isSaved.value
-        ? `This ${contentLabel.value.toLowerCase()} is now in your saved list.`
-        : `This ${contentLabel.value.toLowerCase()} has been removed from your saved list.`,
-    })
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
     toast.error('Save failed', { description: message })
@@ -900,10 +962,6 @@ const submitComment = async () => {
         replies: [],
       })
       commentInput.value = ''
-
-      toast.success('Comment added', {
-        description: 'Your comment has been added to this post.',
-      })
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
       toast.error('Comment failed', { description: message })
@@ -977,7 +1035,6 @@ const loadAnswererProfile = async () => {
 
 const uploadAnswerAttachments = async () => {
   const mediaAssetIds: string[] = []
-  const fallbackMedia: Array<{ url: string; mediaType: string }> = []
   const uploadedUrls: Array<{ url: string; mediaType: string }> = []
 
   for (const file of answerAttachments.value) {
@@ -998,15 +1055,12 @@ const uploadAnswerAttachments = async () => {
           mediaType,
         })
       }
-    } else if (url) {
-      fallbackMedia.push({
-        url,
-        mediaType,
-      })
+    } else {
+      throw new Error('Media upload completed without an asset ID.')
     }
   }
 
-  return { mediaAssetIds, fallbackMedia, uploadedUrls }
+  return { mediaAssetIds, uploadedUrls }
 }
 
 const submitAnswer = async () => {
@@ -1048,7 +1102,6 @@ const submitAnswer = async () => {
     )
 
     closeAnswerModal()
-    toast.success('Answer posted')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to post your answer.'
     toast.error('Answer failed', { description: message })
@@ -1061,7 +1114,7 @@ const copyShareLink = async () => {
   try {
     await navigator.clipboard.writeText(shareLink.value)
     if (apiPostId.value) {
-      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken).catch(() => null)
+      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken)
     }
     toast.success('Link copied', {
       description: 'The post link has been copied to your clipboard.',
@@ -1162,7 +1215,6 @@ const submitShare = async () => {
     if (apiPostId.value) {
       await postsService
         .recordShareEvent(apiPostId.value, { type: canNativeShare ? 'native_share' : 'manual_share' }, authStore.authToken)
-        .catch(() => null)
     }
     shareCommunity.value = ''
     shareComment.value = ''
@@ -1366,7 +1418,6 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
     comment.areRepliesOpen = true
     comment.isReplying = false
     comment.replyInput = ''
-    toast.success('Reply added')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add reply.'
     toast.error('Reply failed', { description: message })
@@ -1385,11 +1436,9 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         <div class="flex items-start gap-3">
           <div class="min-w-0 flex-1">
             <div class="flex min-w-0 items-center gap-2 text-sm text-[var(--text-secondary)]">
-              <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_12%,var(--surface-primary))] text-[var(--accent-strong)]">
-                Q
+              <span class="inline-flex h-7 shrink-0 items-center justify-center rounded-full bg-[color:color-mix(in_srgb,var(--accent)_12%,var(--surface-primary))] px-3 text-xs font-semibold text-[var(--accent-strong)]">
+                Question
               </span>
-              <i :class="post.communityIconClass || 'las la-users'" class="shrink-0 text-base leading-none text-[var(--accent-strong)]" aria-hidden="true" />
-              <span class="truncate font-semibold">{{ post.communityName }}</span>
             </div>
             <RouterLink
               :to="detailPath"
@@ -1429,14 +1478,6 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               <button
                 type="button"
                 class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
-                @click="openAnswerModal"
-              >
-                <Reply class="h-4 w-4" />
-                Answer
-              </button>
-              <button
-                type="button"
-                class="mt-1 flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
                 @click="handleMobileSave"
               >
                 <Bookmark class="h-4 w-4" />
@@ -1459,7 +1500,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
       <div class="mt-3 flex flex-wrap gap-1 sm:mt-5 sm:gap-2">
         <button
           type="button"
-          class="inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
+          class="s4e-feed-action inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
           @click="openAnswerModal"
         >
           <Reply class="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" />
@@ -1468,7 +1509,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         <button
           v-if="showFollowAction"
           type="button"
-          class="inline-flex h-6 items-center rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
+          class="s4e-feed-action inline-flex h-6 items-center rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
           :class="
             isFollowing
               ? activeActionClass
@@ -1479,7 +1520,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           {{ followLabel }}
         </button>
         <span
-          class="inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
+          class="s4e-feed-action inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
         >
           {{ displayedAnswers }} Answers
         </span>
@@ -1570,7 +1611,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   <button
                     v-if="showFollowAction"
                     type="button"
-                    class="inline-flex h-6 shrink-0 items-center rounded-[0.65rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
+                    class="s4e-feed-action inline-flex h-6 shrink-0 items-center rounded-[0.65rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
                     :class="
                       isFollowing
                         ? activeActionClass
@@ -1580,7 +1621,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   >
                     {{ followLabel }}
                   </button>
-                  <span class="truncate">{{ post.time }}</span>
+                  <span
+                    v-if="isSharedPost"
+                    class="inline-flex min-w-0 items-center gap-1 truncate font-medium text-[var(--accent-strong)]"
+                  >
+                    <Share2 class="h-3.5 w-3.5 shrink-0" />
+                    <span class="truncate">re-shared {{ post.time }}</span>
+                  </span>
+                  <span v-else class="truncate">{{ post.time }}</span>
                   <span v-if="feedPostContextDetail" class="hidden truncate text-[0.78rem] text-[var(--text-tertiary)] sm:inline">
                     {{ feedPostContextDetail }}
                   </span>
@@ -1590,7 +1638,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   <RouterLink
                     v-if="post.type === 'community'"
                     :to="detailPath"
-                    class="inline-flex h-6 shrink-0 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
+                    class="s4e-feed-action inline-flex h-6 shrink-0 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
                   >
                     View post
                   </RouterLink>
@@ -1602,18 +1650,25 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
         <div class="min-w-0">
           <RouterLink
+            v-if="!isSharedPost"
             :to="detailPath"
             class="block text-[1.05rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.18rem] lg:text-[1.28rem]"
           >
             {{ post.title }}
           </RouterLink>
           <RichTextContent
+            v-if="!isSharedPost"
             :content="post.description"
             :clamp="shouldClampPostContent"
             class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)] sm:text-[0.9rem] sm:leading-7"
           />
+          <RichTextContent
+            v-else-if="sharedPostComment"
+            :content="sharedPostComment"
+            class="mt-1 text-[0.86rem] leading-6 text-[var(--text-primary)] sm:text-[0.95rem]"
+          />
           <button
-            v-if="isPostContentCollapsible && !props.expanded"
+            v-if="!isSharedPost && isPostContentCollapsible && !props.expanded"
             type="button"
             class="mt-1 inline-flex text-[0.82rem] font-semibold text-[var(--accent-strong)] transition hover:text-[var(--accent)]"
             @click="isContentExpanded = !isContentExpanded"
@@ -1623,41 +1678,95 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
           <div
             v-if="isSharedPost"
-            class="mt-4 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3"
+            class="mt-4"
           >
             <div
               v-if="isLoadingSharedOriginal"
-              class="space-y-2"
+              class="space-y-3 pl-2 sm:pl-6"
               aria-label="Loading shared post"
             >
-              <div class="h-3 w-1/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
-              <div class="h-4 w-4/5 animate-pulse rounded-full bg-[var(--surface-muted)]" />
-              <div class="h-3 w-2/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
-            </div>
-            <template v-else-if="sharedOriginalPost && sharedOriginalPost.type !== 'question'">
-              <div class="flex items-center gap-2 text-[0.78rem] text-[var(--text-secondary)]">
-                <span class="font-semibold text-[var(--text-primary)]">{{ sharedOriginalPost.author.name }}</span>
-                <span>{{ sharedOriginalPost.time }}</span>
+              <div class="flex items-start gap-3">
+                <div class="h-10 w-10 shrink-0 animate-pulse rounded-[0.8rem] bg-[var(--surface-muted)]" />
+                <div class="flex-1 space-y-2">
+                  <div class="h-3 w-1/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                  <div class="h-4 w-4/5 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                  <div class="h-3 w-2/3 animate-pulse rounded-full bg-[var(--surface-muted)]" />
+                </div>
               </div>
-              <RouterLink
-                :to="`/posts/${sharedOriginalPost.slug}`"
-                class="mt-2 block text-[0.95rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)]"
-              >
-                {{ sharedOriginalPost.title }}
-              </RouterLink>
-              <RichTextContent
-                :content="sharedOriginalPost.description"
-                clamp
-                class="mt-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]"
-              />
-              <img
-                v-if="sharedOriginalPost.imageSrc"
-                :src="sharedOriginalPost.imageSrc"
-                :alt="sharedOriginalPost.imageAlt || sharedOriginalPost.title"
-                loading="lazy"
-                decoding="async"
-                class="mt-3 aspect-[4/5] w-full rounded-[0.8rem] bg-[var(--surface-primary)] object-cover sm:aspect-[1.91/1]"
-              />
+            </div>
+            <template v-else-if="sharedOriginalPost">
+              <div class="flex items-start gap-3 sm:gap-4">
+                <RouterLink
+                  :to="sharedOriginalAuthorRoute"
+                  class="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
+                  :aria-label="`View ${sharedOriginalAuthorName}'s profile`"
+                >
+                  <img loading="lazy" decoding="async"
+                    v-if="sharedOriginalAuthorAvatarSrc"
+                    :src="sharedOriginalAuthorAvatarSrc"
+                    :alt="sharedOriginalAuthorName"
+                    class="absolute inset-0 block h-full w-full object-cover"
+                    @error="failedSharedAuthorAvatarSrc = sharedOriginalAuthorAvatarSrc"
+                  />
+                  <span v-else>{{ sharedOriginalAuthorAvatarText }}</span>
+                </RouterLink>
+
+                <div class="min-w-0 flex-1">
+                  <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <RouterLink
+                      :to="sharedOriginalAuthorRoute"
+                      class="shrink-0 text-[1rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.08rem]"
+                    >
+                      {{ sharedOriginalAuthorName }}
+                    </RouterLink>
+                    <span
+                      v-if="sharedOriginalAuthorTag"
+                      class="min-w-0 truncate text-[0.82rem] font-semibold text-[var(--text-tertiary)] sm:text-[0.9rem]"
+                    >
+                      {{ sharedOriginalAuthorTag }}
+                    </span>
+                    <span class="shrink-0 text-[0.78rem] text-[var(--text-secondary)] sm:text-[0.85rem]">
+                      posted {{ sharedOriginalPost.time }}
+                    </span>
+                  </div>
+
+                  <RouterLink
+                    :to="sharedOriginalDetailPath"
+                    class="mt-3 block text-[1.18rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.38rem]"
+                  >
+                    {{ sharedOriginalPost.title }}
+                  </RouterLink>
+
+                  <RichTextContent
+                    v-if="sharedOriginalPost.type !== 'question'"
+                    :content="sharedOriginalPost.description"
+                    clamp
+                    class="mt-2 text-[0.88rem] leading-6 text-[var(--text-primary)] sm:text-[1rem] sm:leading-7"
+                  />
+                  <RichTextContent
+                    v-else-if="sharedOriginalPost.body"
+                    :content="sharedOriginalPost.body"
+                    class="mt-2 text-[0.88rem] leading-6 text-[var(--text-primary)] sm:text-[1rem] sm:leading-7"
+                  />
+
+                  <video
+                    v-if="sharedOriginalPrimaryMedia?.isVideo"
+                    :src="sharedOriginalPrimaryMedia.url"
+                    controls
+                    preload="metadata"
+                    playsinline
+                    class="mt-4 aspect-video w-full rounded-[0.9rem] bg-black object-contain"
+                  />
+                  <img
+                    v-else-if="sharedOriginalPrimaryMedia"
+                    :src="sharedOriginalPrimaryMedia.url"
+                    :alt="sharedOriginalPrimaryMedia.alt"
+                    loading="lazy"
+                    decoding="async"
+                    class="mt-4 aspect-[4/5] w-full rounded-[0.9rem] bg-[var(--surface-secondary)] object-cover sm:aspect-[1.91/1]"
+                  />
+                </div>
+              </div>
             </template>
             <p v-else class="text-sm text-[var(--text-secondary)]">The original shared post is not available.</p>
           </div>
@@ -1682,7 +1791,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           <div class="mt-2.5 flex flex-wrap gap-1 sm:mt-4 sm:gap-1.5">
             <button
               type="button"
-              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
+              class="s4e-feed-action inline-flex h-6 items-center gap-1 rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               :class="
                 !canScorePost
                   ? 'cursor-not-allowed border-[color:var(--border-soft)] text-[var(--text-tertiary)] opacity-70'
@@ -1699,7 +1808,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             <button
               v-if="canEditPost"
               type="button"
-              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
+              class="s4e-feed-action inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               @click="openEditModal"
             >
               <Edit2 class="h-3 w-3" />
@@ -1707,7 +1816,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             </button>
             <button
               type="button"
-              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
+              class="s4e-feed-action inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               @click="openShareModal"
             >
               <Share2 class="h-3 w-3" />
@@ -1715,7 +1824,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             </button>
             <button
               type="button"
-              class="inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
+              class="s4e-feed-action inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
               @click="toggleComments"
             >
               <MessageSquare class="h-3 w-3" />
@@ -1828,9 +1937,10 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                         <span>{{ comment.time }}</span>
                       </div>
                       <p class="mt-0.5 text-[0.72rem] text-[var(--text-secondary)] sm:text-[0.76rem]">{{ comment.tag }}</p>
-                      <p class="mt-1.5 text-[0.82rem] leading-6 text-[var(--text-primary)]">
-                        {{ comment.body }}
-                      </p>
+                      <RichTextContent
+                        :content="comment.body"
+                        class="mt-1.5 text-[0.82rem] leading-6 text-[var(--text-primary)]"
+                      />
 
                       <div class="mt-2.5 flex flex-wrap gap-1.5">
                         <button
@@ -1865,7 +1975,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                           @click="toggleCommentFollow(comment)"
                         >
                           <Check v-if="comment.isFollowing" class="h-3 w-3" />
-                          {{ comment.isFollowing ? 'Following' : 'Follow' }}
+                          {{ comment.isFollowing ? 'Unfollow' : 'Follow' }}
                         </button>
                         <button
                           type="button"
@@ -1929,7 +2039,10 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                               <span class="font-semibold text-[var(--text-primary)]">{{ reply.author }}</span>
                               <span>{{ reply.time }}</span>
                             </div>
-                            <p class="mt-1.5 text-[0.8rem] leading-6 text-[var(--text-primary)]">{{ reply.body }}</p>
+                            <RichTextContent
+                              :content="reply.body"
+                              class="mt-1.5 text-[0.8rem] leading-6 text-[var(--text-primary)]"
+                            />
                             <div class="mt-2 flex flex-wrap gap-1.5">
                               <button
                                 type="button"

@@ -165,7 +165,6 @@ const saveAlertPreferences = async () => {
       : scholarshipTypes.value
     jobAlert.value = response.data.jobAlert
     jobSearchTags.value = response.data.jobSearchTags ?? []
-    toast.success('Alert preferences saved.')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to save alert preferences.'
     toast.error('Save failed', { description: message })

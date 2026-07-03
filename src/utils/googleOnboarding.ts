@@ -82,7 +82,7 @@ export const resolveGoogleOnboardingRedirect = async (
 
   if (onboardingCompleted === null && authStore.authToken) {
     try {
-      const profileResponse = await usersService.getMyProfile(authStore.authToken, { suppressErrorModal: true })
+      const profileResponse = await usersService.getMyProfile(authStore.authToken)
       const profile = profileResponse.data?.profile ?? null
 
       if (profileResponse.data?.user) {

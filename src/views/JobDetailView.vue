@@ -2,13 +2,15 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { ArrowRight, BriefcaseBusiness, CalendarDays, CheckCircle2, Copy, MapPin, UploadCloud, Wallet } from 'lucide-vue-next'
+import { ArrowRight, BriefcaseBusiness, CalendarDays, CheckCircle2, Copy, MapPin, Megaphone, UploadCloud, Wallet } from 'lucide-vue-next'
+import RichTextContent from '@/components/RichTextContent.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { mediaService } from '@/services/media'
 import { useAuthStore } from '@/stores/auth'
 import { useJobsStore } from '@/stores/jobs'
+import { richTextToPlainText } from '@/utils/richText'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -91,6 +93,7 @@ const qualifications = computed(() => {
 
   return job.value?.summary ? [job.value.summary] : []
 })
+const jobDescriptionContent = computed(() => job.value?.description || 'No description has been added yet.')
 
 const perks = computed(() => job.value?.perks || [])
 const skills = computed(() => job.value?.skills || [])
@@ -210,7 +213,6 @@ const applyToJob = async () => {
       kind: 'resume',
       title: selectedResumeFile.value.name,
       token: authStore.authToken,
-      fallbackToDirectUpload: false,
     })
     const resumeMediaId = uploadResponse.data.assetId || uploadResponse.data.id
 
@@ -254,7 +256,6 @@ const loadAdverts = async () => {
         per_page: 100,
         sort: '-createdAt',
       },
-      authStore.authToken,
     )
     adverts.value = response.data ?? []
   } catch {
@@ -377,8 +378,15 @@ watch(
       <article class="min-w-0 space-y-8">
         <div class="space-y-4 border-b border-[color:var(--border-soft)] pb-8">
           <h2 class="text-[1.3rem] font-semibold text-[var(--text-primary)]">Job Description</h2>
-          <p v-if="job.summary" class="text-[0.98rem] leading-8 text-[var(--text-secondary)]">{{ job.summary }}</p>
-          <p class="text-[0.98rem] leading-8 text-[var(--text-secondary)]">{{ job.description || 'No description has been added yet.' }}</p>
+          <RichTextContent
+            v-if="job.summary"
+            :content="job.summary"
+            class="text-[0.98rem] leading-8 text-[var(--text-secondary)]"
+          />
+          <RichTextContent
+            :content="jobDescriptionContent"
+            class="text-[0.98rem] leading-8 text-[var(--text-secondary)]"
+          />
 
           <div class="flex flex-wrap gap-2 pt-2">
             <span class="inline-flex items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-sm text-[var(--text-secondary)]">
@@ -409,7 +417,7 @@ watch(
               class="flex items-start gap-3 text-[0.98rem] leading-8 text-[var(--text-secondary)]"
             >
               <CheckCircle2 class="mt-2 h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
-              <span>{{ item }}</span>
+              <span>{{ richTextToPlainText(item) }}</span>
             </li>
           </ul>
         </div>
@@ -451,7 +459,7 @@ watch(
           <p class="text-center text-xs font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">Advertisements</p>
           <div
             v-if="isLoadingAdverts && !rightRailAdvert"
-            class="advert-placeholder aspect-[29/50] w-full rounded-[0.35rem]"
+            class="aspect-[29/50] w-full animate-pulse rounded-[0.35rem] bg-[var(--surface-secondary)]"
             aria-label="Loading advertisement"
           />
           <a
@@ -470,15 +478,16 @@ watch(
               decoding="async"
             >
           </a>
-          <a
+          <div
             v-else
-            href="#"
-            aria-label="Advertisement"
-            class="block overflow-hidden rounded-[0.35rem] bg-[var(--surface-secondary)] transition hover:opacity-90"
-            @click.prevent
+            class="flex aspect-[29/50] w-full flex-col items-center justify-center rounded-[0.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 text-center"
+            aria-label="No advertisements available"
           >
-            <div class="advert-placeholder aspect-[29/50] w-full" />
-          </a>
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+              <Megaphone class="h-5 w-5" />
+            </span>
+            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">Currently no ads available</p>
+          </div>
         </section>
       </aside>
     </div>

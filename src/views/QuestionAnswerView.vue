@@ -41,14 +41,14 @@ const loadQuestion = async (question: QuestionRecord) => {
     userId
       ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
       : Promise.resolve(null),
-    questionsService.listAnswers(question.id, authStore.authToken).catch(() => null),
+    questionsService.listAnswers(question.id, authStore.authToken),
   ])
 
   return mapApiQuestionToFeedPost(
     {
       ...question,
-      answers_count: answersResponse?.total ?? question.answers_count,
-      answers: answersResponse?.data ?? question.answers,
+      answers_count: answersResponse.total ?? question.answers_count,
+      answers: answersResponse.data ?? question.answers,
     },
     authorData,
     community?.name,
@@ -66,10 +66,10 @@ const loadQuestions = async () => {
         { per_page: 100, sort: '-createdAt' },
         authStore.authToken,
       ),
-      communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken).catch(() => null),
+      communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken),
     ])
     communitiesById.value = new Map(
-      (communitiesResponse?.data ?? []).map((community) => [community.id, community]),
+      (communitiesResponse.data ?? []).map((community) => [community.id, community]),
     )
     apiQuestions.value = await Promise.all(response.data.map((question) => loadQuestion(question)))
     apiQuestions.value.forEach((question) => {

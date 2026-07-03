@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { ArrowUpRight, BadgeHelp } from 'lucide-vue-next'
+import { ArrowUpRight, BadgeHelp, Megaphone } from 'lucide-vue-next'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
-import { useAuthStore } from '@/stores/auth'
-import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName } from '@/utils/displayName'
 import { getQuestionUserId } from '@/utils/questionMapper'
 
@@ -30,8 +28,6 @@ type TrendingQuestion = {
   score: number
 }
 
-const authStore = useAuthStore()
-const socialActionsStore = useSocialActionsStore()
 const questions = ref<QuestionRecord[]>([])
 const questionAuthors = ref(new Map<string, string>())
 const isLoadingQuestions = ref(false)
@@ -82,14 +78,8 @@ const getQuestionAuthor = (question: QuestionRecord) => {
 }
 
 const trendingQuestions = computed<TrendingQuestion[]>(() => {
-  const apiItems = [...questions.value]
+  return [...questions.value]
     .sort((first, second) => {
-      const scoreDifference = getQuestionScore(second) - getQuestionScore(first)
-
-      if (scoreDifference !== 0) {
-        return scoreDifference
-      }
-
       return new Date(getQuestionTimestamp(second)).getTime() - new Date(getQuestionTimestamp(first)).getTime()
     })
     .slice(0, 4)
@@ -101,21 +91,6 @@ const trendingQuestions = computed<TrendingQuestion[]>(() => {
       to: `/questions/${question.id}`,
       score: getQuestionScore(question),
     }))
-  const knownIds = new Set(apiItems.map((question) => question.id))
-  const globalItems = socialActionsStore.questions
-    .filter((question) => !knownIds.has(question.apiId || question.slug))
-    .map((question) => ({
-      id: question.apiId || question.slug,
-      title: question.title,
-      time: formatQuestionTime(question.createdAt || question.updatedAt || ''),
-      author: question.authorName,
-      to: `/questions/${question.apiId || question.slug}`,
-      score: question.score ?? 0,
-    }))
-
-  return [...globalItems, ...apiItems]
-    .sort((first, second) => second.score - first.score)
-    .slice(0, 4)
 })
 
 const usableAdverts = computed(() =>
@@ -147,9 +122,7 @@ const loadTrendingQuestions = async (options: { background?: boolean } = {}) => 
 
   try {
     const response = await questionsService.listQuestions(
-      { per_page: 5, sort: '-createdAt' },
-      authStore.authToken,
-      { suppressErrorModal: true },
+      { per_page: 4, 'sort[field]': 'created_at', 'sort[direction]': 'desc' },
     )
     questions.value = response.data ?? []
     questionAuthors.value = new Map()
@@ -174,7 +147,6 @@ const loadAdverts = async () => {
         per_page: 20,
         sort: '-createdAt',
       },
-      authStore.authToken,
     )
     adverts.value = response.data ?? []
   } catch {
@@ -221,7 +193,7 @@ onBeforeUnmount(() => {
       >
         <div class="flex items-center gap-2">
           <BadgeHelp class="h-4 w-4 text-[var(--accent-strong)]" />
-          <h2 class="text-base font-semibold text-[var(--text-primary)]">Trending Questions</h2>
+          <h2 class="text-base font-semibold text-[var(--text-primary)]">Latest Questions</h2>
         </div>
 
         <div
@@ -262,7 +234,7 @@ onBeforeUnmount(() => {
           v-else-if="hasLoadedQuestions"
           class="mt-3 rounded-lg bg-[var(--surface-secondary)] p-3 text-[0.82rem] text-[var(--text-secondary)]"
         >
-          No trending questions yet.
+          No questions yet.
         </p>
 
         <RouterLink
@@ -296,15 +268,15 @@ onBeforeUnmount(() => {
             decoding="async"
           >
         </a>
-        <a
+        <div
           v-else
-          href="#"
-          aria-label="Advertisement"
-          class="block overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] transition hover:opacity-90"
-          @click.prevent
+          class="flex aspect-[4/5] w-full flex-col items-center justify-center rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 text-center"
         >
-          <div class="advert-placeholder aspect-[4/5] w-full" />
-        </a>
+          <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+            <Megaphone class="h-5 w-5" />
+          </span>
+          <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">Currently no ads available</p>
+        </div>
       </section>
     </div>
   </aside>

@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
+import { richTextToPlainText } from '@/utils/richText'
 
 type ProfileUploadItem = {
   id: string
@@ -108,18 +109,45 @@ const getAccountInitials = (name: string) =>
 
 const getFollowingUsers = (data: unknown) => {
   const record = asRecord(data)
-  const followingRecord = asRecord(record?.following)
+  const followingValue = record?.following
+
+  if (Array.isArray(followingValue)) {
+    return followingValue
+  }
+
+  const followingRecord = asRecord(followingValue)
   const users = followingRecord?.users
 
   return Array.isArray(users) ? users : []
 }
 
-const getAccountFromUnknown = (value: unknown) => {
+const getFollowerUsers = (data: unknown): UserFollower[] => {
+  const record = asRecord(data)
+  const followersValue = record?.followers
+
+  if (Array.isArray(followersValue)) {
+    return followersValue as UserFollower[]
+  }
+
+  const followersRecord = asRecord(followersValue)
+  const users = followersRecord?.users
+
+  return Array.isArray(users) ? users as UserFollower[] : []
+}
+
+const getFollowingAccount = (value: unknown) => {
   const record = asRecord(value)
-  const profileRecord = asRecord(record?.profile) || asRecord(record?.followingProfile) || asRecord(record?.userProfile)
-  const userRecord = asRecord(record?.user) || asRecord(record?.following) || record
+  const profileRecord =
+    asRecord(record?.followingProfile) ||
+    asRecord(record?.profile) ||
+    asRecord(record?.userProfile)
+  const userRecord =
+    asRecord(record?.following) ||
+    asRecord(record?.user) ||
+    asRecord(record?.account) ||
+    record
   const id =
-    getStringField(record, ['id', 'userId', 'user_id', 'followingId', 'following_id']) ||
+    getStringField(record, ['followingId', 'following_id']) ||
     getStringField(userRecord, ['id', 'userId', 'user_id'])
   const name = getDisplayName(
     getStringField(profileRecord, ['displayName', 'display_name', 'name']),
@@ -236,96 +264,73 @@ const loadProfile = async () => {
   isLoadingProfile.value = true
   loadError.value = ''
 
-  const results = await Promise.allSettled([
-    usersService.getUser(userId.value, authStore.authToken),
-    usersService.getUserProfile(userId.value, authStore.authToken),
-    usersService.listUserSkills(userId.value, authStore.authToken, { suppressErrorModal: true }),
-    usersService.listUserPortfolios(userId.value, authStore.authToken, { suppressErrorModal: true }),
-    usersService.listUserCertifications(userId.value, authStore.authToken, { suppressErrorModal: true }),
-    usersService.listUserEducations(userId.value, authStore.authToken, { suppressErrorModal: true }),
-    usersService.listUserExperiences(userId.value, authStore.authToken, { suppressErrorModal: true }),
-    usersService.listFollowers(userId.value, authStore.authToken, { suppressErrorModal: true }),
-  ])
+  try {
+    const profileResponse = await usersService.getUserProfile(userId.value, authStore.authToken)
+    const profileData = profileResponse.data
 
-  const [userResult, profileResult, skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult, followersResult] =
-    results
-
-  if (userResult.status === 'fulfilled') {
-    user.value = userResult.value.data ?? null
-  }
-
-  if (profileResult.status === 'fulfilled') {
-    userProfile.value = profileResult.value.data?.profile ?? null
-    following.value = getFollowingUsers(profileResult.value.data)
-      .map(getAccountFromUnknown)
+    user.value = profileData?.user ?? null
+    userProfile.value = profileData?.profile ?? null
+    skills.value = collectUserSkills(profileData?.skills, profileData)
+    portfolios.value = profileData?.portfolios ?? []
+    certifications.value = profileData?.certifications ?? []
+    educations.value = profileData?.educations ?? profileData?.education ?? []
+    experiences.value = profileData?.experiences ?? profileData?.activeExperiences ?? []
+    const nextFollowers = getFollowerUsers(profileData)
+    const nextFollowing = getFollowingUsers(profileData)
+      .map(getFollowingAccount)
       .filter((account) => account.id)
-    if (!user.value && profileResult.value.data?.user) {
-      user.value = profileResult.value.data.user
+    const nextFollowingIds = new Set(nextFollowing.map((account) => account.id))
+
+    followers.value = nextFollowers
+    following.value = nextFollowing
+
+    const nextFollowStates = { ...followStates.value }
+    nextFollowing.forEach((account) => {
+      nextFollowStates[account.id] = true
+      socialActionsStore.setUserFollowingState(account.id, true)
+    })
+    nextFollowers.forEach((follower) => {
+      const account = getFollowerAccount(follower)
+      if (account.id) {
+        const followerRecord = follower as Record<string, unknown>
+        const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+        const isFollowing = explicitState ?? nextFollowingIds.has(account.id)
+        nextFollowStates[account.id] = isFollowing
+        socialActionsStore.setUserFollowingState(account.id, isFollowing)
+      }
+    })
+    followStates.value = nextFollowStates
+
+    socialActionsStore.setProfileStats(userId.value, {
+      followers: profileData?.followerCount ?? followers.value.length,
+      following: profileData?.followingCount ?? following.value.length,
+    })
+
+    if (authStore.authToken && authStore.userId && authStore.userId !== userId.value) {
+      const followStatusResponse = await usersService.getUserFollowStatus(userId.value, authStore.authToken)
+      const followStatus = followStatusResponse.data
+      const isFollowingFromStatus =
+        typeof followStatus?.following === 'boolean'
+          ? followStatus.following
+          : typeof followStatus?.is_following === 'boolean'
+            ? followStatus.is_following
+            : false
+
+      socialActionsStore.setUserFollowingState(userId.value, isFollowingFromStatus)
+    } else {
+      socialActionsStore.setUserFollowingState(userId.value, false)
     }
-  } else if (profileResult.reason instanceof ApiError && profileResult.reason.status !== 404) {
-    loadError.value = profileResult.reason.message
-  }
 
-  if (skillsResult.status === 'fulfilled') {
-    skills.value = collectUserSkills(skillsResult.value.data, profileResult.status === 'fulfilled' ? profileResult.value.data?.skills : null)
-  } else {
-    skills.value = collectUserSkills(profileResult.status === 'fulfilled' ? profileResult.value.data?.skills : null)
-  }
-
-  if (portfoliosResult.status === 'fulfilled') {
-    portfolios.value = portfoliosResult.value.data ?? []
-  } else {
-    portfolios.value = []
-  }
-
-  if (certificationsResult.status === 'fulfilled') {
-    certifications.value = certificationsResult.value.data ?? []
-  } else {
-    certifications.value = []
-  }
-
-  if (educationsResult.status === 'fulfilled') {
-    educations.value = educationsResult.value.data ?? []
-  } else {
-    educations.value = []
-  }
-
-  if (experiencesResult.status === 'fulfilled') {
-    experiences.value = experiencesResult.value.data ?? []
-  } else {
-    experiences.value = []
-  }
-
-  if (followersResult.status === 'fulfilled') {
-    followers.value = followersResult.value.data ?? []
-  } else {
-    followers.value = []
-  }
-
-  const nextFollowStates = { ...followStates.value }
-  followers.value.forEach((follower) => {
-    const account = getFollowerAccount(follower)
-    if (account.id) {
-      nextFollowStates[account.id] = account.isFollowing
-      socialActionsStore.setUserFollowingState(account.id, account.isFollowing)
+    if (!user.value && !userProfile.value) {
+      loadError.value = 'This profile could not be loaded.'
     }
-  })
-  followStates.value = nextFollowStates
-
-  socialActionsStore.setProfileStats(userId.value, {
-    followers: followers.value.length,
-    following: following.value.length,
-  })
-  socialActionsStore.setUserFollowingState(
-    userId.value,
-    followers.value.some((entry) => entry.followerId === authStore.userId),
-  )
-
-  if (!user.value && !userProfile.value && !loadError.value) {
-    loadError.value = 'This profile could not be loaded.'
+  } catch (error) {
+    loadError.value = error instanceof ApiError
+      ? error.message
+      : getErrorMessage(error, 'This profile could not be loaded.')
+  } finally {
+    isLoadingProfile.value = false
   }
-
-  isLoadingProfile.value = false
 }
 
 const profile = computed(() => {
@@ -412,7 +417,6 @@ const handleFollowToggle = async () => {
     if (isFollowingProfile.value) {
       await socialActionsStore.unfollowUser(userId.value)
       followers.value = followers.value.filter((entry) => entry.followerId !== authStore.userId)
-      toast.success('Profile unfollowed')
     } else {
       await socialActionsStore.followUser(userId.value)
       followers.value = [
@@ -424,7 +428,6 @@ const handleFollowToggle = async () => {
         },
         ...followers.value,
       ]
-      toast.success('You are now following this profile')
     }
   } catch (error) {
     const message = getErrorMessage(error, 'Unable to update follow status.')
@@ -467,7 +470,6 @@ const toggleFollowFromModal = async (targetUserId: string) => {
         [targetUserId]: false,
       }
       following.value = following.value.filter((account) => account.id !== targetUserId)
-      toast.success('Unfollowed user.')
       return
     }
 
@@ -488,7 +490,6 @@ const toggleFollowFromModal = async (targetUserId: string) => {
         ...following.value,
       ]
     }
-    toast.success('Following user.')
   } catch (error) {
     toast.error('Follow action failed', {
       description: getErrorMessage(error, 'Unable to update follow status.'),
@@ -651,7 +652,7 @@ watch(
 
         <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
           <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
-            <p v-if="profile.bio" class="whitespace-pre-line">{{ profile.bio }}</p>
+            <p v-if="profile.bio" class="whitespace-pre-line">{{ richTextToPlainText(profile.bio) }}</p>
             <div
               v-else-if="isLoadingProfile"
               class="space-y-3 py-2"
@@ -722,7 +723,7 @@ watch(
                 />
               </div>
               <p class="break-words text-lg font-semibold text-[var(--text-primary)]">{{ portfolio.title }}</p>
-              <p v-if="portfolio.description" class="mt-3 line-clamp-5 break-words text-sm leading-6 text-[var(--text-secondary)]">{{ portfolio.description }}</p>
+              <p v-if="portfolio.description" class="mt-3 line-clamp-5 break-words text-sm leading-6 text-[var(--text-secondary)]">{{ richTextToPlainText(portfolio.description) }}</p>
               <a
                 v-if="portfolio.link"
                 :href="portfolio.link"
@@ -809,7 +810,7 @@ watch(
                 {{ experience.startDate && (experience.endDate || experience.isCurrent) ? ' - ' : '' }}
                 {{ experience.isCurrent ? 'Present' : (experience.endDate ? new Date(experience.endDate).toLocaleDateString() : '') }}
               </p>
-              <p v-if="experience.description" class="mt-2 text-sm text-[var(--text-secondary)]">{{ experience.description }}</p>
+              <p v-if="experience.description" class="mt-2 text-sm text-[var(--text-secondary)]">{{ richTextToPlainText(experience.description) }}</p>
             </div>
           </div>
           <div v-else class="py-8 text-center text-sm text-[var(--text-secondary)]">

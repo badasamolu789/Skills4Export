@@ -6,6 +6,7 @@ import type { MyProfileData } from '@/services/users'
 import { getOptionalCount } from '@/utils/postMapper'
 import { getDisplayName } from '@/utils/displayName'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { getProfileContextTag } from '@/utils/profileContextTag'
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
@@ -130,7 +131,7 @@ const getAuthorTag = (author?: MyProfileData | null) => {
     .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
     .slice(0, 3) ?? []
 
-  return skills.join(' | ')
+  return skills.join(' | ') || getProfileContextTag(author)
 }
 
 export const mapApiQuestionToFeedPost = (

@@ -20,10 +20,14 @@ import SkillPillInput from '@/components/SkillPillInput.vue'
 import {
   type FreelanceJobRecord,
   type FreelancerRecord,
+  freelancersService,
 } from '@/services/freelancers'
-import { nigeriaStates } from '@/data/locations'
+import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
+import { NIGERIA_COUNTRY, nigeriaProfileLocationOptions, nigeriaStates } from '@/data/locations'
 import { useAuthStore } from '@/stores/auth'
 import { useFreelancersStore } from '@/stores/freelancers'
+import { getDisplayName } from '@/utils/displayName'
+import { richTextToPlainText } from '@/utils/richText'
 import { slugify } from '@/utils/slugify'
 
 const authStore = useAuthStore()
@@ -50,10 +54,14 @@ const isApplyingToFreelanceJob = ref(false)
 const isFreelanceJobDetailOpen = ref(false)
 const isEmailModalOpen = ref(false)
 const isSendingEmail = ref(false)
+const isPrefillingFreelancerForm = ref(false)
 const selectedFreelancer = ref<FreelancerRecord | null>(null)
 const emailForm = ref({
+  category: '',
+  skills: '',
+  location: '',
+  jobType: 'remote',
   message: '',
-  replyToEmail: '',
 })
 const freelancerForm = ref({
   name: '',
@@ -103,6 +111,23 @@ const getFreelancerPath = (freelancer: FreelancerRecord) => `/profile/view/${fre
 
 const getFreelancerEmail = (freelancer?: FreelancerRecord | null) =>
   freelancer?.email || freelancer?.userEmail || ''
+
+const getRequesterEmail = () =>
+  authStore.signUpDraft.email || authStore.currentUser?.email || ''
+
+const formatLocationWithCountry = (value?: string | null) => {
+  const location = value?.trim()
+
+  if (!location) {
+    return ''
+  }
+
+  return location.toLowerCase().endsWith(`, ${NIGERIA_COUNTRY.toLowerCase()}`)
+    ? location
+    : `${location}, ${NIGERIA_COUNTRY}`
+}
+
+const getPlainCardText = (value?: string | null) => richTextToPlainText(value)
 
 const formatStatusLabel = (value?: string | null) => {
   if (!value) {
@@ -166,6 +191,120 @@ const parseAttachmentIds = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean)
 
+const getProfileName = (profile?: MyProfileData | null) =>
+  getDisplayName(
+    profile?.profile?.displayName,
+    profile?.profile?.username,
+    profile?.user?.name,
+    profile?.user?.username,
+    profile?.name,
+    authStore.userProfile?.displayName,
+    authStore.userProfile?.username,
+    authStore.currentUser?.name,
+    authStore.currentUser?.username,
+    authStore.signUpDraft.name,
+  )
+
+const getProfileTitle = (profile?: MyProfileData | null) =>
+  profile?.profile?.currentJobTitle ||
+  profile?.profile?.current_job_title ||
+  profile?.current_job_title ||
+  authStore.userProfile?.currentJobTitle ||
+  authStore.userProfile?.current_job_title ||
+  authStore.signUpDraft.jobTitle ||
+  authStore.signUpDraft.headline ||
+  ''
+
+const getProfileLocation = (profile?: MyProfileData | null) => {
+  const location =
+    profile?.profile?.location ||
+    profile?.location ||
+    authStore.userProfile?.location ||
+    authStore.signUpDraft.location ||
+    authStore.signUpDraft.state ||
+    ''
+
+  const normalizedLocation = location.replace(new RegExp(`,\\s*${NIGERIA_COUNTRY}$`, 'i'), '')
+
+  return nigeriaStates.includes(normalizedLocation) ? formatLocationWithCountry(normalizedLocation) : ''
+}
+
+const getProfileBio = (profile?: MyProfileData | null) =>
+  profile?.profile?.bio ||
+  profile?.profile?.description ||
+  profile?.profile?.about ||
+  profile?.bio ||
+  authStore.userProfile?.bio ||
+  authStore.userProfile?.description ||
+  authStore.userProfile?.about ||
+  authStore.signUpDraft.headline ||
+  ''
+
+const getProfileSkills = (profile?: MyProfileData | null) =>
+  collectUserSkills(profile?.skills, profile, authStore.signUpDraft.interests)
+    .map((skill) => skill.name || skill.skill || skill.skillName || skill.skill_name || '')
+    .map((skill) => skill.trim())
+    .filter(Boolean)
+    .join(', ')
+
+const getStoredProfileData = (): MyProfileData => ({
+  user: authStore.currentUser,
+  profile: authStore.userProfile,
+  skills: collectUserSkills(authStore.signUpDraft.interests),
+  name: authStore.signUpDraft.name,
+  location: authStore.signUpDraft.location || authStore.signUpDraft.state,
+  bio: authStore.signUpDraft.headline,
+  current_job_title: authStore.signUpDraft.jobTitle,
+})
+
+const applyFreelancerPrefill = (profile?: MyProfileData | null) => {
+  const nextValues = {
+    name: getProfileName(profile),
+    title: getProfileTitle(profile),
+    skills: getProfileSkills(profile),
+    location: getProfileLocation(profile),
+    bio: getProfileBio(profile),
+  }
+
+  Object.entries(nextValues).forEach(([key, value]) => {
+    if (!value) {
+      return
+    }
+
+    const formKey = key as keyof Pick<typeof freelancerForm.value, 'name' | 'title' | 'skills' | 'location' | 'bio'>
+    if (!freelancerForm.value[formKey]) {
+      freelancerForm.value[formKey] = value
+    }
+  })
+}
+
+const prefillFreelancerForm = async () => {
+  applyFreelancerPrefill(getStoredProfileData())
+
+  if (!authStore.authToken || isPrefillingFreelancerForm.value) {
+    return
+  }
+
+  isPrefillingFreelancerForm.value = true
+
+  try {
+    const response = await usersService.getMyProfile(authStore.authToken)
+    if (response.data?.profile) {
+      authStore.setUserProfile(response.data.profile)
+    }
+    applyFreelancerPrefill(response.data)
+  } catch {
+    applyFreelancerPrefill(getStoredProfileData())
+  } finally {
+    isPrefillingFreelancerForm.value = false
+  }
+}
+
+const openFreelancerRegistration = () => {
+  isRegisterModalOpen.value = true
+  void prefillFreelancerForm()
+}
+
 const selectedFreelanceJob = computed(() => freelancersStore.currentFreelanceJob)
 const selectedJobCategory = computed(() => {
   const value = route.query.category
@@ -189,7 +328,10 @@ const filteredFreelancers = computed(() => {
       !skill ||
       freelancer.skills.some((item) => item.toLowerCase().includes(skill)) ||
       freelancer.title.toLowerCase().includes(skill)
-    const locationMatch = !location || String(freelancer.location || '').toLowerCase().includes(location)
+    const locationMatch =
+      !location ||
+      formatLocationWithCountry(freelancer.location).toLowerCase().includes(location) ||
+      String(freelancer.location || '').toLowerCase().includes(location)
     const availabilityMatch =
       availabilityFilter.value === 'Any of the options' ||
       (availabilityFilter.value === 'Remote only' && freelancer.remoteOnly) ||
@@ -212,7 +354,10 @@ const filteredJobs = computed(() => {
       !skill ||
       job.skills.some((item) => item.toLowerCase().includes(skill)) ||
       job.title.toLowerCase().includes(skill)
-    const locationMatch = !location || String(job.location || '').toLowerCase().includes(location)
+    const locationMatch =
+      !location ||
+      formatLocationWithCountry(job.location).toLowerCase().includes(location) ||
+      String(job.location || '').toLowerCase().includes(location)
 
     return categoryMatch && skillMatch && locationMatch
   })
@@ -333,7 +478,7 @@ const submitFreelancerRegistration = async () => {
       name: freelancerForm.value.name,
       title: freelancerForm.value.title,
       skills: splitList(freelancerForm.value.skills),
-      location: freelancerForm.value.location,
+      location: formatLocationWithCountry(freelancerForm.value.location),
       bio: freelancerForm.value.bio,
       availability: freelancerForm.value.availability,
       remoteOnly: freelancerForm.value.remoteOnly,
@@ -418,8 +563,11 @@ const submitFreelanceJob = async () => {
 const openEmailModal = (freelancer: FreelancerRecord) => {
   selectedFreelancer.value = freelancer
   emailForm.value = {
+    category: freelancer.skills?.[0] || freelancer.title || '',
+    skills: freelancer.skills?.join(', ') || '',
+    location: formatLocationWithCountry(freelancer.location),
+    jobType: freelancer.remoteOnly ? 'remote' : 'hybrid',
     message: '',
-    replyToEmail: authStore.signUpDraft.email || '',
   }
   isEmailModalOpen.value = true
 }
@@ -432,39 +580,86 @@ const closeEmailModal = () => {
   isEmailModalOpen.value = false
   selectedFreelancer.value = null
   emailForm.value = {
+    category: '',
+    skills: '',
+    location: '',
+    jobType: 'remote',
     message: '',
-    replyToEmail: '',
   }
 }
 
-const sendFreelancerEmail = () => {
+const sendFreelancerEmail = async () => {
   if (!selectedFreelancer.value || isSendingEmail.value) {
     return
   }
 
-  const candidateEmail = getFreelancerEmail(selectedFreelancer.value)
-  const replyToEmail = emailForm.value.replyToEmail.trim()
+  const requesterEmail = getRequesterEmail()
+  const category = emailForm.value.category.trim()
+  const skills = emailForm.value.skills.trim()
+  const location = emailForm.value.location.trim()
+  const jobType = emailForm.value.jobType.trim()
   const message = emailForm.value.message.trim()
 
-  if (!candidateEmail) {
-    toast.error('Candidate email is unavailable.')
+  if (!category || !message) {
+    toast.error('Add category and message before sending.')
     return
   }
 
-  if (!message || !replyToEmail) {
-    toast.error('Add a message and reply email before sending.')
+  if (!requesterEmail) {
+    toast.error('Your account email is unavailable.', {
+      description: 'Please refresh your profile or sign in again before contacting a freelancer.',
+    })
     return
   }
 
+  const freelancerEmail = getFreelancerEmail(selectedFreelancer.value)
   isSendingEmail.value = true
 
   try {
-    const subject = `Freelance opportunity for ${selectedFreelancer.value.name}`
-    const body = `${message}\n\nReply to: ${replyToEmail}`
-    window.location.href = `mailto:${encodeURIComponent(candidateEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
-    toast.success('Email composer opened')
+    const emailMessage = [
+      `Category / Type of Work: ${category}`,
+      skills ? `Skills: ${skills}` : '',
+      location ? `Location: ${location}` : '',
+      jobType ? `Job Type: ${formatStatusLabel(jobType)}` : '',
+      '',
+      message,
+    ].filter(Boolean).join('\n')
+
+    const emailResponse = await freelancersService.emailFreelancer(
+      {
+        freelancerId: selectedFreelancer.value.id,
+        email: freelancerEmail || requesterEmail,
+        freelancerEmail: freelancerEmail || undefined,
+        recipientEmail: freelancerEmail || undefined,
+        replyToEmail: requesterEmail,
+        category,
+        skills,
+        location,
+        jobType,
+        message: emailMessage,
+      },
+      authStore.authToken,
+    )
+
+    if (emailResponse?.success === false) {
+      throw new Error((emailResponse as { message?: string }).message || 'Unable to send this email.')
+    }
+
+    toast.success('Message submitted', {
+      description: `We sent your message to ${selectedFreelancer.value.name}.`,
+    })
     isEmailModalOpen.value = false
     selectedFreelancer.value = null
+    emailForm.value = {
+      category: '',
+      skills: '',
+      location: '',
+      jobType: 'remote',
+      message: '',
+    }
+  } catch (error) {
+    const messageText = error instanceof ApiError ? error.message : 'Unable to send this email.'
+    toast.error('Email failed', { description: messageText })
   } finally {
     isSendingEmail.value = false
   }
@@ -559,7 +754,7 @@ const clearPassportUpload = () => {
         <button
           type="button"
           class="inline-flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--accent)] bg-transparent px-4 text-[0.86rem] font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-secondary)]"
-          @click="isRegisterModalOpen = true"
+          @click="openFreelancerRegistration"
         >
           Register as a Freelancer
         </button>
@@ -617,8 +812,8 @@ const clearPassportUpload = () => {
               class="min-w-0 flex-1 bg-transparent text-[0.86rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
             >
               <option value="">All locations</option>
-              <option v-for="state in nigeriaStates" :key="state" :value="state">
-                {{ state }}
+              <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+                {{ location }}
               </option>
             </select>
           </label>
@@ -732,7 +927,7 @@ const clearPassportUpload = () => {
                 <p class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9rem] text-[var(--text-secondary)]">
                   <span class="font-semibold text-[var(--text-primary)]">Location</span>
                   <span>-</span>
-                  <span>{{ freelancer.location || 'Location not listed' }}</span>
+                  <span>{{ formatLocationWithCountry(freelancer.location) || 'Location not listed' }}</span>
                   <span class="text-[var(--text-tertiary)]">|</span>
                   <span class="inline-flex items-center gap-1">
                     <span class="font-semibold text-[var(--text-primary)]">Status</span>
@@ -742,7 +937,7 @@ const clearPassportUpload = () => {
                   </span>
                 </p>
                 <p class="mt-5 line-clamp-3 text-[1rem] leading-8 text-[var(--text-secondary)] sm:text-[1.05rem]">
-                  {{ freelancer.bio }}
+                  {{ getPlainCardText(freelancer.bio) || 'No bio has been added yet.' }}
                 </p>
               </div>
             </div>
@@ -830,13 +1025,13 @@ const clearPassportUpload = () => {
                 </p>
 
                 <p class="mt-2 line-clamp-2 max-w-3xl text-[0.84rem] leading-5 text-[var(--text-secondary)]">
-                  {{ job.description || 'No description has been added yet.' }}
+                  {{ getPlainCardText(job.description) || 'No description has been added yet.' }}
                 </p>
 
                 <div class="mt-3 flex flex-wrap gap-2">
                   <span class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[18rem]">
                     <MapPin class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
-                    <span class="truncate">{{ job.location || 'Location not listed' }}</span>
+                    <span class="truncate">{{ formatLocationWithCountry(job.location) || 'Location not listed' }}</span>
                   </span>
                   <span class="inline-flex max-w-full items-center gap-2 rounded-full bg-[var(--surface-secondary)] px-3 py-1.5 text-[0.82rem] text-[var(--text-secondary)] sm:max-w-[12rem]">
                     <BriefcaseBusiness class="h-4 w-4 shrink-0 text-[var(--accent-strong)]" />
@@ -932,8 +1127,8 @@ const clearPassportUpload = () => {
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location:<span class="text-[var(--danger)]">*</span></span>
           <select v-model="freelanceJobForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
             <option value="">Select location</option>
-            <option v-for="state in nigeriaStates" :key="state" :value="state">
-              {{ state }}
+            <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+              {{ location }}
             </option>
           </select>
         </label>
@@ -1022,8 +1217,8 @@ const clearPassportUpload = () => {
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location</span>
             <select v-model="freelancerForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
               <option value="">Select location</option>
-              <option v-for="state in nigeriaStates" :key="state" :value="state">
-                {{ state }}
+              <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+                {{ location }}
               </option>
             </select>
           </label>
@@ -1102,17 +1297,56 @@ const clearPassportUpload = () => {
   >
     <form class="space-y-5" @submit.prevent="sendFreelancerEmail">
       <label class="block">
-        <span class="text-sm font-semibold text-[var(--text-primary)]">Candidate email</span>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Category / Type of Work<span class="text-[var(--danger)]">*</span></span>
         <input
-          :value="getFreelancerEmail(selectedFreelancer)"
-          readonly
-          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none"
-          placeholder="Candidate email unavailable"
+          v-model="emailForm.category"
+          :disabled="isSendingEmail"
+          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+          placeholder="Writing, App dev., Websites, Data entry, etc."
         />
       </label>
 
       <label class="block">
-        <span class="text-sm font-semibold text-[var(--text-primary)]">Message</span>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">skills</span>
+        <input
+          v-model="emailForm.skills"
+          :disabled="isSendingEmail"
+          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+        />
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
+        <select
+          v-model="emailForm.location"
+          :disabled="isSendingEmail"
+          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <option value="">Add location</option>
+          <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
+            {{ location }}
+          </option>
+        </select>
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Job Type</span>
+        <select
+          v-model="emailForm.jobType"
+          :disabled="isSendingEmail"
+          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <option value="remote">Remote</option>
+          <option value="hybrid">Hybrid</option>
+          <option value="onsite">Onsite</option>
+          <option value="contract">Contract</option>
+          <option value="part-time">Part time</option>
+          <option value="project-based">Project based</option>
+        </select>
+      </label>
+
+      <label class="block">
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Message<span class="text-[var(--danger)]">*</span></span>
         <textarea
           v-model="emailForm.message"
           rows="4"
@@ -1121,25 +1355,25 @@ const clearPassportUpload = () => {
         />
       </label>
 
-      <label class="block">
-        <span class="text-sm font-semibold text-[var(--text-primary)]">Reply to email</span>
-        <input
-          v-model="emailForm.replyToEmail"
-          type="email"
-          :disabled="isSendingEmail"
-          class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-70"
-          placeholder="hr@skills4export.com"
-        />
-      </label>
-
       <button
         type="submit"
-        :disabled="isSendingEmail || !getFreelancerEmail(selectedFreelancer)"
+        :disabled="isSendingEmail"
         class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
       >
         {{ isSendingEmail ? 'Sending...' : 'Send' }}
+        <span aria-hidden="true">→</span>
       </button>
 
+      <div class="flex justify-end border-t border-[color:var(--border-soft)] pt-4">
+        <button
+          type="button"
+          :disabled="isSendingEmail"
+          class="inline-flex h-10 items-center justify-center rounded-[0.75rem] bg-[var(--danger)] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          @click="closeEmailModal"
+        >
+          Close
+        </button>
+      </div>
     </form>
   </ResponsiveOverlay>
 
@@ -1165,7 +1399,7 @@ const clearPassportUpload = () => {
 
         <div class="mt-4 grid gap-2 sm:grid-cols-3">
           <span class="rounded-[0.75rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-secondary)]">
-            {{ selectedFreelanceJob.location || 'Location not listed' }}
+            {{ formatLocationWithCountry(selectedFreelanceJob.location) || 'Location not listed' }}
           </span>
           <span class="rounded-[0.75rem] bg-[var(--surface-primary)] px-3 py-2 text-sm text-[var(--text-secondary)]">
             {{ selectedFreelanceJob.type }}
@@ -1194,7 +1428,7 @@ const clearPassportUpload = () => {
           <div>
             <h3 class="text-base font-semibold text-[var(--text-primary)]">Description</h3>
             <p class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">
-              {{ selectedFreelanceJob.description || 'No description has been added yet.' }}
+              {{ getPlainCardText(selectedFreelanceJob.description) || 'No description has been added yet.' }}
             </p>
           </div>
           <div>

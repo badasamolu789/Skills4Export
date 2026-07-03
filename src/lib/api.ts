@@ -9,7 +9,6 @@ export type ApiRequestOptions = {
   headers?: HeadersInit
   signal?: AbortSignal
   token?: string | null
-  suppressErrorModal?: boolean
   retry?: boolean
   timeoutMs?: number
 }
@@ -462,7 +461,6 @@ export const apiRequest = async <T>(
     headers,
     signal,
     token,
-    suppressErrorModal = false,
     retry,
     timeoutMs,
   }: ApiRequestOptions = {},
@@ -556,15 +554,13 @@ export const apiRequest = async <T>(
           })
         }
 
-        if (!suppressErrorModal) {
-          reportApiError({
-            method,
-            url: requestUrl,
-            status: response.status,
-            payload,
-            description: 'The backend returned an error response.',
-          })
-        }
+        reportApiError({
+          method,
+          url: requestUrl,
+          status: response.status,
+          payload,
+          description: 'The backend returned an error response.',
+        })
 
         throw new ApiError(
           message,
@@ -587,32 +583,28 @@ export const apiRequest = async <T>(
       }
 
       if (error instanceof DOMException && error.name === 'AbortError') {
-        if (!suppressErrorModal) {
-          reportApiError({
-            method,
-            url: requestUrl || path,
-            status: 408,
-            payload: { message: 'Request timeout' },
-            description: 'The request timed out before the server responded.',
-          })
-        }
-        throw new ApiError('Connection timed out. Try again.', 408)
-      }
-
-      if (!suppressErrorModal) {
         reportApiError({
           method,
           url: requestUrl || path,
-          status: 0,
-          payload: { message: String(error) },
-          description: 'The request could not reach the backend service.',
+          status: 408,
+          payload: { message: 'Request timeout' },
+          description: 'The request timed out before the server responded.',
         })
-        // A fetch TypeError can also mean CORS, a blocked request, or a bad
-        // endpoint. Only show the global connection state when the browser
-        // itself confirms that the device is offline.
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-          reportOfflineState()
-        }
+        throw new ApiError('Connection timed out. Try again.', 408)
+      }
+
+      reportApiError({
+        method,
+        url: requestUrl || path,
+        status: 0,
+        payload: { message: String(error) },
+        description: 'The request could not reach the backend service.',
+      })
+      // A fetch TypeError can also mean CORS, a blocked request, or a bad
+      // endpoint. Only show the global connection state when the browser
+      // itself confirms that the device is offline.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        reportOfflineState()
       }
 
       throw new ApiError(

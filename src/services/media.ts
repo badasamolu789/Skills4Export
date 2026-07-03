@@ -1,4 +1,4 @@
-import { api, ApiError } from '@/lib/api'
+import { api } from '@/lib/api'
 
 // ============================================================================
 // Types
@@ -370,7 +370,6 @@ export const mediaService = {
             title?: string
             token?: string | null
             timeoutMs?: number
-            fallbackToDirectUpload?: boolean
         },
     ) => {
         const formData = new FormData()
@@ -384,100 +383,11 @@ export const mediaService = {
             formData.append('title', options.title)
         }
 
-        try {
-            return await api.post<MediaUploadFileResponse>('/media/upload', formData, {
-                token: options?.token,
-                retry: false,
-                timeoutMs: options?.timeoutMs ?? 180000,
-            })
-        } catch (error) {
-            const canFallback =
-                options?.fallbackToDirectUpload !== false &&
-                error instanceof ApiError &&
-                (error.status === 0 || error.status === 408 || error.status === 502 || error.status === 503 || error.status === 504)
-
-            if (!canFallback) {
-                throw error
-            }
-
-            const signatureResponse = await mediaService.getCloudinarySignature(options?.token)
-            const uploadResponse = await mediaService.uploadCloudinaryFile(file, signatureResponse.data)
-            const publicId = uploadResponse.public_id
-
-            if (!publicId) {
-                throw error
-            }
-
-            const registerResponse = await mediaService.registerMedia(
-                {
-                    publicId,
-                    title: options?.title || file.name,
-                    kind: options?.kind ?? (file.type.startsWith('video/') ? 'video' : 'post_image'),
-                },
-                options?.token,
-            )
-            const immediateAssetId = extractMediaAssetId(registerResponse.data)
-            const immediateUrl = extractMediaUrl(registerResponse.data) || uploadResponse.secure_url
-
-            if (immediateAssetId) {
-                return {
-                    success: true,
-                    message: 'Media uploaded successfully',
-                    data: {
-                        assetId: immediateAssetId,
-                        id: immediateAssetId,
-                        url: immediateUrl || uploadResponse.secure_url,
-                        publicId,
-                        kind: options?.kind,
-                        title: options?.title || file.name,
-                        mimeType: file.type,
-                        sizeBytes: file.size,
-                    },
-                }
-            }
-
-            if (registerResponse.data.jobId) {
-                const result = await mediaService.waitForProcessedMediaResult(registerResponse.data.jobId, {
-                    token: options?.token,
-                    attempts: 45,
-                    intervalMs: 1000,
-                })
-
-                if (result.assetId) {
-                    return {
-                        success: true,
-                        message: 'Media uploaded successfully',
-                        data: {
-                            assetId: result.assetId,
-                            id: result.assetId,
-                            url: result.url || immediateUrl || uploadResponse.secure_url,
-                            publicId,
-                            kind: options?.kind,
-                            title: options?.title || file.name,
-                            mimeType: file.type,
-                            sizeBytes: file.size,
-                        },
-                    }
-                }
-            }
-
-            if (immediateUrl || uploadResponse.secure_url) {
-                return {
-                    success: true,
-                    message: 'Media uploaded successfully',
-                    data: {
-                        url: immediateUrl || uploadResponse.secure_url,
-                        publicId,
-                        kind: options?.kind,
-                        title: options?.title || file.name,
-                        mimeType: file.type,
-                        sizeBytes: file.size,
-                    },
-                }
-            }
-
-            throw error
-        }
+        return api.post<MediaUploadFileResponse>('/media/upload', formData, {
+            token: options?.token,
+            retry: false,
+            timeoutMs: options?.timeoutMs ?? 180000,
+        })
     },
 
     uploadCloudinaryFile: async (
@@ -507,7 +417,7 @@ export const mediaService = {
             body: formData,
         })
 
-        const payload = await response.json().catch(() => null)
+        const payload = await response.json()
 
         if (!response.ok) {
             const message =

@@ -1,0 +1,196 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@100;200;300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+
+:root {
+  color-scheme: light;
+  --primary: #443fa0;
+  --primary-deep: #353266;
+  --primary-soft: #e8e9ff;
+  --surface-base: #ffffff;
+  --surface-muted-base: #f8f9ff;
+  --surface-elevated: #f3f5ff;
+  --neutral-50: #f8faff;
+  --neutral-100: #eef2fb;
+  --neutral-200: #d9dfef;
+  --neutral-300: #c0c9de;
+  --neutral-400: #94a3b8;
+  --neutral-500: #667085;
+  --neutral-600: #475467;
+  --neutral-700: #344054;
+  --neutral-800: #1f2937;
+  --neutral-900: #101828;
+  --app-bg: linear-gradient(180deg, #ffffff 0%, #f8f9ff 52%, #eef2fb 100%);
+  --surface-primary: var(--surface-base);
+  --surface-secondary: var(--surface-muted-base);
+  --surface-muted: var(--surface-elevated);
+  --border-soft: #dde3f1;
+  --accent: var(--primary);
+  --accent-strong: var(--primary-deep);
+  --accent-soft: var(--primary-soft);
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-600);
+  --landing-bg: linear-gradient(180deg, #f7f9ff 0%, #eef2fb 48%, #e8edf8 100%);
+  --landing-heading: #1d2440;
+  --landing-text: #243045;
+  --landing-muted: #5d6b85;
+  --landing-border: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  background: var(--app-bg);
+  font-size: 15.5px;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1.36;
+  color: var(--text-primary);
+  background: var(--app-bg);
+}
+
+@media (min-width: 1280px) {
+  html {
+    font-size: 15.75px;
+  }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Plus Jakarta Sans", "Inter", "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+.landing-hero-title {
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: clamp(2.05rem, 3.65vw, 3.7rem);
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.landing-join-title {
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: clamp(2.45rem, 4.2vw, 4.2rem);
+  font-weight: 350;
+  letter-spacing: 0;
+  line-height: 1.12;
+}
+
+.landing-auth-panel {
+  min-width: 0;
+}
+
+.landing-preview {
+  min-width: 0;
+}
+
+.landing-preview img {
+  max-height: min(54vh, 36rem);
+}
+
+.landing-intro-text {
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: clamp(1rem, 1.28vw, 1.18rem);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.62;
+}
+
+.landing-feature-title {
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: clamp(1.05rem, 1.42vw, 1.24rem);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.18;
+}
+
+.landing-feature-text {
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: clamp(0.86rem, 1.02vw, 0.94rem);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.55;
+}
+
+.landing-quote-text {
+  color: inherit;
+  font-family: "Inter", "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-size: clamp(0.92rem, 1.38vw, 1.04rem);
+  font-weight: 300;
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .landing-hero-title {
+    font-size: clamp(2rem, 11vw, 2.8rem);
+    line-height: 1.08;
+  }
+
+  .landing-join-title {
+    font-size: clamp(2.35rem, 11.5vw, 3.1rem);
+    line-height: 1.12;
+  }
+}
+
+@media (max-width: 1023px) {
+  .landing-auth-hero {
+    align-content: center;
+  }
+
+  .landing-auth-panel {
+    text-align: center;
+  }
+
+  .landing-auth-panel p {
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .landing-preview img {
+    max-height: min(44vh, 31rem);
+  }
+}
+
+@media (min-width: 1024px) and (max-height: 760px) {
+  .landing-join-title {
+    font-size: clamp(2.35rem, 3.35vw, 3.35rem);
+  }
+
+  .landing-preview img {
+    max-height: 50vh;
+  }
+}
+
+@media (min-width: 1536px) {
+  .landing-preview img {
+    max-height: min(56vh, 38rem);
+  }
+}

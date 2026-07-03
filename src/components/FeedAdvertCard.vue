@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Megaphone } from 'lucide-vue-next'
 import type { AdvertRecord } from '@/services/adverts'
 
 const props = defineProps<{
@@ -31,14 +32,15 @@ const advertAltText = computed(() =>
         decoding="async"
       >
     </a>
-    <a
+    <div
       v-else
-      href="#"
-      aria-label="Advertisement"
-      class="block overflow-hidden rounded-[0.95rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] transition hover:opacity-90"
-      @click.prevent
+      class="flex aspect-[16/7] w-full flex-col items-center justify-center rounded-[0.95rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-5 text-center"
+      aria-label="No advertisements available"
     >
-      <div class="advert-placeholder aspect-[16/7] w-full" />
-    </a>
+      <span class="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+        <Megaphone class="h-5 w-5" />
+      </span>
+      <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">Currently no ads available</p>
+    </div>
   </article>
 </template>

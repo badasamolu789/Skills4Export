@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { BriefcaseBusiness, MapPin, Wallet } from 'lucide-vue-next'
 import type { JobRecord } from '@/services/jobs'
+import { richTextToPlainText } from '@/utils/richText'
 
 const props = defineProps<{
   job: JobRecord
@@ -38,6 +39,8 @@ const experienceLabel = () => {
   }
   return `${experience.replace(/\s*-\s*/g, '-')}(yrs)`
 }
+
+const plainDescription = () => richTextToPlainText(props.job.description)
 </script>
 
 <template>
@@ -63,8 +66,8 @@ const experienceLabel = () => {
         {{ job.companyName }}
       </p>
 
-      <p v-if="job.description" class="mt-2 line-clamp-2 max-w-3xl text-[0.84rem] leading-5 text-[var(--text-secondary)]">
-        {{ job.description }}
+      <p v-if="plainDescription()" class="mt-2 line-clamp-2 max-w-3xl text-[0.84rem] leading-5 text-[var(--text-secondary)]">
+        {{ plainDescription() }}
       </p>
 
       <div class="mt-3 flex flex-wrap gap-2">

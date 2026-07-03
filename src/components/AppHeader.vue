@@ -25,7 +25,7 @@ import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import type { NotificationItem } from '@/services/notifications'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
-import { postsService, type CreatePostRequest, type PostMediaRecord, type PostRecord } from '@/services/posts'
+import { type CreatePostRequest, type PostMediaRecord, type PostRecord } from '@/services/posts'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -34,6 +34,7 @@ import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { isPrivateCommunity } from '@/utils/communityFilters'
 import { mapApiPostToFeedPost } from '@/utils/postMapper'
 import { mapApiQuestionToFeedPost } from '@/utils/questionMapper'
+import { richTextToPlainText } from '@/utils/richText'
 
 type HeaderLink = {
   label: string
@@ -50,6 +51,7 @@ type MenuItem = {
 }
 
 const POST_CREATED_EVENT = 'skills4export:post-created'
+const OPEN_COMPOSER_EVENT = 'skills4export:open-composer'
 const RECENT_CREATED_POSTS_KEY = 'skills4export:recent-created-posts'
 const MAX_RECENT_CREATED_POSTS = 10
 
@@ -66,7 +68,6 @@ const props = withDefaults(
     platformName: string
     links: HeaderLink[]
     searchPlaceholder?: string
-    notifications: NotificationItem[]
     isAuthenticated?: boolean
     userName: string
     userRole?: string
@@ -90,13 +91,15 @@ const emit = defineEmits<{
 const isNotificationsOpen = ref(false)
 const isUserMenuOpen = ref(false)
 const userMenuRoot = ref<HTMLElement | null>(null)
+const notificationsRoot = ref<HTMLElement | null>(null)
 const activeComposer = ref<null | 'ask' | 'post'>(null)
+const composerCommunityOverrideId = ref('')
+const isComposerCommunityLocked = ref(false)
 const router = useRouter()
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
-const askTitle = ref('')
 const askQuestion = ref('')
 const postAudienceId = ref('')
 const communities = ref<CommunityRecord[]>([])
@@ -119,7 +122,8 @@ const postImageSizeReferences = [
 ] as const
 const postContentInput = ref<HTMLTextAreaElement | null>(null)
 const searchQuery = ref('')
-const unreadCount = computed(() => notificationsStore.unreadCount || props.notifications.filter((item) => item.unread).length)
+const headerNotifications = computed(() => notificationsStore.visibleNotifications.slice(0, 3))
+const unreadCount = computed(() => notificationsStore.unreadCount)
 const postFileKind = computed(() => {
   if (!postFile.value) {
     return ''
@@ -145,7 +149,8 @@ const postFileRecommendation = computed(() => {
 const communityOptions = computed(() =>
   communities.value
     .filter((community) => community.id && community.name)
-    .filter((community) => !isPrivateCommunity(community))
+    .filter((community) => !isComposerCommunityLocked.value || community.id === composerCommunityOverrideId.value)
+    .filter((community) => !isPrivateCommunity(community) || community.id === composerCommunityOverrideId.value)
     .filter((community, index, list) => list.findIndex((item) => item.id === community.id) === index)
     .sort((first, second) => first.name.localeCompare(second.name)),
 )
@@ -156,7 +161,7 @@ const getSelectedCommunity = () =>
 const selectedCommunityAllowsActions = () => {
   const community = getSelectedCommunity()
 
-  if (!community || !isPrivateCommunity(community)) {
+  if (!community || !isPrivateCommunity(community) || community.id === composerCommunityOverrideId.value) {
     return true
   }
 
@@ -176,13 +181,36 @@ const getLineAwesomeIconClass = (link: HeaderLink) => link.iconClass || ''
 
 const openComposer = (type: 'ask' | 'post') => {
   activeComposer.value = type
+  composerCommunityOverrideId.value = ''
+  isComposerCommunityLocked.value = false
   isUserMenuOpen.value = false
   isNotificationsOpen.value = false
   void loadCommunities()
 }
 
+const openComposerWithOptions = async (detail: { type?: 'ask' | 'post'; communityId?: string; lockCommunity?: boolean }) => {
+  const type = detail.type || 'post'
+  activeComposer.value = type
+  isComposerCommunityLocked.value = Boolean(detail.lockCommunity && detail.communityId)
+  isUserMenuOpen.value = false
+  isNotificationsOpen.value = false
+  await loadCommunities()
+
+  if (detail.communityId) {
+    composerCommunityOverrideId.value = detail.communityId
+    postAudienceId.value = detail.communityId
+  }
+}
+
+const handleOpenComposerEvent = (event: Event) => {
+  const detail = (event as CustomEvent<{ type?: 'ask' | 'post'; communityId?: string; lockCommunity?: boolean }>).detail ?? {}
+  void openComposerWithOptions(detail)
+}
+
 const closeComposer = () => {
   activeComposer.value = null
+  composerCommunityOverrideId.value = ''
+  isComposerCommunityLocked.value = false
 }
 
 const handleHeaderLinkAction = (link: HeaderLink) => {
@@ -267,38 +295,17 @@ const getPlainTextFromHtml = (value: string) => {
 }
 
 const openNotifications = () => {
-  isNotificationsOpen.value = true
+  isNotificationsOpen.value = !isNotificationsOpen.value
   isUserMenuOpen.value = false
   void notificationsStore.requestBrowserNotifications()
 
-  if (authStore.authToken) {
-    void notificationsStore.refresh(authStore.authToken, true)
-  }
-}
-
-const markAllNotificationsRead = async () => {
-  if (!authStore.authToken) {
-    return
-  }
-
-  try {
-    await notificationsStore.markAllAsRead(authStore.authToken)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to update notifications.'
-    toast.error('Notification update failed', { description: message })
-  }
-}
-
-const clearNotifications = async () => {
-  if (!authStore.authToken) {
-    return
-  }
-
-  try {
-    await notificationsStore.clearAll(authStore.authToken)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to clear notifications.'
-    toast.error('Notification clear failed', { description: message })
+  if (authStore.authToken && isNotificationsOpen.value) {
+    void notificationsStore.loadNotifications({
+      token: authStore.authToken,
+      page: 1,
+      perPage: 3,
+      background: notificationsStore.visibleNotifications.length > 0,
+    })
   }
 }
 
@@ -323,7 +330,7 @@ const toggleUserMenu = () => {
 }
 
 const handleDocumentPointerDown = (event: PointerEvent) => {
-  if (!isUserMenuOpen.value) {
+  if (!isUserMenuOpen.value && !isNotificationsOpen.value) {
     return
   }
 
@@ -332,7 +339,12 @@ const handleDocumentPointerDown = (event: PointerEvent) => {
     return
   }
 
+  if (target && notificationsRoot.value?.contains(target)) {
+    return
+  }
+
   isUserMenuOpen.value = false
+  isNotificationsOpen.value = false
 }
 
 const openMobileMenu = () => {
@@ -417,16 +429,10 @@ const addEditorPrefixLine = async (prefix: string) => {
 }
 
 const submitQuestion = async () => {
-  const title = askTitle.value.trim()
   const body = askQuestion.value.trim()
 
-  if (!title) {
-    toast.error('Question title is required.')
-    return
-  }
-
   if (!body) {
-    toast.error('Question details are required.')
+    toast.error('Question is required.')
     return
   }
 
@@ -444,7 +450,7 @@ const submitQuestion = async () => {
     const question = await socialActionsStore.createQuestion(
       {
         ...(postAudienceId.value ? { communityId: postAudienceId.value } : {}),
-        title,
+        title: body,
         body,
         visibility: postAudienceId.value ? 'community_public' : 'public',
       },
@@ -462,7 +468,6 @@ const submitQuestion = async () => {
     toast.success('Question posted', {
       description: 'Your question is now live.',
     })
-    askTitle.value = ''
     askQuestion.value = ''
     postAudienceId.value = ''
     closeComposer()
@@ -480,7 +485,6 @@ const submitQuestion = async () => {
 
 type UploadedPostMedia = {
   mediaAssetIds: string[]
-  fallbackUrl?: string
   uploadedUrl?: string
   mediaType?: string
 }
@@ -509,15 +513,7 @@ const uploadSelectedPostMedia = async () => {
     } satisfies UploadedPostMedia
   }
 
-  if (url) {
-    return {
-      mediaAssetIds: [],
-      fallbackUrl: url,
-      mediaType,
-    } satisfies UploadedPostMedia
-  }
-
-  throw new Error('Media upload completed without an asset ID or URL.')
+  throw new Error('Media upload completed without an asset ID.')
 }
 
 const submitPost = async () => {
@@ -527,6 +523,11 @@ const submitPost = async () => {
 
   if (!title || !plainContent) {
     toast.error('Add a title and content before posting.')
+    return
+  }
+
+  if (!postFile.value) {
+    toast.error('Upload an image or video before posting.')
     return
   }
 
@@ -556,7 +557,7 @@ const submitPost = async () => {
   try {
     const uploadedMedia = await uploadSelectedPostMedia()
 
-    if (uploadedMedia.mediaAssetIds.length > 0 || uploadedMedia.fallbackUrl) {
+    if (uploadedMedia.mediaAssetIds.length > 0) {
       toast.loading('Creating post...', { id: loadingToastId })
     }
 
@@ -586,8 +587,8 @@ const submitPost = async () => {
       created_at: createdAt,
       updated_at: updatedAt,
     } satisfies PostRecord
-    const immediateMediaUrl = uploadedMedia.uploadedUrl || uploadedMedia.fallbackUrl
-    const fallbackMedia: PostMediaRecord[] = immediateMediaUrl
+    const immediateMediaUrl = uploadedMedia.uploadedUrl
+    const immediateMedia: PostMediaRecord[] = immediateMediaUrl
       ? [
           {
             id: `immediate-${responsePost.id}`,
@@ -600,18 +601,6 @@ const submitPost = async () => {
         ]
       : []
 
-    if (uploadedMedia.fallbackUrl) {
-      await postsService.attachPostMedia(
-        responsePost.id,
-        {
-          url: uploadedMedia.fallbackUrl,
-          mediaType: uploadedMedia.mediaType,
-          displayOrder: 0,
-        },
-        authStore.authToken,
-      )
-    }
-
     toast.success('Post created', {
       id: loadingToastId,
       description: title,
@@ -620,12 +609,12 @@ const submitPost = async () => {
     rememberCreatedPost({
       storedAt: new Date().toISOString(),
       post: createdPost,
-      media: fallbackMedia,
+      media: immediateMedia,
     })
     socialActionsStore.upsertFeedItem(
       mapApiPostToFeedPost(
         createdPost,
-        fallbackMedia,
+        immediateMedia,
         currentUser.profileData.value,
         communities.value.find((item) => item.id === selectedCommunityId)?.name,
       ),
@@ -671,6 +660,7 @@ watch(postFile, (file, previousFile) => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  window.removeEventListener(OPEN_COMPOSER_EVENT, handleOpenComposerEvent)
 
   if (postFilePreviewUrl.value) {
     URL.revokeObjectURL(postFilePreviewUrl.value)
@@ -679,15 +669,16 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  window.addEventListener(OPEN_COMPOSER_EVENT, handleOpenComposerEvent)
   void loadCommunities()
 })
 </script>
 
 <template>
-  <header class="sticky top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]/95 backdrop-blur">
+  <header class="app-header sticky top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]/95 backdrop-blur">
     <div class="mx-auto w-full max-w-[86rem] px-3 py-2 sm:px-4 lg:px-6 xl:px-8">
-      <div class="relative flex items-center justify-between gap-2 md:hidden">
-        <div class="flex min-w-0 items-center gap-2">
+      <div class="relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 md:hidden">
+        <div class="flex min-w-0 items-center justify-self-start">
           <button
             type="button"
             class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -697,18 +688,19 @@ onMounted(() => {
           >
             <Menu class="h-4 w-4" />
           </button>
-          <RouterLink to="/feed" class="flex min-w-0 items-center justify-center">
-            <img loading="lazy" decoding="async"
-              :src="logoSrc"
-              :alt="logoAlt"
-              class="h-[2.8rem] w-auto object-contain"
-            />
-          </RouterLink>
         </div>
 
-        <div class="flex items-center gap-1.5">
+        <RouterLink to="/feed" class="flex min-w-0 items-center justify-center justify-self-center">
+          <img loading="lazy" decoding="async"
+            :src="logoSrc"
+            :alt="logoAlt"
+            class="h-[2.55rem] w-auto max-w-[12.75rem] object-contain"
+          />
+        </RouterLink>
+
+        <div class="flex items-center gap-1.5 justify-self-end">
           <RouterLink
-            to="/mobile/notifications"
+            to="/notifications"
             class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open notifications"
             title="Open notifications"
@@ -765,7 +757,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="mt-2 grid grid-cols-5 gap-1.5 md:hidden">
+      <div class="mx-auto mt-2 grid w-full max-w-[26rem] grid-cols-4 gap-1.5 md:hidden">
         <template
           v-for="link in links"
           :key="link.label"
@@ -773,7 +765,7 @@ onMounted(() => {
           <button
             v-if="link.action"
             type="button"
-            class="flex min-h-10 items-center justify-center rounded-[0.8rem] bg-[var(--surface-secondary)] px-2 py-2 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--surface-secondary)] px-2 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             :aria-label="link.label"
             :title="link.label"
             @click="handleHeaderLinkAction(link)"
@@ -781,7 +773,7 @@ onMounted(() => {
             <i
               v-if="getLineAwesomeIconClass(link)"
               :class="getLineAwesomeIconClass(link)"
-              class="text-[1.2rem] leading-none"
+              class="text-[1rem] leading-none"
               aria-hidden="true"
             />
             <component
@@ -795,7 +787,7 @@ onMounted(() => {
             :to="link.to || '/'"
             :target="link.target"
             :rel="link.target === '_blank' ? 'noopener noreferrer' : undefined"
-            class="flex min-h-10 items-center justify-center rounded-[0.8rem] bg-[var(--surface-secondary)] px-2 py-2 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--surface-secondary)] px-2 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             :aria-label="link.label"
             :title="link.label"
           >
@@ -891,19 +883,103 @@ onMounted(() => {
           </form>
           -->
 
-          <button
-            type="button"
-            class="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            @click="openNotifications"
-          >
-            <Bell class="h-[1.05rem] w-[1.05rem]" />
-            <span
-              v-if="unreadCount"
-              class="absolute -right-0.5 -top-0.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white"
+          <div ref="notificationsRoot" class="relative">
+            <button
+              type="button"
+              class="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+              :aria-expanded="isNotificationsOpen"
+              aria-haspopup="menu"
+              @click="openNotifications"
             >
-              {{ unreadCount }}
-            </span>
-          </button>
+              <Bell class="h-[1.05rem] w-[1.05rem]" />
+              <span
+                v-if="unreadCount"
+                class="absolute -right-0.5 -top-0.5 inline-flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold text-white"
+              >
+                {{ unreadCount }}
+              </span>
+            </button>
+
+            <div
+              v-if="isNotificationsOpen"
+              class="absolute right-0 top-[calc(100%+0.65rem)] z-50 w-[22rem] overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]"
+              role="menu"
+            >
+              <div class="flex items-center gap-2 border-b border-[color:var(--border-soft)] px-4 py-3">
+                <Bell class="h-4 w-4 text-[var(--text-secondary)]" />
+                <p class="text-sm font-semibold text-[var(--text-primary)]">Notifications</p>
+              </div>
+
+              <div
+                v-if="notificationsStore.isLoading && !headerNotifications.length"
+                class="divide-y divide-[color:var(--border-soft)]"
+                aria-label="Loading notifications"
+              >
+                <div v-for="item in 3" :key="item" class="flex animate-pulse gap-3 px-4 py-3">
+                  <div class="h-11 w-11 shrink-0 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+                  <div class="min-w-0 flex-1 space-y-2">
+                    <div class="h-3 w-4/5 rounded-full bg-[var(--surface-muted)]" />
+                    <div class="h-3 w-1/2 rounded-full bg-[var(--surface-muted)]" />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-else-if="notificationsStore.error && !headerNotifications.length"
+                class="px-4 py-5 text-sm text-[var(--text-secondary)]"
+              >
+                {{ notificationsStore.error }}
+              </div>
+
+              <div
+                v-else-if="!headerNotifications.length"
+                class="px-4 py-5 text-sm text-[var(--text-secondary)]"
+              >
+                No notifications yet.
+              </div>
+
+              <div v-else class="divide-y divide-[color:var(--border-soft)]">
+                <button
+                  v-for="item in headerNotifications"
+                  :key="item.id"
+                  type="button"
+                  class="flex w-full gap-3 px-4 py-3 text-left transition hover:bg-[var(--surface-muted)]"
+                  role="menuitem"
+                  @click="openNotificationItem(item)"
+                >
+                  <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
+                    <img
+                      v-if="item.actor?.avatar"
+                      loading="lazy"
+                      decoding="async"
+                      :src="item.actor.avatar"
+                      :alt="item.actor.name || item.title"
+                      class="h-full w-full object-cover object-center"
+                    />
+                    <Bell v-else class="h-5 w-5" />
+                  </span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-sm font-semibold text-[var(--text-primary)]">{{ item.title }}</span>
+                    <span class="mt-1 line-clamp-2 block text-xs leading-5 text-[var(--text-secondary)]">{{ richTextToPlainText(item.description) }}</span>
+                    <span class="mt-1 block text-xs text-[var(--text-tertiary)]">{{ item.time }}</span>
+                  </span>
+                  <span
+                    v-if="item.unread"
+                    class="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--danger)]"
+                  />
+                </button>
+              </div>
+
+              <RouterLink
+                to="/notifications"
+                class="flex items-center justify-center gap-2 border-t border-[color:var(--border-soft)] px-4 py-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]"
+                @click="isNotificationsOpen = false"
+              >
+                View all notifications
+                <ArrowRight class="h-4 w-4" />
+              </RouterLink>
+            </div>
+          </div>
 
           <div ref="userMenuRoot" class="relative">
             <button
@@ -1006,94 +1082,6 @@ onMounted(() => {
     </div>
 
     <ResponsiveOverlay
-      v-model="isNotificationsOpen"
-      label="Notifications"
-      title="Recent activity"
-      description="Important updates, community mentions, and alerts will show here."
-      max-width-class="sm:max-w-2xl"
-    >
-      <div class="space-y-3">
-        <div class="flex items-center justify-between gap-3">
-          <p class="text-sm font-semibold text-[var(--text-primary)]">
-            {{ unreadCount }} unread
-          </p>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              :disabled="!unreadCount"
-              class="inline-flex h-9 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-50"
-              @click="markAllNotificationsRead"
-            >
-              Mark all read
-            </button>
-            <button
-              type="button"
-              :disabled="!notifications.length"
-              class="inline-flex h-9 items-center justify-center rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-50"
-              @click="clearNotifications"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-
-        <div
-          v-if="notificationsStore.isLoading && !notifications.length"
-          class="space-y-3 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
-          aria-label="Loading notifications"
-        >
-          <div v-for="item in 3" :key="item" class="flex animate-pulse items-center gap-3">
-            <div class="h-9 w-9 rounded-full bg-[var(--surface-muted)]" />
-            <div class="min-w-0 flex-1 space-y-2">
-              <div class="h-3 w-4/5 rounded-full bg-[var(--surface-muted)]" />
-              <div class="h-3 w-1/2 rounded-full bg-[var(--surface-muted)]" />
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-else-if="notificationsStore.error && !notifications.length"
-          class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm text-[var(--text-secondary)]"
-        >
-          {{ notificationsStore.error }}
-        </div>
-
-        <div
-          v-else-if="!notifications.length"
-          class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4 text-sm text-[var(--text-secondary)]"
-        >
-          No notifications yet.
-        </div>
-
-        <article
-          v-for="item in notifications"
-          :key="item.id"
-          class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3 transition hover:border-[color:var(--accent-soft)]"
-        >
-          <button
-            type="button"
-            class="w-full text-left"
-            @click="openNotificationItem(item)"
-          >
-            <div class="flex items-start justify-between gap-4">
-            <div class="space-y-1">
-              <p class="text-[0.86rem] font-semibold text-[var(--text-primary)]">{{ item.title }}</p>
-              <p class="text-[0.82rem] leading-6 text-[var(--text-secondary)]">{{ item.description }}</p>
-            </div>
-            <span
-              v-if="item.unread"
-              class="mt-1 inline-flex h-2.5 w-2.5 rounded-full bg-[var(--danger)]"
-            />
-            </div>
-            <p class="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
-              {{ item.time }}
-            </p>
-          </button>
-        </article>
-      </div>
-    </ResponsiveOverlay>
-
-    <ResponsiveOverlay
       :model-value="activeComposer === 'ask'"
       label="Ask"
       title="Ask Question"
@@ -1102,12 +1090,13 @@ onMounted(() => {
     >
       <div class="space-y-5">
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Everyone or a Community<span class="text-[var(--danger)]">*</span></span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">{{ isComposerCommunityLocked ? 'Community' : 'Everyone or a Community' }}<span class="text-[var(--danger)]">*</span></span>
           <select
             v-model="postAudienceId"
+            :disabled="isComposerCommunityLocked"
             class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
           >
-            <option value="">Everyone</option>
+            <option v-if="!isComposerCommunityLocked" value="">Everyone</option>
             <option
               v-for="community in communityOptions"
               :key="community.id"
@@ -1123,23 +1112,17 @@ onMounted(() => {
           />
         </label>
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Question title<span class="text-[var(--danger)]">*</span></span>
-          <input
-            v-model="askTitle"
-            type="text"
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Question<span class="text-[var(--danger)]">*</span></span>
+          <textarea
+            v-model="askQuestion"
+            rows="10"
             placeholder="What do you want to ask?"
-            class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
+            class="mt-2 w-full resize-y rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
           />
         </label>
-        <textarea
-          v-model="askQuestion"
-          rows="10"
-          placeholder="Add context, what you have tried, and the kind of answer you need..."
-          class="w-full resize-y rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
-        />
         <button
           type="button"
-          :disabled="isSubmittingQuestion || !askTitle.trim() || !askQuestion.trim()"
+          :disabled="isSubmittingQuestion || !askQuestion.trim()"
           class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
           @click="submitQuestion"
         >
@@ -1158,12 +1141,13 @@ onMounted(() => {
     >
       <div class="space-y-5">
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Everyone or a Community<span class="text-[var(--danger)]">*</span></span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">{{ isComposerCommunityLocked ? 'Community' : 'Everyone or a Community' }}<span class="text-[var(--danger)]">*</span></span>
           <select
             v-model="postAudienceId"
+            :disabled="isComposerCommunityLocked"
             class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
           >
-            <option value="">Everyone</option>
+            <option v-if="!isComposerCommunityLocked" value="">Everyone</option>
             <option
               v-for="community in communityOptions"
               :key="community.id"
@@ -1189,7 +1173,7 @@ onMounted(() => {
         </label>
         <!-- Direct media URL input removed; posts now use file uploads only. -->
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Content</span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Content<span class="text-[var(--danger)]">*</span></span>
           <div class="post-content-editor mt-2">
             <div class="flex flex-wrap gap-2 rounded-t-[0.75rem] border border-b-0 border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-2.5">
               <button
@@ -1228,6 +1212,7 @@ onMounted(() => {
             <textarea
               ref="postContentInput"
               v-model="postContent"
+              required
               rows="12"
               placeholder="Write the post content here..."
               class="min-h-[18rem] w-full resize-y rounded-b-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
@@ -1235,7 +1220,7 @@ onMounted(() => {
           </div>
         </label>
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video</span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span class="text-[var(--danger)]">*</span></span>
           <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
             Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB.
           </span>
@@ -1296,7 +1281,7 @@ onMounted(() => {
               </span>
             </span>
           </span>
-          <input ref="postFileInput" type="file" accept="image/*,video/*" class="sr-only" @change="handlePostFileChange" />
+          <input ref="postFileInput" type="file" accept="image/*,video/*" class="sr-only" required @change="handlePostFileChange" />
         </label>
         <button
           type="button"

@@ -1,5 +1,4 @@
 import { api } from '@/lib/api'
-import type { ApiRequestOptions } from '@/lib/api'
 import type { ApiSuccessResponse, PaginatorPayload, PostMediaRecord, ToggleReactionResponse } from '@/services/posts'
 
 export type QuestionAnswerRecord = {
@@ -154,8 +153,6 @@ export type ListQuestionsParams = {
   'sort[direction]'?: 'asc' | 'desc' | string
 }
 
-type QuestionRequestOptions = Pick<ApiRequestOptions, 'suppressErrorModal' | 'signal'>
-
 const QUESTION_ROUTES = {
   questions: '/questions',
   questionById: (id: string, includeAnswers = false) =>
@@ -232,10 +229,9 @@ export const questionsService = {
     return api.post<ApiSuccessResponse<QuestionRecord>>(QUESTION_ROUTES.questions, payload, { token })
   },
 
-  listQuestions(params: ListQuestionsParams = {}, token?: string | null, options?: QuestionRequestOptions) {
+  listQuestions(params: ListQuestionsParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, normalizeFeedQueryParams(params)), {
       token,
-      ...options,
     })
   },
 

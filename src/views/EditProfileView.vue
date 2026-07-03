@@ -382,35 +382,12 @@ const loadProfile = async () => {
       }
     }
 
-    // The primary identity and public information are ready. Load the heavier
-    // profile sections without keeping the top-level page in a loading state.
-    isLoadingProfile.value = false
-
     if (loadedUserId) {
-      const [skillsResult, portfoliosResult, certificationsResult, educationsResult, experiencesResult] =
-        await Promise.allSettled([
-          usersService.listUserSkills(loadedUserId, authStore.authToken),
-          usersService.listUserPortfolios(loadedUserId, authStore.authToken),
-          usersService.listUserCertifications(loadedUserId, authStore.authToken),
-          usersService.listUserEducations(loadedUserId, authStore.authToken),
-          usersService.listUserExperiences(loadedUserId, authStore.authToken),
-        ])
-
-      const sourceSkills = skillsResult.status === 'fulfilled'
-        ? normalizeUserSkills(skillsResult.value.data)
-        : []
-      const sourcePortfolios = portfoliosResult.status === 'fulfilled'
-        ? portfoliosResult.value.data
-        : response.data?.portfolios ?? []
-      const sourceCertifications = certificationsResult.status === 'fulfilled'
-        ? certificationsResult.value.data
-        : response.data?.certifications ?? []
-      const sourceEducations = educationsResult.status === 'fulfilled'
-        ? educationsResult.value.data
-        : response.data?.education ?? []
-      const sourceExperiences = experiencesResult.status === 'fulfilled'
-        ? experiencesResult.value.data
-        : response.data?.experiences ?? []
+      const sourceSkills = normalizeUserSkills(response.data?.skills ?? [])
+      const sourcePortfolios = response.data?.portfolios ?? []
+      const sourceCertifications = response.data?.certifications ?? []
+      const sourceEducations = response.data?.educations ?? response.data?.education ?? []
+      const sourceExperiences = response.data?.experiences ?? response.data?.activeExperiences ?? []
 
       skills.value = sourceSkills.map(toSkillViewItem).filter((skill) => skill.name)
 
@@ -1282,7 +1259,6 @@ const upsertProfile = async (payload: {
     payload,
     Boolean(authStore.userProfile?.id),
     authStore.authToken,
-    { suppressErrorModal: true },
   )
 }
 
@@ -1378,7 +1354,6 @@ const saveCurrentExperience = async () => {
     authStore.userId,
     payloadWithOptionalEndDate,
     authStore.authToken,
-    { suppressErrorModal: true },
   )
 
   if (existingExperience?.id) {

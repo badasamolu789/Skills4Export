@@ -11,14 +11,13 @@ const PRIVATE_VALUES = new Set([
   'restricted',
   'connections',
   'connections only',
-  'community',
   'community only',
   'members',
   'members only',
   'closed',
 ])
 
-const PUBLIC_VALUES = new Set(['public', 'open', 'open community'])
+const PUBLIC_VALUES = new Set(['public', 'public community', 'open', 'open community'])
 
 const parseMetadata = (value: unknown): unknown => {
   if (typeof value !== 'string' || !value.trim()) {
@@ -48,13 +47,13 @@ const isTruthyFlag = (value: unknown) =>
   normalizeValue(value) === '1' ||
   normalizeValue(value) === 'yes'
 
-const VISIBILITY_KEYS = [
+const COMMUNITY_VISIBILITY_KEYS = [
   'visibility',
   'privacy',
   'access',
-  'type',
-  'community_type',
-  'communityType',
+]
+
+const POST_VISIBILITY_KEYS = [
   'defaultPostVisibility',
   'default_post_visibility',
 ]
@@ -72,7 +71,7 @@ const readMetadataVisibility = (value: unknown): string => {
     return ''
   }
 
-  const candidates = VISIBILITY_KEYS.map((key) => readRecordValue(metadata, [key]))
+  const candidates = COMMUNITY_VISIBILITY_KEYS.map((key) => readRecordValue(metadata, [key]))
 
   return candidates.map(normalizeValue).find(Boolean) ?? ''
 }
@@ -83,7 +82,7 @@ const readMetadataPrivateFlag = (value: unknown) => {
 }
 
 export const getCommunityVisibility = (community: CommunityRecord) => {
-  const directValues = VISIBILITY_KEYS.map((key) => readRecordValue(community, [key]))
+  const directValues = COMMUNITY_VISIBILITY_KEYS.map((key) => readRecordValue(community, [key]))
   const directVisibility = directValues.map(normalizeValue).find(Boolean)
 
   if (directVisibility) {
@@ -100,6 +99,36 @@ export const getCommunityVisibility = (community: CommunityRecord) => {
   return metadataValues.map(readMetadataVisibility).find(Boolean) ?? ''
 }
 
+export const getCommunityDefaultPostVisibility = (community: CommunityRecord) => {
+  const directValues = POST_VISIBILITY_KEYS.map((key) => readRecordValue(community, [key]))
+  const directVisibility = directValues.map(normalizeValue).find(Boolean)
+
+  if (directVisibility) {
+    return directVisibility
+  }
+
+  const metadataValues = [
+    community.metadata,
+    community.meta,
+    community.metaData,
+    community.meta_data,
+  ]
+
+  return metadataValues
+    .map((value) => {
+      const metadata = parseMetadata(value)
+
+      if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+        return ''
+      }
+
+      return POST_VISIBILITY_KEYS
+        .map((key) => normalizeValue(readRecordValue(metadata, [key])))
+        .find(Boolean) ?? ''
+    })
+    .find(Boolean) ?? ''
+}
+
 export const isPrivateCommunity = (community: CommunityRecord) => {
   const directPrivateFlag = isTruthyFlag(readRecordValue(community, PRIVATE_FLAG_KEYS))
   const metadataPrivateFlag = [
@@ -113,6 +142,10 @@ export const isPrivateCommunity = (community: CommunityRecord) => {
 }
 
 export const isPublicCommunity = (community: CommunityRecord) => {
+  if (isPrivateCommunity(community)) {
+    return false
+  }
+
   const visibility = getCommunityVisibility(community)
   return !visibility || PUBLIC_VALUES.has(visibility)
 }

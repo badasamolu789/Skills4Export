@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowUp, Reply } from 'lucide-vue-next'
+import RichTextContent from '@/components/RichTextContent.vue'
 
 export type PostCommentThreadItem = {
   id: number | string
@@ -70,7 +71,10 @@ const activeActionClass =
             <span>{{ comment.time }}</span>
           </div>
           <p v-if="comment.tag" class="mt-0.5 text-[0.7rem] text-[var(--text-secondary)]">{{ comment.tag }}</p>
-          <p class="mt-1.5 text-[0.8rem] leading-6 text-[var(--text-primary)]">{{ comment.body }}</p>
+          <RichTextContent
+            :content="comment.body"
+            class="mt-1.5 text-[0.8rem] leading-6 text-[var(--text-primary)]"
+          />
         </div>
       </div>
 

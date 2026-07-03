@@ -230,10 +230,11 @@ const submitDetails = async () => {
             type="button"
             class="relative inline-flex h-11 items-center justify-center gap-2 text-sm font-semibold transition"
             :class="form.accountType === 'default' ? 'text-[var(--accent-strong)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
+            :aria-pressed="form.accountType === 'default'"
             @click="form.accountType = 'default'"
           >
             <BriefcaseBusiness class="h-4 w-4" />
-            Default
+            Professional
             <span
               v-if="form.accountType === 'default'"
               class="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[var(--accent)]"
@@ -243,6 +244,7 @@ const submitDetails = async () => {
             type="button"
             class="relative inline-flex h-11 items-center justify-center gap-2 text-sm font-semibold transition"
             :class="form.accountType === 'student' ? 'text-[var(--accent-strong)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
+            :aria-pressed="form.accountType === 'student'"
             @click="form.accountType = 'student'"
           >
             <BookOpen class="h-4 w-4" />
@@ -292,7 +294,7 @@ const submitDetails = async () => {
         </div>
 
         <div class="space-y-2">
-          <label class="text-sm font-semibold text-[var(--text-primary)]">Year started</label>
+          <label class="text-sm font-semibold text-[var(--text-primary)]">Year Graduating</label>
           <select
             v-model="form.yearStarted"
             required

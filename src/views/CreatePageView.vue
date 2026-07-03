@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores/auth'
 import { usePagesStore, type PageCategory } from '@/stores/pages'
 import { slugify } from '@/utils/slugify'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const pagesStore = usePagesStore()
@@ -27,9 +28,7 @@ type PageTypeOption = {
   value: PageCategory
   icon: unknown
   category?: PageCategoryRecord | null
-  description?: string
   isLimitReached?: boolean
-  limitText?: string
 }
 
 const selectedPageType = ref<PageCategory | null>(null)
@@ -83,6 +82,9 @@ const categoryToPageType = (category?: PageCategoryRecord | null): PageCategory 
 
 const getCategoryIcon = (type: PageCategory) => type === 'student' ? GraduationCap : Building2
 
+const getCategoryCardLabel = (type: PageCategory) =>
+  type === 'student' ? 'Create Student page' : 'Create Business page'
+
 const pageTypes = computed<PageTypeOption[]>(() => {
   const activeCategories = pageCategories.value.filter((category) => category.is_active !== 0)
 
@@ -93,15 +95,11 @@ const pageTypes = computed<PageTypeOption[]>(() => {
     const isLimitReached = typeof maxPages === 'number' && maxPages > 0 && totalPages >= maxPages
 
     return {
-      label: `Create ${category.name} page`,
+      label: getCategoryCardLabel(value),
       value,
       icon: getCategoryIcon(value),
       category,
-      description: category.description || undefined,
       isLimitReached,
-      limitText: typeof maxPages === 'number' && maxPages > 0
-        ? `${totalPages}/${maxPages} created`
-        : undefined,
     }
   })
 })
@@ -185,34 +183,8 @@ const goBackToOptions = () => {
   resetUpload()
 }
 
-const getLocalPrefill = (type: PageCategory): PagePrefillRecord => {
-  const currentUser = authStore.currentUser
-  const profile = authStore.userProfile
-  const draft = authStore.signUpDraft
-  const name = readFirstValue(profile?.displayName, currentUser?.name, draft.name)
-  const email = readFirstValue(currentUser?.email, draft.email)
-
-  return {
-    type,
-    pageType: type,
-    name,
-    email,
-    contactEmail: email,
-    phone: readFirstValue(profile?.phone, draft.phone),
-    courseOfStudy: readFirstValue(draft.courseOfStudy),
-    skills: draft.interests,
-    website: readFirstValue(profile?.website, draft.website),
-    avatar: readFirstValue(profile?.avatar, profile?.avatarUrl, profile?.avatar_url, draft.avatar),
-  }
-}
-
 const applyPagePrefill = (type: PageCategory, prefill: PagePrefillRecord) => {
   if (type === 'business') {
-    fillIfEmpty(
-      businessForm.value.name,
-      prefill.name,
-      (value) => { businessForm.value.name = value },
-    )
     fillIfEmpty(
       businessForm.value.contactEmail,
       readFirstValue(prefill.contactEmail, prefill.email),
@@ -271,9 +243,6 @@ const applyPagePrefill = (type: PageCategory, prefill: PagePrefillRecord) => {
 }
 
 const loadPagePrefill = async (type: PageCategory) => {
-  const localPrefill = getLocalPrefill(type)
-  applyPagePrefill(type, localPrefill)
-
   if (!authStore.authToken || loadedPrefillTypes.has(type)) {
     return
   }
@@ -282,10 +251,10 @@ const loadPagePrefill = async (type: PageCategory) => {
 
   try {
     const response = await pagesService.getPagePrefill(type, authStore.authToken)
-    applyPagePrefill(type, response.data || localPrefill)
+    applyPagePrefill(type, response.data)
     loadedPrefillTypes.add(type)
   } catch {
-    // Local authenticated profile data remains available if prefill cannot load.
+    toast.error('Saved details could not load.')
   } finally {
     isLoadingPrefill.value = false
   }
@@ -306,6 +275,37 @@ const selectPageType = (item: PageTypeOption) => {
   void loadPagePrefill(item.value)
 }
 
+const requestedPageType = computed<PageCategory | null>(() => {
+  const type = typeof route.query.type === 'string' ? route.query.type.toLowerCase() : ''
+  return type === 'student' || type === 'business' ? type : null
+})
+
+const applyRequestedPageType = () => {
+  if (!requestedPageType.value) {
+    return
+  }
+
+  const matchingOption = pageTypes.value.find((item) => item.value === requestedPageType.value)
+
+  if (selectedPageType.value === requestedPageType.value) {
+    if (matchingOption && selectedPageCategory.value?.id !== matchingOption.category?.id) {
+      selectedPageCategory.value = matchingOption.category || null
+    }
+    return
+  }
+
+  if (matchingOption) {
+    selectPageType(matchingOption)
+    return
+  }
+
+  selectedPageType.value = requestedPageType.value
+  selectedPageCategory.value = null
+  agreedToTerms.value = false
+  resetUpload()
+  void loadPagePrefill(requestedPageType.value)
+}
+
 const loadPageCategories = async () => {
   if (!authStore.authToken) {
     return
@@ -317,8 +317,9 @@ const loadPageCategories = async () => {
   try {
     const response = await pagesService.listPageCategories(authStore.authToken)
     pageCategories.value = response.data
+    applyRequestedPageType()
   } catch {
-    pageCategoriesError.value = 'Page categories could not load. Showing default options.'
+    pageCategoriesError.value = 'Page categories could not load.'
   } finally {
     isLoadingPageCategories.value = false
   }
@@ -539,12 +540,20 @@ watch(selectedPageType, () => {
   agreedToTerms.value = false
 })
 
+watch(
+  () => route.query.type,
+  () => {
+    applyRequestedPageType()
+  },
+)
+
 onBeforeUnmount(() => {
   if (avatarPreviewUrl.value) URL.revokeObjectURL(avatarPreviewUrl.value)
 })
 
 onMounted(() => {
   void loadPageCategories()
+  applyRequestedPageType()
 })
 </script>
 
@@ -590,12 +599,6 @@ onMounted(() => {
               <component :is="item.icon" class="h-11 w-11" />
             </span>
             <span class="mt-7 text-xl font-semibold text-[var(--text-primary)]">{{ item.label }}</span>
-            <span v-if="item.description" class="mt-3 max-w-sm text-sm leading-6 text-[var(--text-secondary)]">
-              {{ item.description }}
-            </span>
-            <span v-if="item.limitText" class="mt-4 rounded-full bg-[var(--surface-secondary)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]">
-              {{ item.limitText }}
-            </span>
           </button>
         </div>
       </div>

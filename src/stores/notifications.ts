@@ -86,15 +86,13 @@ export const useNotificationsStore = defineStore('notifications', () => {
     return Notification.requestPermission()
   }
 
-  const syncUnreadCount = async (token?: string | null, options?: { suppressErrorModal?: boolean }) => {
+  const syncUnreadCount = async (token?: string | null) => {
     if (!token) {
       unreadCount.value = 0
       return
     }
 
-    const response = await notificationsService.getUnreadCount(token, {
-      suppressErrorModal: options?.suppressErrorModal ?? true,
-    })
+    const response = await notificationsService.getUnreadCount(token)
     unreadCount.value = Number(response.count ?? response.data?.count ?? unreadCount.value ?? 0)
   }
 
@@ -176,7 +174,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
           sort: '-createdAt',
         },
         token,
-        { suppressErrorModal: background },
       )
       const previousUnread = unreadCount.value
       const rawItems = response.data ?? []
@@ -189,7 +186,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       unreadCount.value = nextItems.filter((item) => item.unread).length +
         (append ? Math.max(0, unreadCount.value - notifications.value.filter((item) => item.unread).length) : 0)
 
-      await syncUnreadCount(token, { suppressErrorModal: true })
+      await syncUnreadCount(token)
       if (hasCompletedInitialSync && unreadCount.value > previousUnread) {
         const newestUnread = nextItems.find((item) => item.unread)
         if (newestUnread) {

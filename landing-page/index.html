@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Skills4Export landing page">
+  <title>Skills4Export</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+
+<body>
+  <section class="min-h-screen bg-[var(--landing-bg)] text-[var(--landing-text)]">
+    <header
+      class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_94%,transparent)] px-4 py-2 backdrop-blur sm:px-6 lg:px-8">
+      <a href="./index.html" class="flex items-center gap-3" aria-label="Skills4Export home">
+        <img loading="eager" decoding="async" fetchpriority="high" src="./assets/logo_1.svg" alt="Skills4Export logo"
+          class="h-12 w-auto object-contain sm:h-14">
+      </a>
+
+      <nav id="landing-nav"
+        class="hidden min-w-0 flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--landing-muted)] lg:flex"
+        aria-label="Landing navigation"></nav>
+
+      <div class="flex items-center gap-2">
+        <a href="/auth/signup"
+          class="hidden h-10 items-center justify-center rounded-full px-4 text-sm font-semibold text-[var(--landing-muted)] transition hover:text-[var(--accent-strong)] sm:inline-flex">
+          Sign up
+        </a>
+        <a href="/auth/login"
+          class="inline-flex h-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--landing-heading)] transition hover:border-[color:var(--accent)] hover:text-[var(--accent-strong)]">
+          Sign in
+        </a>
+        <button id="theme-toggle" aria-pressed="false" title="Toggle theme"
+          class="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--landing-muted)] hover:bg-[var(--surface-muted)]">
+          <i id="theme-toggle-icon" data-lucide="moon" class="h-5 w-5" aria-hidden="true"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="flex min-h-screen w-full max-w-none flex-col px-4 pb-5 pt-20 sm:px-6 sm:pt-24 lg:px-8">
+      <main class="grid flex-1 items-center">
+        <section id="overview"
+          class="landing-auth-hero mx-auto grid w-full max-w-[96rem] scroll-mt-28 items-center justify-center gap-8 px-2 py-6 sm:px-6 sm:py-8 md:gap-10 lg:grid-cols-[minmax(17rem,31rem)_minmax(24rem,40rem)] lg:gap-16 lg:px-8 xl:gap-24 xl:px-10 2xl:gap-28">
+          <div class="landing-auth-panel mx-auto w-full max-w-[31rem] text-left lg:mx-0 lg:justify-self-start">
+            <h1 class="landing-join-title text-[var(--landing-heading)]">
+              <span class="block">Join Skills4Export</span>
+              <span class="block">Community</span>
+            </h1>
+
+            <div class="mt-5 space-y-3">
+              <a href="/auth/login"
+                class="inline-flex h-11 w-full items-center justify-center rounded-full bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]">
+                Login
+              </a>
+
+              <a href="/auth/signup"
+                class="inline-flex h-11 w-full items-center justify-center rounded-full border border-[color:var(--accent)] bg-transparent px-5 text-sm font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-muted)]">
+                Create Account
+              </a>
+            </div>
+
+            <p class="mt-2 max-w-[31rem] text-sm leading-5 text-[var(--landing-muted)]">
+              By signing up, you agree to the
+              <a href="/terms-and-conditions"
+                class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Terms of
+                Service</a>
+              and
+              <a href="/privacy-policy"
+                class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Privacy
+                Policy</a>, including
+              <a href="/cookie-policy"
+                class="font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent)]">Cookie Use</a>.
+            </p>
+
+            <div class="mx-auto mt-5 flex max-w-[18rem] items-center gap-5">
+              <span class="h-px flex-1 bg-[var(--landing-rule)]"></span>
+              <span class="text-sm font-semibold uppercase text-[var(--landing-muted)]">OR</span>
+              <span class="h-px flex-1 bg-[var(--landing-rule)]"></span>
+            </div>
+
+            <a href="/auth/signup"
+              class="mt-5 inline-flex h-11 w-full items-center justify-center gap-3 rounded-full border border-[color:var(--accent)] bg-transparent px-5 text-sm font-semibold text-[var(--accent-strong)] transition hover:bg-[var(--surface-muted)]">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#4285F4"
+                  d="M21.6 12.23c0-.68-.06-1.33-.17-1.96H12v3.71h5.39a4.61 4.61 0 0 1-2 3.02v2.5h3.24c1.9-1.75 2.97-4.33 2.97-7.27Z">
+                </path>
+                <path fill="#34A853"
+                  d="M12 22c2.7 0 4.96-.9 6.61-2.44l-3.24-2.5c-.9.6-2.05.96-3.37.96-2.59 0-4.79-1.75-5.57-4.11H3.08v2.58A9.98 9.98 0 0 0 12 22Z">
+                </path>
+                <path fill="#FBBC04"
+                  d="M6.43 13.91A5.98 5.98 0 0 1 6.12 12c0-.66.11-1.3.31-1.91V7.51H3.08A9.98 9.98 0 0 0 2 12c0 1.61.39 3.13 1.08 4.49l3.35-2.58Z">
+                </path>
+                <path fill="#EA4335"
+                  d="M12 5.98c1.47 0 2.78.5 3.81 1.48l2.86-2.86C16.95 2.99 14.69 2 12 2A9.98 9.98 0 0 0 3.08 7.51l3.35 2.58C7.21 7.73 9.41 5.98 12 5.98Z">
+                </path>
+              </svg>
+              Signup with Google
+            </a>
+          </div>
+
+          <div
+            class="landing-preview mx-auto hidden w-full max-w-[20rem] sm:max-w-[28rem] md:block md:max-w-[34rem] lg:mx-0 lg:max-w-[36rem] xl:max-w-[40rem] lg:justify-self-stretch">
+            <img src="./assets/combined_screen.png" alt="Skills4Export app preview"
+              class="block w-full h-auto object-contain" loading="eager" decoding="async" fetchpriority="high">
+          </div>
+        </section>
+      </main>
+
+      <footer class="mx-auto w-full max-w-[96rem] px-2 py-4 text-sm text-[var(--text-secondary)] sm:px-6 lg:px-8">
+        <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
+          <div id="footer-links" class="flex flex-wrap justify-center gap-x-5 gap-y-2 sm:justify-start"></div>
+          <p class="text-center text-[var(--text-secondary)] sm:text-right">&copy; 2026 Skills4Export</p>
+        </div>
+      </footer>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="./script.js"></script>
+  <script>
+    (function () {
+      const STORAGE_KEY = 'Skills4Export-theme'
+      const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)')
+
+      function applyTheme(mode) {
+        document.documentElement.dataset.theme = mode
+        document.documentElement.style.colorScheme = mode
+        const btn = document.getElementById('theme-toggle')
+        const icon = document.getElementById('theme-toggle-icon')
+        if (btn && icon) {
+          btn.setAttribute('aria-pressed', mode === 'dark')
+          icon.setAttribute('data-lucide', mode === 'dark' ? 'sun' : 'moon')
+          icon.innerHTML = ''
+          if (window.lucide) window.lucide.createIcons()
+        }
+      }
+
+      function getResolved() {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored === 'light' || stored === 'dark') return stored
+        return mq && mq.matches ? 'dark' : 'light'
+      }
+
+      function toggle() {
+        const next = (document.documentElement.dataset.theme === 'dark') ? 'light' : 'dark'
+        localStorage.setItem(STORAGE_KEY, next)
+        applyTheme(next)
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        applyTheme(getResolved())
+        const btn = document.getElementById('theme-toggle')
+        if (btn) btn.addEventListener('click', toggle)
+        if (mq && mq.addEventListener) mq.addEventListener('change', () => applyTheme(getResolved()))
+      })
+    })()
+  </script>
+</body>
+
+</html>

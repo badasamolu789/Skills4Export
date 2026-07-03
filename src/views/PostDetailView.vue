@@ -28,7 +28,7 @@ import { communitiesService, type CommunityRecord } from '@/services/communities
 import { pagesService } from '@/services/pages'
 import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/services/posts'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
-import { collectUserSkills, usersService, type MyProfileData } from '@/services/users'
+import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
@@ -255,7 +255,7 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
   }
 
   const response = comment.user_id
-    ? await usersService.getUserProfile(comment.user_id, authStore.authToken).catch(() => null)
+    ? await usersService.getUserProfile(comment.user_id, authStore.authToken)
     : null
   const profile = response?.data ?? null
   const embeddedProfile = getEmbeddedProfileData(comment)
@@ -331,36 +331,19 @@ const loadApiQuestion = async (id: string) => {
   const userId = getQuestionUserId(response.data)
   const communityId = response.data.communityId || response.data.community_id || ''
 
-  const [authorResponse, userResponse, skillsResponse, answersResponse, communityResponse] = await Promise.all([
+  const [authorResponse, answersResponse, communityResponse] = await Promise.all([
     userId
-      ? usersService.getUserProfile(userId, authStore.authToken).catch(() => null)
+      ? usersService.getUserProfile(userId, authStore.authToken)
       : Promise.resolve(null),
-    userId
-      ? usersService.getUser(userId, authStore.authToken).catch(() => null)
-      : Promise.resolve(null),
-    userId
-      ? usersService.listUserSkills(userId, authStore.authToken).catch(() => null)
-      : Promise.resolve(null),
-    questionsService.listAnswers(response.data.id, authStore.authToken).catch(() => null),
-    communityId ? communitiesService.getCommunity(communityId, authStore.authToken).catch(() => null) : Promise.resolve(null),
+    questionsService.listAnswers(response.data.id, authStore.authToken),
+    communityId ? communitiesService.getCommunity(communityId, authStore.authToken) : Promise.resolve(null),
   ])
 
-  const embeddedAnswers = Array.isArray(response.data.answers) ? response.data.answers : []
-  const listedAnswers = answersResponse?.data ?? []
-  const answers = listedAnswers.length ? listedAnswers : embeddedAnswers
+  const answers = answersResponse.data ?? []
   const authorData =
     authorResponse?.data
-      ? {
-        ...authorResponse.data,
-        user: {
-          ...(authorResponse.data.user ?? {}),
-          ...(userResponse?.data ?? {}),
-        },
-        skills: collectUserSkills(skillsResponse?.data, authorResponse.data.skills, authorResponse.data, userResponse?.data),
-      }
-      : userResponse?.data
-        ? { user: userResponse.data, skills: collectUserSkills(skillsResponse?.data, userResponse.data) }
-        : (userId && userId === authStore.userId
+      ? authorResponse.data
+      : (userId && userId === authStore.userId
       ? currentUser.profileData.value
       : null)
 
@@ -604,56 +587,27 @@ watch(
       }
 
       const response = await postsService.getPost(String(slug), authStore.authToken)
-      let media: PostMediaRecord[] = []
       const postUserId = getPostUserId(response.data)
-
-      try {
-        const mediaResponse = await postsService.listPostMedia(response.data.id, authStore.authToken)
-        media = mediaResponse.data
-      } catch {
-        media = []
-      }
-
-      const [authorResponse, userResponse, skillsResponse, communityResponse] = await Promise.all([
+      const [mediaResponse, authorResponse, communityResponse] = await Promise.all([
+        postsService.listPostMedia(response.data.id, authStore.authToken),
         postUserId
-          ? usersService.getUserProfile(postUserId, authStore.authToken).catch(() => null)
-          : Promise.resolve(null),
-        postUserId
-          ? usersService.getUser(postUserId, authStore.authToken).catch(() => null)
-          : Promise.resolve(null),
-        postUserId
-          ? usersService.listUserSkills(postUserId, authStore.authToken).catch(() => null)
+          ? usersService.getUserProfile(postUserId, authStore.authToken)
           : Promise.resolve(null),
         response.data.community_id || response.data.communityId
-          ? communitiesService.getCommunity(response.data.community_id || response.data.communityId || '', authStore.authToken).catch(() => null)
+          ? communitiesService.getCommunity(response.data.community_id || response.data.communityId || '', authStore.authToken)
           : Promise.resolve(null),
       ])
       const authorData = authorResponse?.data
-        ? {
-          ...authorResponse.data,
-          user: {
-            ...(authorResponse.data.user ?? {}),
-            ...(userResponse?.data ?? {}),
-          },
-          skills: collectUserSkills(skillsResponse?.data, authorResponse.data.skills, authorResponse.data, userResponse?.data),
-        }
-        : userResponse?.data
-          ? { user: userResponse.data, skills: collectUserSkills(skillsResponse?.data, userResponse.data) }
-          : null
+        ? authorResponse.data
+        : null
 
-      apiPost.value = mapApiPostToFeedPost(response.data, media, authorData, communityResponse?.data?.name)
+      apiPost.value = mapApiPostToFeedPost(response.data, mediaResponse.data, authorData, communityResponse?.data?.name)
       await loadPostComments(response.data.id)
     } catch (error) {
-      try {
-        await loadApiQuestion(String(slug))
-      } catch (questionError) {
-        postError.value =
-          questionError instanceof ApiError
-            ? questionError.message
-            : error instanceof ApiError
-              ? error.message
-              : 'Unable to load post.'
-      }
+      postError.value =
+        error instanceof ApiError
+          ? error.message
+          : 'Unable to load post.'
     } finally {
       isLoadingPost.value = false
     }
@@ -718,7 +672,6 @@ const toggleFollow = async () => {
     }
 
     isFollowing.value = nextValue
-    toast.success(nextValue ? 'Following' : 'Unfollowed')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
     toast.error('Follow failed', { description: message })
@@ -770,7 +723,6 @@ const toggleScore = async () => {
 const toggleSave = async () => {
   if (!apiPostId.value) {
     isSaved.value = !isSaved.value
-    toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved')
     return
   }
 
@@ -794,7 +746,6 @@ const toggleSave = async () => {
       authStore.authToken,
     )
     isSaved.value = response.data.saved
-    toast.success(isSaved.value ? 'Post saved' : 'Post removed from saved')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
     toast.error('Save failed', { description: message })
@@ -807,7 +758,7 @@ const copyShareLink = async () => {
   try {
     await navigator.clipboard.writeText(shareLink.value)
     if (apiPostId.value) {
-      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken).catch(() => null)
+      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken)
     }
     toast.success('Post link copied')
   } catch {
@@ -917,7 +868,6 @@ const submitShare = async () => {
     if (apiPostId.value) {
       await postsService
         .recordShareEvent(apiPostId.value, { type: canNativeShare ? 'native_share' : 'manual_share' }, authStore.authToken)
-        .catch(() => null)
     }
     shareCommunity.value = ''
     shareComment.value = ''
@@ -1047,7 +997,6 @@ const submitCommentReply = async (comment: DetailComment | PostCommentThreadItem
     comment.isReplying = false
     comment.replyInput = ''
     currentComments.value += 1
-    toast.success('Reply added')
     return
   }
 
@@ -1075,7 +1024,6 @@ const submitCommentReply = async (comment: DetailComment | PostCommentThreadItem
     comment.isReplying = false
     comment.replyInput = ''
     currentComments.value += 1
-    toast.success('Reply added')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add reply.'
     toast.error('Reply failed', { description: message })
@@ -1095,7 +1043,6 @@ const submitComment = async () => {
     detailComments.value.unshift(createCurrentUserDetailComment(`local-comment-${Date.now()}`, value))
     currentComments.value += 1
     commentInput.value = ''
-    toast.success('Comment added')
     return
   }
 
@@ -1120,7 +1067,6 @@ const submitComment = async () => {
     )
     currentComments.value = socialActionsStore.getCommentCount(apiPostId.value, currentComments.value + 1)
     commentInput.value = ''
-    toast.success('Comment added')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
     toast.error('Comment failed', { description: message })
@@ -1172,7 +1118,6 @@ const submitAnswer = async () => {
         }
       }
 
-      toast.success('Answer posted')
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to post answer.'
       toast.error('Answer failed', { description: message })
@@ -1195,7 +1140,6 @@ const submitAnswer = async () => {
     isScored: false,
   })
   closeAnswerModal()
-  toast.success('Answer posted')
 }
 </script>
 
@@ -1350,7 +1294,7 @@ const submitAnswer = async () => {
             @click="toggleFollow"
           >
             <Check v-if="isFollowing" class="h-3.5 w-3.5" />
-            {{ isFollowing ? 'Following' : 'Follow' }}
+            {{ isFollowing ? 'Unfollow' : 'Follow' }}
           </button>
           <button
             type="button"
@@ -1390,9 +1334,11 @@ const submitAnswer = async () => {
       <div class="space-y-6 p-4 sm:p-5">
         <template v-if="post.type === 'question'">
           <div class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4">
-            <p v-if="post.body" class="whitespace-pre-line text-[0.94rem] leading-8 text-[var(--text-primary)]">
-              {{ post.body }}
-            </p>
+            <RichTextContent
+              v-if="post.body"
+              :content="post.body"
+              class="text-[0.94rem] leading-8 text-[var(--text-primary)]"
+            />
           </div>
 
           <div class="flex flex-col gap-3 border-b border-[color:var(--border-soft)] pb-4 sm:flex-row sm:items-end sm:justify-between">
@@ -1471,9 +1417,10 @@ const submitAnswer = async () => {
                 </div>
               </div>
 
-              <p class="mt-4 whitespace-pre-line text-[0.94rem] leading-8 text-[var(--text-primary)]">
-                {{ answer.content }}
-              </p>
+              <RichTextContent
+                :content="answer.content"
+                class="mt-4 text-[0.94rem] leading-8 text-[var(--text-primary)]"
+              />
 
               <div class="mt-4 flex flex-wrap gap-2">
                 <button
@@ -1614,7 +1561,10 @@ const submitAnswer = async () => {
                     <span>{{ comment.time }}</span>
                   </div>
                   <p v-if="comment.tag" class="mt-0.5 text-[0.72rem] text-[var(--text-secondary)]">{{ comment.tag }}</p>
-                  <p class="mt-1.5 text-[0.86rem] leading-6 text-[var(--text-primary)]">{{ comment.body }}</p>
+                  <RichTextContent
+                    :content="comment.body"
+                    class="mt-1.5 text-[0.86rem] leading-6 text-[var(--text-primary)]"
+                  />
 
                   <div class="mt-2.5 flex flex-wrap gap-1.5">
                     <button
@@ -1641,7 +1591,7 @@ const submitAnswer = async () => {
                       @click="toggleCommentFollow(comment)"
                     >
                       <Check v-if="comment.isFollowing" class="h-3 w-3" />
-                      {{ comment.isFollowing ? 'Following' : 'Follow' }}
+                      {{ comment.isFollowing ? 'Unfollow' : 'Follow' }}
                     </button>
                     <button
                       type="button"

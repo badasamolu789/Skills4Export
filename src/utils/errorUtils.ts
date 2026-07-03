@@ -233,27 +233,6 @@ export function throttleAsync<Args extends any[], R>(
 }
 
 /**
- * Combine multiple async operations and handle errors
- */
-export async function executeAll<T extends readonly Promise<any>[]>(
-    promises: T,
-    options: { stopOnFirstError?: boolean } = {}
-): Promise<PromiseSettledResult<Awaited<T[number]>>[]> {
-    const { stopOnFirstError = false } = options
-
-    if (stopOnFirstError) {
-        try {
-            const results = await Promise.all(promises)
-            return results.map((value) => ({ status: 'fulfilled' as const, value }))
-        } catch (error) {
-            return [{ status: 'rejected' as const, reason: error }]
-        }
-    }
-
-    return Promise.allSettled(promises)
-}
-
-/**
  * Format field validation errors for display
  */
 export function formatFieldErrors(

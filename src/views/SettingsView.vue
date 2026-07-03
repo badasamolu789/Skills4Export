@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   Eye,
   EyeOff,
@@ -15,8 +16,7 @@ import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { authService } from '@/services/auth'
-import { notificationsService, type NotificationPreferences } from '@/services/notifications'
-import { usersService, type UserPrivacyResponse } from '@/services/users'
+import { usersService, type UserPrivacyResponse, type UserSettings } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore } from '@/stores/pages'
 
@@ -30,6 +30,7 @@ type SettingsTab =
 
 const authStore = useAuthStore()
 const pagesStore = usePagesStore()
+const router = useRouter()
 const activeTab = ref<SettingsTab>('privacy')
 const showPasswordFields = ref({
   current: false,
@@ -38,45 +39,41 @@ const showPasswordFields = ref({
 })
 const deleteAccountConfirmed = ref(false)
 const deletePageConfirmed = ref(false)
-const emailAddress = ref(authStore.currentUser?.email || authStore.signUpDraft.email || '')
-const notificationEmailOtp = ref('')
-const isNotificationEmailOtpSent = ref(false)
 const selectedDeletePageId = ref('')
 const isSavingPassword = ref(false)
-const isSavingEmail = ref(false)
-const isVerifyingEmail = ref(false)
 const isLoadingNotificationPreferences = ref(false)
 const isSavingNotificationPreferences = ref(false)
 const isLoadingPrivacy = ref(false)
 const isSavingPrivacy = ref(false)
+const isDisablingAccount = ref(false)
 const isDeletingPage = ref(false)
 const passwordForm = ref({
   current: '',
   next: '',
   confirm: '',
 })
-const notificationPreferences = ref<NotificationPreferences>({
-  inApp: true,
-  browser: true,
-  email: false,
-  comments: true,
-  replies: true,
-  answers: true,
-  scores: true,
-  follows: true,
-  communities: true,
-  jobs: true,
-  pages: true,
-  system: true,
+type EmailNotificationPreferenceKey =
+  | 'followedContent'
+  | 'postActivity'
+  | 'answers'
+  | 'recommendedAlerts'
+  | 'productUpdates'
+
+const notificationPreferences = ref<Record<EmailNotificationPreferenceKey, boolean>>({
+  followedContent: false,
+  postActivity: false,
+  answers: false,
+  recommendedAlerts: false,
+  productUpdates: false,
 })
 const { theme, resolvedTheme, setTheme } = useTheme()
 
 const tabs: Array<{ id: SettingsTab; label: string }> = [
   { id: 'theme', label: 'Theme' },
   { id: 'change-password', label: 'Change Password' },
-  { id: 'email-settings', label: 'Email Settings' },
+  { id: 'email-settings', label: 'Email Settings & Notifications' },
   { id: 'privacy', label: 'Privacy' },
-  // The current API spec does not expose account deletion, so this tab is not rendered.
+  { id: 'delete-account', label: 'Delete Account' },
   { id: 'delete-page', label: 'Delete Page' },
 ]
 
@@ -106,19 +103,36 @@ const themeOptions: Array<{
   },
 ]
 
-const notificationPreferenceOptions = [
-  { key: 'inApp', label: 'Inbox', description: 'Answers, comments, and chat notifications' },
-  { key: 'browser', label: 'Alerts', description: 'Content from people and pages you follow' },
-  { key: 'email', label: 'Email notifications', description: 'Receive selected updates by email' },
-  { key: 'comments', label: 'Comments', description: 'New comments on your posts' },
-  { key: 'replies', label: 'Replies', description: 'Replies to your comments' },
-  { key: 'answers', label: 'Answers', description: 'Answers to your questions' },
-  { key: 'scores', label: 'Scores and reactions', description: 'Scores and reactions on your content' },
-  { key: 'follows', label: 'Follows', description: 'New followers and follow activity' },
-  { key: 'communities', label: 'Research', description: 'Community invitations, surveys, and research' },
-  { key: 'jobs', label: 'Recommended Jobs', description: 'Emails highlighting relevant jobs and companies' },
-  { key: 'pages', label: 'Page activity', description: 'Updates from pages you manage' },
-  { key: 'system', label: 'Features & Announcements', description: 'Product updates and occasional announcements' },
+const notificationPreferenceOptions: Array<{
+  key: EmailNotificationPreferenceKey
+  label: string
+  apiKeys: Array<keyof UserSettings>
+}> = [
+  {
+    key: 'followedContent',
+    label: 'Posts and reactions from people you follow',
+    apiKeys: ['alerts'],
+  },
+  {
+    key: 'postActivity',
+    label: 'comments, scores, shares, on your posts',
+    apiKeys: ['comments', 'scoresAndReactions'],
+  },
+  {
+    key: 'answers',
+    label: 'Answers to your questions',
+    apiKeys: ['answers'],
+  },
+  {
+    key: 'recommendedAlerts',
+    label: 'Recommended Jobs, contests, and scholarships from alert you created',
+    apiKeys: ['recommendedJobs'],
+  },
+  {
+    key: 'productUpdates',
+    label: 'Product updates and occasional announcements',
+    apiKeys: ['featuresAndAnnouncements'],
+  },
 ] as const
 
 type PrivacyUiValue = 'public' | 'followers' | 'private'
@@ -192,6 +206,59 @@ const requireAuthToken = () => {
   return false
 }
 
+const readSettingsBoolean = (settings: UserSettings, keys: Array<keyof UserSettings>) => {
+  const sources: UserSettings[] = [
+    settings,
+    (settings.updates ?? {}) as UserSettings,
+    (settings.notificationPreferences ?? {}) as UserSettings,
+  ]
+
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = source[key]
+
+      if (typeof value === 'boolean') {
+        return value
+      }
+    }
+  }
+
+  return false
+}
+
+const applyNotificationSettings = (settings?: UserSettings | null) => {
+  if (!settings) {
+    return
+  }
+
+  notificationPreferences.value = notificationPreferenceOptions.reduce(
+    (preferences, option) => ({
+      ...preferences,
+      [option.key]: readSettingsBoolean(settings, option.apiKeys),
+    }),
+    {} as Record<EmailNotificationPreferenceKey, boolean>,
+  )
+}
+
+const buildNotificationSettingsPayload = (
+  option: (typeof notificationPreferenceOptions)[number],
+  value: boolean,
+) => {
+  const flatSettings = option.apiKeys.reduce(
+    (payload, key) => ({
+      ...payload,
+      [key]: value,
+    }),
+    {} as Record<string, boolean>,
+  )
+
+  return {
+    ...flatSettings,
+    updates: flatSettings,
+    notificationPreferences: flatSettings,
+  }
+}
+
 const loadNotificationPreferences = async () => {
   if (!authStore.authToken || isLoadingNotificationPreferences.value) {
     return
@@ -200,11 +267,8 @@ const loadNotificationPreferences = async () => {
   isLoadingNotificationPreferences.value = true
 
   try {
-    const response = await notificationsService.getPreferences(authStore.authToken)
-    notificationPreferences.value = {
-      ...notificationPreferences.value,
-      ...(response.data ?? {}),
-    }
+    const response = await usersService.getSettings(authStore.authToken)
+    applyNotificationSettings(response.data)
   } catch {
     return
   } finally {
@@ -239,7 +303,10 @@ const loadPrivacySettings = async () => {
   }
 }
 
-const updateNotificationPreference = async (key: string, value: boolean) => {
+const updateNotificationPreference = async (
+  option: (typeof notificationPreferenceOptions)[number],
+  value: boolean,
+) => {
   if (!requireAuthToken() || isSavingNotificationPreferences.value) {
     return
   }
@@ -247,20 +314,16 @@ const updateNotificationPreference = async (key: string, value: boolean) => {
   const previousPreferences = { ...notificationPreferences.value }
   notificationPreferences.value = {
     ...notificationPreferences.value,
-    [key]: value,
+    [option.key]: value,
   }
   isSavingNotificationPreferences.value = true
 
   try {
-    const response = await notificationsService.updatePreferences(
-      notificationPreferences.value,
+    const response = await usersService.patchSettings(
+      buildNotificationSettingsPayload(option, value),
       authStore.authToken,
     )
-    notificationPreferences.value = {
-      ...notificationPreferences.value,
-      ...(response.data ?? {}),
-    }
-    toast.success('Notification preference saved.')
+    applyNotificationSettings(response.data)
   } catch (error) {
     notificationPreferences.value = previousPreferences
     const message = error instanceof Error ? error.message : 'Unable to save notification preferences.'
@@ -306,60 +369,6 @@ const changePassword = async () => {
   }
 }
 
-const sendNotificationEmailOtp = async () => {
-  if (!requireAuthToken() || isSavingEmail.value) {
-    return
-  }
-
-  const email = emailAddress.value.trim()
-
-  if (!email) {
-    toast.error('Enter an email address.')
-    return
-  }
-
-  isSavingEmail.value = true
-
-  try {
-    await usersService.sendNotificationEmailOtp({ notification_email: email }, authStore.authToken)
-    isNotificationEmailOtpSent.value = true
-    notificationEmailOtp.value = ''
-    toast.success('Verification code sent.')
-  } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to send verification code.'
-    toast.error('Email verification failed', { description: message })
-  } finally {
-    isSavingEmail.value = false
-  }
-}
-
-const verifyNotificationEmailOtp = async () => {
-  if (!requireAuthToken() || isVerifyingEmail.value) {
-    return
-  }
-
-  const otp = notificationEmailOtp.value.trim()
-
-  if (!otp) {
-    toast.error('Enter the verification code.')
-    return
-  }
-
-  isVerifyingEmail.value = true
-
-  try {
-    await usersService.verifyNotificationEmail({ otp }, authStore.authToken)
-    isNotificationEmailOtpSent.value = false
-    notificationEmailOtp.value = ''
-    toast.success('Notification email verified.')
-  } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to verify this code.'
-    toast.error('Verification failed', { description: message })
-  } finally {
-    isVerifyingEmail.value = false
-  }
-}
-
 const deleteSelectedPage = async () => {
   if (!requireAuthToken() || isDeletingPage.value) {
     return
@@ -390,13 +399,46 @@ const deleteSelectedPage = async () => {
   }
 }
 
+const deleteAccount = async () => {
+  if (!requireAuthToken() || isDisablingAccount.value) {
+    return
+  }
+
+  if (!deleteAccountConfirmed.value) {
+    toast.error('Confirm account deletion first.')
+    return
+  }
+
+  isDisablingAccount.value = true
+
+  try {
+    await usersService.disableAccount(
+      {
+        confirm: true,
+        confirmed: true,
+        reason: 'Requested from settings delete account tab.',
+      },
+      authStore.authToken,
+    )
+    toast.success('Account disabled.', {
+      description: 'You have been signed out.',
+    })
+    authStore.clearAuthenticatedSession()
+    await router.push('/auth/login')
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : 'Unable to disable account.'
+    toast.error('Account disable failed', { description: message })
+  } finally {
+    isDisablingAccount.value = false
+  }
+}
+
 const savePrivacy = async () => {
   if (!requireAuthToken() || isSavingPrivacy.value) return
 
   isSavingPrivacy.value = true
   try {
     await usersService.updatePrivacy(buildPrivacyPayload(), authStore.authToken)
-    toast.success('Privacy settings saved.')
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to save privacy settings.'
     toast.error('Privacy update failed', { description: message })
@@ -580,88 +622,30 @@ onMounted(() => {
 
       <section v-else-if="activeTab === 'email-settings'" class="space-y-7">
         <div class="rounded-[0.9rem] bg-[var(--surface-secondary)] p-5">
-          <h2 class="text-lg font-semibold text-[var(--text-primary)]">Email Settings</h2>
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-[var(--text-primary)]">Email Settings & Notifications</h2>
+            <Loader2
+              v-if="isLoadingNotificationPreferences || isSavingNotificationPreferences"
+              class="h-4 w-4 animate-spin text-[var(--accent-strong)]"
+            />
+          </div>
         </div>
 
         <div class="space-y-8">
-          <label class="block">
-            <span class="text-sm font-semibold text-[var(--text-primary)]">
-              Email Address <span class="text-xs">(only affects your notifications email address)</span>
-            </span>
-            <div class="mt-2 flex overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
-              <input
-                v-model="emailAddress"
-                type="email"
-                placeholder="you@example.com"
-                class="h-12 min-w-0 flex-1 bg-transparent px-4 text-sm text-[var(--text-primary)] outline-none"
-              />
-              <button
-                type="button"
-                :disabled="isSavingEmail"
-                class="inline-flex items-center gap-2 border-l border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-                @click="sendNotificationEmailOtp"
-              >
-                <Loader2 v-if="isSavingEmail" class="h-4 w-4 animate-spin" />
-                {{ isSavingEmail ? 'Sending...' : 'Send code' }}
-              </button>
-            </div>
-          </label>
-
-          <form
-            v-if="isNotificationEmailOtpSent"
-            class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
-            @submit.prevent="verifyNotificationEmailOtp"
-          >
-            <label class="block">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Verification code</span>
-              <input
-                v-model="notificationEmailOtp"
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none focus:border-[color:var(--accent-soft)]"
-                placeholder="Enter the code sent to your email"
-              />
-            </label>
-            <button
-              type="submit"
-              :disabled="isVerifyingEmail"
-              class="mt-4 inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Loader2 v-if="isVerifyingEmail" class="h-4 w-4 animate-spin" />
-              {{ isVerifyingEmail ? 'Verifying...' : 'Verify email' }}
-            </button>
-          </form>
-
-          <article class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-sm font-semibold text-[var(--text-primary)]">Notification preferences</p>
-                <p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                  Choose which updates should reach you across the platform.
-                </p>
-              </div>
-              <Loader2
-                v-if="isLoadingNotificationPreferences || isSavingNotificationPreferences"
-                class="h-4 w-4 animate-spin text-[var(--accent-strong)]"
-              />
-            </div>
-
-            <div class="mt-5 divide-y divide-[color:var(--border-soft)]">
+          <article class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4">
+            <div class="divide-y divide-[color:var(--border-soft)]">
               <label
                 v-for="option in notificationPreferenceOptions"
                 :key="option.key"
-                class="flex items-center justify-between gap-4 py-5"
+                class="flex items-center justify-between gap-4 py-8"
               >
-                <span>
-                  <span class="block text-sm font-semibold text-[var(--text-primary)]">{{ option.label }}</span>
-                  <span class="mt-1 block text-sm text-[var(--text-secondary)]">{{ option.description }}</span>
-                </span>
+                <span class="block text-base font-semibold leading-7 text-[var(--text-primary)]">{{ option.label }}</span>
                 <input
                   type="checkbox"
                   class="peer sr-only"
                   :checked="Boolean(notificationPreferences[option.key])"
                   :disabled="isLoadingNotificationPreferences || isSavingNotificationPreferences"
-                  @change="updateNotificationPreference(option.key, ($event.target as HTMLInputElement).checked)"
+                  @change="updateNotificationPreference(option, ($event.target as HTMLInputElement).checked)"
                 />
                 <span class="relative h-7 w-12 shrink-0 rounded-full bg-[var(--surface-muted)] transition peer-checked:bg-[var(--accent)] peer-disabled:opacity-50 after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5" />
               </label>
@@ -760,12 +744,12 @@ onMounted(() => {
         <button
           type="button"
           class="mt-6 inline-flex h-11 items-center gap-2 rounded-[0.75rem] bg-[color:color-mix(in_srgb,var(--danger)_45%,white)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--danger)] disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="activeTab === 'delete-account' ? !deleteAccountConfirmed : !deletePageConfirmed"
-          @click="activeTab === 'delete-page' ? deleteSelectedPage() : undefined"
+          :disabled="activeTab === 'delete-account' ? !deleteAccountConfirmed || isDisablingAccount : !deletePageConfirmed || isDeletingPage"
+          @click="activeTab === 'delete-page' ? deleteSelectedPage() : deleteAccount()"
         >
-          <Loader2 v-if="isDeletingPage" class="h-4 w-4 animate-spin" />
+          <Loader2 v-if="isDeletingPage || isDisablingAccount" class="h-4 w-4 animate-spin" />
           <Trash2 v-else class="h-4 w-4" />
-          {{ isDeletingPage ? 'Deleting...' : deleteCopy.button }}
+          {{ isDeletingPage || isDisablingAccount ? 'Deleting...' : deleteCopy.button }}
         </button>
       </section>
     </div>

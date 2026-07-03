@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { ArrowUp, BookOpen, Bookmark, Check, CloudUpload, Flag, MessageSquare, Share2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { useCurrentUserIdentity, getInitials, getProfileSkills } from '@/composables/useCurrentUserIdentity'
+import RichTextContent from '@/components/RichTextContent.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import type { QuestionPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
@@ -18,7 +19,6 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { getOptionalCount } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
-import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 
 const route = useRoute()
@@ -87,14 +87,12 @@ let realtimeTimer: ReturnType<typeof window.setInterval> | null = null
 
 const question = computed(() => apiQuestion.value)
 const questionId = computed(() => question.value?.apiId)
-const questionCommunityName = computed(() =>
-  questionCommunity.value?.name || question.value?.communityName || 'Everyone',
-)
-const questionCommunityIcon = computed(() =>
-  questionCommunity.value
-    ? getCommunityLineAwesomeClass(questionCommunity.value)
-    : 'las la-users',
-)
+const questionBodyText = computed(() => {
+  const body = question.value?.body?.trim() || ''
+  const title = question.value?.title?.trim() || ''
+
+  return body && body !== title ? body : ''
+})
 
 const formatTime = (value?: string) => {
   if (!value) {
@@ -427,7 +425,6 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
 
 const uploadAnswerAttachments = async () => {
   const mediaAssetIds: string[] = []
-  const fallbackMedia: Array<{ url: string; mediaType: string }> = []
   const uploadedUrls: Array<{ url: string; mediaType: string }> = []
 
   for (const file of answerAttachments.value) {
@@ -448,15 +445,12 @@ const uploadAnswerAttachments = async () => {
           mediaType,
         })
       }
-    } else if (url) {
-      fallbackMedia.push({
-        url,
-        mediaType,
-      })
+    } else {
+      throw new Error('Media upload completed without an asset ID.')
     }
   }
 
-  return { mediaAssetIds, fallbackMedia, uploadedUrls }
+  return { mediaAssetIds, uploadedUrls }
 }
 
 const loadAnswererProfile = async () => {
@@ -490,12 +484,10 @@ const loadQuestion = async (id: string, options: { background?: boolean } = {}) 
       userId
         ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
         : Promise.resolve(null),
-      questionsService.listAnswers(response.data.id, authStore.authToken).catch(() => null),
-      communityId ? communitiesService.getCommunity(communityId, authStore.authToken).catch(() => null) : Promise.resolve(null),
+      questionsService.listAnswers(response.data.id, authStore.authToken),
+      communityId ? communitiesService.getCommunity(communityId, authStore.authToken) : Promise.resolve(null),
     ])
-    const embeddedAnswers = Array.isArray(response.data.answers) ? response.data.answers : []
-    const listedAnswers = answersResponse?.data ?? []
-    const answers = listedAnswers.length ? listedAnswers : embeddedAnswers
+    const answers = answersResponse.data ?? []
     const embeddedCommunity = response.data.community
       ? {
         id: response.data.community.id || communityId,
@@ -516,7 +508,7 @@ const loadQuestion = async (id: string, options: { background?: boolean } = {}) 
     apiQuestion.value = mapApiQuestionToFeedPost(
       {
         ...response.data,
-        answers_count: answersResponse?.total ?? response.data.answers_count,
+        answers_count: answersResponse.total ?? response.data.answers_count,
         answers,
       },
       authorData,
@@ -605,7 +597,7 @@ const submitAnswer = async () => {
       )
 
       const responseMedia = getAnswerEmbeddedMedia(answer)
-      const uploadedPreviewMedia = [...uploadedMedia.uploadedUrls, ...uploadedMedia.fallbackMedia].map((item, index) => ({
+      const uploadedPreviewMedia = uploadedMedia.uploadedUrls.map((item, index) => ({
         id: `uploaded-${answer.id}-${index}`,
         post_id: answer.id,
         media_type: item.mediaType,
@@ -634,7 +626,6 @@ const submitAnswer = async () => {
         media: responseMedia.length ? responseMedia : uploadedPreviewMedia,
       })
       closeAnswerModal()
-      toast.success('Answer posted')
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to post answer.'
       toast.error('Answer failed', { description: message })
@@ -727,7 +718,6 @@ const toggleAnswerFollow = (answer: AnswerItem) => {
       }
 
       answer.isFollowing = nextValue
-      toast.success(nextValue ? 'Following' : 'Unfollowed')
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
       toast.error('Follow failed', { description: message })
@@ -789,7 +779,6 @@ const submitAnswerComment = async (answer: AnswerItem) => {
     answer.comments += 1
     answer.commentInput = ''
     answer.isCommentsOpen = true
-    toast.success('Comment added')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
     toast.error('Comment failed', { description: message })
@@ -821,7 +810,7 @@ const shareAnswer = async (answer: AnswerItem) => {
       answer.id,
       { type: canNativeShare ? 'native_share' : 'copy_link' },
       authStore.authToken,
-    ).catch(() => null)
+    )
     toast.success(canNativeShare ? 'Share opened' : 'Answer link copied')
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -853,7 +842,6 @@ const toggleAnswerSave = async (answer: AnswerItem) => {
       authStore.authToken,
     )
     answer.isSaved = response.data.saved
-    toast.success(answer.isSaved ? 'Answer saved' : 'Answer removed from saved')
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
     toast.error('Save failed', { description: message })
@@ -955,13 +943,6 @@ onBeforeUnmount(() => {
           <span class="font-medium text-[var(--accent-strong)]">Details</span>
         </div>
 
-        <div class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
-          <span class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
-            <i :class="questionCommunityIcon" class="text-lg leading-none" aria-hidden="true" />
-          </span>
-          <span class="font-semibold text-[var(--text-primary)]">{{ questionCommunityName }}</span>
-        </div>
-
         <h1 class="text-[1.45rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.9rem]">
           {{ question.title }}
         </h1>
@@ -998,12 +979,11 @@ onBeforeUnmount(() => {
         </div>
 
         <p
-          v-if="question.body"
+          v-if="questionBodyText"
           class="whitespace-pre-line text-[0.94rem] leading-8 text-[var(--text-secondary)]"
         >
-          {{ question.body }}
+          {{ questionBodyText }}
         </p>
-        <p v-else class="text-sm text-[var(--text-secondary)]">No additional details were added to this question.</p>
 
         <button
           type="button"
@@ -1077,7 +1057,7 @@ onBeforeUnmount(() => {
                     @click="toggleAnswerFollow(answer)"
                   >
                     <Check class="h-3.5 w-3.5" />
-                    {{ answer.isFollowing ? 'Following' : 'Follow' }}
+                    {{ answer.isFollowing ? 'Unfollow' : 'Follow' }}
                   </button>
                 </div>
               </div>
@@ -1087,9 +1067,10 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <p class="mt-4 whitespace-pre-line text-[0.94rem] leading-8 text-[var(--text-primary)]">
-              {{ answer.content }}
-            </p>
+            <RichTextContent
+              :content="answer.content"
+              class="mt-4 text-[0.94rem] leading-8 text-[var(--text-primary)]"
+            />
 
             <div
               v-if="answer.media.length"
@@ -1202,7 +1183,10 @@ onBeforeUnmount(() => {
                     <span class="font-semibold text-[var(--text-primary)]">{{ comment.authorName }}</span>
                     <span>{{ comment.time }}</span>
                   </div>
-                  <p class="mt-1.5 text-[0.82rem] leading-6 text-[var(--text-primary)]">{{ comment.content }}</p>
+                  <RichTextContent
+                    :content="comment.content"
+                    class="mt-1.5 text-[0.82rem] leading-6 text-[var(--text-primary)]"
+                  />
                 </article>
               </div>
               <p v-else class="p-3 text-center text-[0.82rem] text-[var(--text-secondary)]">No comments yet.</p>

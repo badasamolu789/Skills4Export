@@ -1,5 +1,4 @@
-import { ApiError, api } from '@/lib/api'
-import type { ApiRequestOptions } from '@/lib/api'
+import { api } from '@/lib/api'
 
 export type UserRecord = {
   id?: string
@@ -132,10 +131,36 @@ export type MyProfileData = {
   skills?: UserSkill[]
   portfolios?: UserPortfolio[]
   certifications?: UserCertification[]
+  educations?: UserEducation[]
   education?: UserEducation[]
   experiences?: UserExperience[]
-  followers?: UserFollower[]
+  activeExperiences?: UserExperience[]
+  followers?: UserFollower[] | {
+    users?: UserFollower[]
+    pages?: unknown[]
+    totals?: number
+    total?: number
+  }
+  following?: UserFollower[] | {
+    users?: UserFollower[]
+    pages?: unknown[]
+    totals?: number
+    total?: number
+  }
+  followerCount?: number
+  followingCount?: number
   oauthAccounts?: UserOauthAccount[]
+  communities?: unknown[]
+  privacy?: Record<string, unknown>
+  setting?: Record<string, unknown>
+  settings?: Record<string, unknown>
+  counts?: Record<string, number | string>
+  metrics?: Record<string, number | string>
+  scores?: Record<string, unknown>
+  alerts?: Record<string, unknown>
+  created_at?: string
+  created_at_human?: string
+  referral_code?: string
 }
 
 export type MyProfileResponse = {
@@ -439,15 +464,27 @@ const normalizeUserSkillsListResponse = <T extends { data?: UserSkill[] }>(respo
   return response
 }
 
+const normalizeMyProfileData = (data?: MyProfileData | null): MyProfileData | null => {
+  if (!data) {
+    return data ?? null
+  }
+
+  const educations = data.educations ?? data.education ?? []
+  const experiences = data.experiences ?? data.activeExperiences ?? []
+
+  return {
+    ...data,
+    profile: normalizeUserProfile(getProfileFromProfileData(data)),
+    skills: collectUserSkills(data.skills, data),
+    educations,
+    education: educations,
+    experiences,
+  }
+}
+
 const normalizeMyProfileResponse = (response: MyProfileResponse): MyProfileResponse => ({
   ...response,
-  data: response.data
-    ? {
-      ...response.data,
-      profile: normalizeUserProfile(getProfileFromProfileData(response.data)),
-      skills: collectUserSkills(response.data.skills, response.data),
-    }
-    : response.data,
+  data: normalizeMyProfileData(response.data),
 })
 
 const normalizeUserProfileResponse = <T extends { data?: UserProfile | null }>(response: T): T => ({
@@ -455,8 +492,29 @@ const normalizeUserProfileResponse = <T extends { data?: UserProfile | null }>(r
   data: normalizeUserProfile(response.data) as T['data'],
 })
 
-type UserRequestOptions = Pick<ApiRequestOptions, 'suppressErrorModal' | 'signal'>
-type ProfileImageUploadOptions = UserRequestOptions & {
+const normalizeUpsertUserProfileResponse = <T extends { data?: UserProfile | MyProfileData | null }>(response: T): T => {
+  if (!response.data) {
+    return response
+  }
+
+  const record = response.data as Record<string, unknown>
+  const hasWrappedProfile =
+    isRecord(record.profile) ||
+    isRecord(record.user) ||
+    Array.isArray(record.skills) ||
+    Array.isArray(record.experiences) ||
+    Array.isArray(record.educations) ||
+    Array.isArray(record.education)
+
+  return {
+    ...response,
+    data: hasWrappedProfile
+      ? normalizeMyProfileData(response.data as MyProfileData) as T['data']
+      : normalizeUserProfile(response.data as UserProfile) as T['data'],
+  }
+}
+
+type ProfileImageUploadOptions = {
   replace?: boolean
 }
 type ProfileImageUploadRequest =
@@ -484,7 +542,8 @@ export type UserProfileResponse = {
 
 export type UpsertUserProfileResponse = {
   success?: boolean
-  data?: UserProfile | null
+  message?: string
+  data?: UserProfile | MyProfileData | null
 }
 
 export type CreateUserRequest = {
@@ -650,12 +709,25 @@ export type DeleteUserExperienceResponse = {
 
 // Follow/Followers
 export type FollowUserRequest = {
-  followerId?: string
+  followerId: string
 }
 
 export type FollowUserResponse = {
   success: boolean
   data: Record<string, unknown>
+}
+
+export type UserFollowStatus = {
+  following?: boolean
+  is_following?: boolean
+  followerId?: string
+  followingId?: string
+}
+
+export type UserFollowStatusResponse = {
+  success: boolean
+  message?: string
+  data?: UserFollowStatus | null
 }
 
 export type FollowersListResponse = {
@@ -700,10 +772,57 @@ export type UserPrivacyResponse = {
   } | null
 }
 
+export type DisableAccountRequest = {
+  reason?: string
+  confirm?: boolean
+  confirmed?: boolean
+}
+
+export type DisableAccountResponse = {
+  success?: boolean
+  message?: string
+  data?: Record<string, unknown>[]
+}
+
+export type UserSettings = {
+  user_id?: string
+  feature_and_announcement?: boolean
+  mails?: boolean
+  tips_and_reminders?: boolean
+  inbox?: boolean
+  comments?: boolean
+  replies?: boolean
+  answers?: boolean
+  scoresAndReactions?: boolean
+  scores_and_reactions?: boolean
+  follows?: boolean
+  research?: boolean
+  recommended?: boolean
+  recommendedJobs?: boolean
+  recommended_jobs?: boolean
+  alerts?: boolean
+  pageActivity?: boolean
+  page_activity?: boolean
+  featuresAndAnnouncements?: boolean
+  features_and_announcements?: boolean
+  emailNotifications?: boolean
+  email_notifications?: boolean
+  updates?: Record<string, boolean>
+  notificationPreferences?: Record<string, boolean>
+  [key: string]: unknown
+}
+
+export type UserSettingsResponse = {
+  success?: boolean
+  message?: string
+  data?: UserSettings | null
+}
+
 const USER_ROUTES = {
   users: '/users',
   myProfile: '/user/profile/me',
   myStats: '/user/stats/me',
+  disableAccount: '/user/disable-account',
   privacy: '/user/privacy',
   settings: '/user/settings',
   notificationEmailOtp: '/user/notification-email/send-otp',
@@ -730,17 +849,18 @@ const USER_ROUTES = {
   userExperienceById: (id: string, experienceId: string) => `/users/${id}/experiences/${experienceId}`,
   // Follow
   userFollow: (id: string) => `/users/${id}/follow`,
+  userFollowStatus: (id: string) => `/users/${id}/follow-status`,
   userFollowers: (id: string) => `/users/${id}/followers`,
   // Login History
   userLoginHistory: (id: string) => `/users/${id}/login-history`,
 } as const
 
 export const usersService = {
-  getMyProfile(token?: string | null, options?: UserRequestOptions) {
-    return api.get<MyProfileResponse>(USER_ROUTES.myProfile, { token, ...options }).then(normalizeMyProfileResponse)
+  getMyProfile(token?: string | null) {
+    return api.get<MyProfileResponse>(USER_ROUTES.myProfile, { token }).then(normalizeMyProfileResponse)
   },
-  getMyStats(token?: string | null, options?: UserRequestOptions) {
-    return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token, ...options })
+  getMyStats(token?: string | null) {
+    return api.get<MyStatsResponse>(USER_ROUTES.myStats, { token })
   },
   getPrivacy(token?: string | null) {
     return api.get<UserPrivacyResponse>(USER_ROUTES.privacy, { token })
@@ -748,8 +868,17 @@ export const usersService = {
   updatePrivacy(payload: Record<string, unknown>, token?: string | null) {
     return api.put<{ success?: boolean; message?: string; data?: unknown[] }>(USER_ROUTES.privacy, payload, { token })
   },
+  getSettings(token?: string | null) {
+    return api.get<UserSettingsResponse>(USER_ROUTES.settings, { token })
+  },
   updateSettings(payload: Record<string, unknown>, token?: string | null) {
-    return api.put<{ success?: boolean; message?: string; data?: Record<string, unknown> }>(USER_ROUTES.settings, payload, { token })
+    return api.put<UserSettingsResponse>(USER_ROUTES.settings, payload, { token })
+  },
+  patchSettings(payload: Record<string, unknown>, token?: string | null) {
+    return api.patch<UserSettingsResponse>(USER_ROUTES.settings, payload, { token })
+  },
+  disableAccount(payload: DisableAccountRequest = {}, token?: string | null) {
+    return api.put<DisableAccountResponse>(USER_ROUTES.disableAccount, payload, { token })
   },
   sendNotificationEmailOtp(payload: { notification_email: string }, token?: string | null) {
     return api.post<{ success?: boolean; message?: string; data?: Record<string, unknown> }>(
@@ -793,49 +922,31 @@ export const usersService = {
     id: string,
     payload: UpsertUserProfileRequest,
     token?: string | null,
-    options?: UserRequestOptions,
   ) {
     return api
-      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
-      .then(normalizeUserProfileResponse)
+      .post<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+      .then(normalizeUpsertUserProfileResponse)
   },
   updateUserProfile(
     id: string,
     payload: UpsertUserProfileRequest,
     token?: string | null,
-    options?: UserRequestOptions,
   ) {
     return api
-      .put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token, ...options })
-      .then(normalizeUserProfileResponse)
+      .put<UpsertUserProfileResponse>(USER_ROUTES.userProfile(id), payload, { token })
+      .then(normalizeUpsertUserProfileResponse)
   },
   async saveUserProfile(
     id: string,
     payload: UpsertUserProfileRequest,
     hasExistingProfile: boolean,
     token?: string | null,
-    options?: UserRequestOptions,
   ) {
     if (hasExistingProfile) {
-      return this.updateUserProfile(id, payload, token, options)
+      return this.updateUserProfile(id, payload, token)
     }
 
-    try {
-      return await this.createUserProfile(id, payload, token, options)
-    } catch (error) {
-      const isExistingProfileConflict =
-        error instanceof ApiError &&
-        error.status === 409 &&
-        error.payload?.error &&
-        typeof error.payload.error === 'object' &&
-        error.payload.error.code === 'profile_already_exists'
-
-      if (!isExistingProfileConflict) {
-        throw error
-      }
-
-      return this.updateUserProfile(id, payload, token, options)
-    }
+    return this.createUserProfile(id, payload, token)
   },
   uploadUserAvatar(
     id: string,
@@ -849,8 +960,6 @@ export const usersService = {
 
     return api.post<BackgroundUploadResponse>(endpoint, body, {
       token,
-      suppressErrorModal: options?.suppressErrorModal,
-      signal: options?.signal,
     })
   },
   uploadUserBanner(
@@ -865,8 +974,6 @@ export const usersService = {
 
     return api.post<BackgroundUploadResponse>(endpoint, body, {
       token,
-      suppressErrorModal: options?.suppressErrorModal,
-      signal: options?.signal,
     })
   },
 
@@ -878,11 +985,10 @@ export const usersService = {
    * List all skills for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
-   * @param options - Optional API request options
    */
-  listUserSkills(userId: string, token?: string | null, options?: ApiRequestOptions) {
+  listUserSkills(userId: string, token?: string | null) {
     return api
-      .get<UserSkillsListResponse>(USER_ROUTES.userSkills(userId), { token, ...options })
+      .get<UserSkillsListResponse>(USER_ROUTES.userSkills(userId), { token })
       .then(normalizeUserSkillsListResponse)
   },
 
@@ -896,7 +1002,6 @@ export const usersService = {
     userId: string,
     payload: AddUserSkillRequest,
     token?: string | null,
-    options?: UserRequestOptions,
   ) {
     const apiLevel = toApiSkillLevel(payload.level)
     const requestPayload = {
@@ -905,7 +1010,7 @@ export const usersService = {
     }
 
     return api
-      .post<UserSkillResponse>(USER_ROUTES.userSkills(userId), requestPayload, { token, ...options })
+      .post<UserSkillResponse>(USER_ROUTES.userSkills(userId), requestPayload, { token })
       .then(normalizeUserSkillResponse)
   },
 
@@ -927,10 +1032,9 @@ export const usersService = {
    * List all portfolios for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
-   * @param options - Optional API request options
    */
-  listUserPortfolios(userId: string, token?: string | null, options?: ApiRequestOptions) {
-    return api.get<UserPortfoliosListResponse>(USER_ROUTES.userPortfolios(userId), { token, ...options })
+  listUserPortfolios(userId: string, token?: string | null) {
+    return api.get<UserPortfoliosListResponse>(USER_ROUTES.userPortfolios(userId), { token })
   },
 
   /**
@@ -964,10 +1068,9 @@ export const usersService = {
    * List all certifications for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
-   * @param options - Optional API request options
    */
-  listUserCertifications(userId: string, token?: string | null, options?: ApiRequestOptions) {
-    return api.get<UserCertificationsListResponse>(USER_ROUTES.userCertifications(userId), { token, ...options })
+  listUserCertifications(userId: string, token?: string | null) {
+    return api.get<UserCertificationsListResponse>(USER_ROUTES.userCertifications(userId), { token })
   },
 
   /**
@@ -998,10 +1101,9 @@ export const usersService = {
    * List all education records for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
-   * @param options - Optional API request options
    */
-  listUserEducations(userId: string, token?: string | null, options?: ApiRequestOptions) {
-    return api.get<UserEducationsListResponse>(USER_ROUTES.userEducations(userId), { token, ...options })
+  listUserEducations(userId: string, token?: string | null) {
+    return api.get<UserEducationsListResponse>(USER_ROUTES.userEducations(userId), { token })
   },
 
   /**
@@ -1014,11 +1116,9 @@ export const usersService = {
     userId: string,
     payload: AddUserEducationRequest,
     token?: string | null,
-    options?: UserRequestOptions,
   ) {
     return api.post<UserEducationResponse>(USER_ROUTES.userEducations(userId), payload, {
       token,
-      ...options,
     })
   },
 
@@ -1040,10 +1140,9 @@ export const usersService = {
    * List all experience records for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
-   * @param options - Optional API request options
    */
-  listUserExperiences(userId: string, token?: string | null, options?: ApiRequestOptions) {
-    return api.get<UserExperiencesListResponse>(USER_ROUTES.userExperiences(userId), { token, ...options })
+  listUserExperiences(userId: string, token?: string | null) {
+    return api.get<UserExperiencesListResponse>(USER_ROUTES.userExperiences(userId), { token })
   },
 
   /**
@@ -1056,11 +1155,9 @@ export const usersService = {
     userId: string,
     payload: AddUserExperienceRequest,
     token?: string | null,
-    options?: UserRequestOptions,
   ) {
     return api.post<UserExperienceResponse>(USER_ROUTES.userExperiences(userId), payload, {
       token,
-      ...options,
     })
   },
 
@@ -1085,11 +1182,11 @@ export const usersService = {
   /**
    * Follow a user
    * @param userId - The user ID to follow
-   * @param payload - Optional follower data
+   * @param payload - Follower data
    * @param token - Optional authorization token
    */
-  followUser(userId: string, payload?: FollowUserRequest, token?: string | null) {
-    return api.post<FollowUserResponse>(USER_ROUTES.userFollow(userId), payload || {}, { token })
+  followUser(userId: string, payload: FollowUserRequest, token?: string | null) {
+    return api.post<FollowUserResponse>(USER_ROUTES.userFollow(userId), payload, { token })
   },
 
   /**
@@ -1102,13 +1199,21 @@ export const usersService = {
   },
 
   /**
+   * Read the authenticated viewer's follow status for a user
+   * @param userId - The target user ID
+   * @param token - Optional authorization token
+   */
+  getUserFollowStatus(userId: string, token?: string | null) {
+    return api.get<UserFollowStatusResponse>(USER_ROUTES.userFollowStatus(userId), { token })
+  },
+
+  /**
    * Get list of followers for a user
    * @param userId - The user ID
    * @param token - Optional authorization token
-   * @param options - Optional API request options
    */
-  listFollowers(userId: string, token?: string | null, options?: ApiRequestOptions) {
-    return api.get<FollowersListResponse>(USER_ROUTES.userFollowers(userId), { token, ...options })
+  listFollowers(userId: string, token?: string | null) {
+    return api.get<FollowersListResponse>(USER_ROUTES.userFollowers(userId), { token })
   },
 
   // ========================================================================

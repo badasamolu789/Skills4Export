@@ -4,6 +4,7 @@ import type { PageRecord } from '@/services/pages'
 import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
 import { getDisplayName } from '@/utils/displayName'
+import { getProfileContextTag } from '@/utils/profileContextTag'
 
 const formatPostTime = (value: string) => {
   const date = new Date(value)
@@ -120,7 +121,7 @@ const getAuthorTag = (author?: MyProfileData | null) => {
     .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
     .slice(0, 3)
 
-  return skills.join(' | ')
+  return skills.join(' | ') || getProfileContextTag(author)
 }
 
 const getAuthorAvatar = (post: PostRecord, author?: MyProfileData | null) => {

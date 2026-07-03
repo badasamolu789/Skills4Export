@@ -119,7 +119,7 @@ const getRememberedPageCategory = (page: Pick<PageRecord, 'id' | 'slug'>) => {
 }
 
 const getPayloadPageCategory = (payload: Partial<CreatePageRequest>): PageCategory | null => {
-  const category = payload.type || payload.pageType || payload.page_type
+  const category = payload.type
 
   if (category === 'student' || payload.metadata?.theme === 'student' || payload.metadata?.pageType === 'student') {
     return 'student'
@@ -169,7 +169,7 @@ const getPagePersistenceIssues = (
   if (payload.slug !== undefined && !valuesMatch(payload.slug, persisted.slug)) issues.push('slug')
   if (payload.description !== undefined && !valuesMatch(payload.description, persisted.description)) issues.push('description')
   if (payload.categoryId !== undefined && !valuesMatch(payload.categoryId, persisted.categoryId || persisted.category_id)) issues.push('category')
-  const submittedType = payload.type || payload.pageType || payload.page_type
+  const submittedType = payload.type
   const persistedType = persisted.type || persisted.pageType || persisted.page_type
   if (submittedType && !valuesMatch(submittedType, persistedType)) issues.push('page type')
 
@@ -354,24 +354,6 @@ export const usePagesStore = defineStore('pages', () => {
     publicPages.value = publicPages.value.map(update)
   }
 
-  const loadRememberedOwnedPages = async () => {
-    const references = Array.from(getOwnedPageReferences()).filter(isUuid)
-
-    if (!references.length) {
-      return
-    }
-
-    const results = await Promise.allSettled(
-      references.map((id) => pagesService.getPage(id, authStore.authToken)),
-    )
-
-    results.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        addPageFromApi(result.value.data)
-      }
-    })
-  }
-
   const loadPages = async () => {
     if (!authStore.authToken || !currentUserId.value) {
       clearPages()
@@ -388,10 +370,8 @@ export const usePagesStore = defineStore('pages', () => {
     try {
       const response = await pagesService.listMyPages({ per_page: 100 }, authStore.authToken)
       setPagesFromApi(response.data)
-      await loadRememberedOwnedPages()
     } catch (error) {
       pagesError.value = error instanceof ApiError ? error.message : 'Unable to load pages.'
-      await loadRememberedOwnedPages()
 
       if (!pages.value.length) {
         pages.value = []
@@ -415,7 +395,7 @@ export const usePagesStore = defineStore('pages', () => {
     try {
       const record = cachedPage || (isUuid(idOrSlug)
         ? null
-        : await pagesService.findPageBySlug(idOrSlug, authStore.authToken, { ownedOnly: true }))
+        : await pagesService.findPageBySlug(idOrSlug, authStore.authToken))
       if (!isUuid(idOrSlug) && !record) {
         pagesError.value = 'Unable to find this page in your pages.'
         return null
@@ -504,15 +484,15 @@ export const usePagesStore = defineStore('pages', () => {
     const payloadCategory = getPayloadPageCategory(payload)
     pagePersistenceWarning.value = ''
     const response = await pagesService.updatePage(id, payload, authStore.authToken)
-    const verifiedResponse = await pagesService.getPage(id, authStore.authToken).catch(() => null)
-    const persistenceIssues = getPagePersistenceIssues(payload, verifiedResponse?.data)
+    const verifiedResponse = await pagesService.getPage(id, authStore.authToken)
+    const persistenceIssues = getPagePersistenceIssues(payload, verifiedResponse.data)
 
     if (persistenceIssues.length) {
       pagePersistenceWarning.value = `The backend accepted the update but the saved page does not match these fields: ${persistenceIssues.join(', ')}.`
     }
 
     const record = {
-      ...(verifiedResponse?.data || response.data),
+      ...verifiedResponse.data,
       ownerId: verifiedResponse?.data.ownerId || response.data.ownerId || currentUserId.value,
     }
     const updatedPage = mapPageRecordToManagedPage(record)

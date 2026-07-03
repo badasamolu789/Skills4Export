@@ -12,6 +12,12 @@ export type FreelancerRecord = {
   avatar?: string | null
   email?: string | null
   userEmail?: string | null
+  user?: {
+    id?: string
+    name?: string | null
+    email?: string | null
+    avatar?: string | null
+  } | null
   passportMediaId?: string | null
   status: 'draft' | 'pending_review' | 'available' | 'certified' | 'suspended' | string
   availability: 'available_now' | 'open' | 'busy' | 'unavailable' | string
@@ -87,10 +93,6 @@ export type FreelanceJobListParams = {
   type?: string
 }
 
-export type FreelancerRequestOptions = {
-  suppressErrorModal?: boolean
-}
-
 export type CreateFreelancerRequest = {
   name: string
   title: string
@@ -125,6 +127,19 @@ export type ApplyToFreelanceJobRequest = {
   attachmentMediaIds?: string[]
 }
 
+export type EmailFreelancerRequest = {
+  freelancerId: string
+  email?: string
+  freelancerEmail?: string
+  recipientEmail?: string
+  replyToEmail?: string
+  category?: string
+  skills?: string
+  location?: string
+  jobType?: string
+  message: string
+}
+
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
   const query = new URLSearchParams()
 
@@ -152,13 +167,14 @@ const FREELANCER_ROUTES = {
     `/freelance-jobs/${jobId}/applications/${applicationId}`,
   myPostedFreelanceJobs: '/me/freelance-jobs/posted',
   myFreelanceApplications: '/me/freelance-jobs/applications',
+  emailFreelancer: '/freelancer/email',
 } as const
 
 export const freelancersService = {
-  listFreelancers(params: FreelancerListParams = {}, token?: string | null, options: FreelancerRequestOptions = {}) {
+  listFreelancers(params: FreelancerListParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<FreelancerRecord>>(
       withQuery(FREELANCER_ROUTES.freelancers, params),
-      { token, ...options },
+      { token },
     )
   },
 
@@ -185,10 +201,10 @@ export const freelancersService = {
     )
   },
 
-  listFreelanceJobs(params: FreelanceJobListParams = {}, token?: string | null, options: FreelancerRequestOptions = {}) {
+  listFreelanceJobs(params: FreelanceJobListParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<FreelanceJobRecord>>(
       withQuery(FREELANCER_ROUTES.freelanceJobs, params),
-      { token, ...options },
+      { token },
     )
   },
 
@@ -229,6 +245,14 @@ export const freelancersService = {
   applyToFreelanceJob(id: string, payload: ApplyToFreelanceJobRequest = {}, token?: string | null) {
     return api.post<ApiSuccessResponse<FreelanceApplicationRecord>>(
       FREELANCER_ROUTES.freelanceJobApplications(id),
+      payload,
+      { token },
+    )
+  },
+
+  emailFreelancer(payload: EmailFreelancerRequest, token?: string | null) {
+    return api.post<ApiSuccessResponse<unknown[]>>(
+      FREELANCER_ROUTES.emailFreelancer,
       payload,
       { token },
     )

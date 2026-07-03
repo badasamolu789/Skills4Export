@@ -59,11 +59,6 @@ export type JobListParams = {
   workMode?: string
 }
 
-export type JobRequestOptions = {
-  suppressErrorModal?: boolean
-  retry?: boolean
-}
-
 export type CreateJobRequest = {
   title: string
   skills?: string[] | string
@@ -270,10 +265,9 @@ const normalizeJobApplication = (application: JobApplicationRecord | unknown): J
 }
 
 export const jobsService = {
-  async listJobs(params: JobListParams = {}, token?: string | null, options: JobRequestOptions = {}) {
+  async listJobs(params: JobListParams = {}, token?: string | null) {
     const response = await api.get<PaginatorPayload<JobRecord>>(withQuery(JOB_ROUTES.jobs, params), {
       token,
-      ...options,
     })
 
     return normalizePaginator(response, normalizeJob)
@@ -307,12 +301,11 @@ export const jobsService = {
     id: string,
     payload: ApplyToJobRequest = {},
     token?: string | null,
-    options: JobRequestOptions = {},
   ) {
     const response = await api.post<ApiSuccessResponse<JobApplicationRecord>>(
       JOB_ROUTES.jobApplications(id),
       payload,
-      { token, ...options },
+      { token },
     )
     return normalizeSuccess(response, normalizeJobApplication)
   },

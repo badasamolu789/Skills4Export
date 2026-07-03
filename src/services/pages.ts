@@ -52,9 +52,7 @@ export type PageCategoryRecord = {
 }
 
 export type CreatePageRequest = {
-  type?: 'business' | 'student'
-  pageType?: 'business' | 'student'
-  page_type?: 'business' | 'student'
+  type: 'business' | 'student'
   categoryId?: string
   name: string
   slug: string
@@ -113,7 +111,6 @@ export type PageListParams = {
 
 export type PagePrefillRecord = {
   type?: 'business' | 'student'
-  pageType?: 'business' | 'student'
   name?: string | null
   email?: string | null
   phone?: string | null
@@ -421,7 +418,6 @@ export const pagesService = {
   async listPageCategories(token?: string | null) {
     const response = await api.get<PaginatorPayload<PageCategoryRecord>>(PAGE_ROUTES.pageCategories, {
       token,
-      suppressErrorModal: true,
     })
     return normalizeCategoryPaginator(response)
   },
@@ -429,7 +425,6 @@ export const pagesService = {
   async listAllPageCategories(token?: string | null) {
     const response = await api.get<PaginatorPayload<PageCategoryRecord>>(PAGE_ROUTES.allPageCategories, {
       token,
-      suppressErrorModal: true,
     })
     return normalizeCategoryPaginator(response)
   },
@@ -438,11 +433,9 @@ export const pagesService = {
     return api.get<ApiSuccessResponse<PagePrefillRecord>>(
       withQuery(PAGE_ROUTES.pagePrefill, {
         type,
-        pageType: type,
       }),
       {
         token,
-        suppressErrorModal: true,
       },
     )
   },
@@ -457,19 +450,10 @@ export const pagesService = {
     return normalizePaginator(response)
   },
 
-  async findPageBySlug(slug: string, token?: string | null, options?: { ownedOnly?: boolean }) {
-    const response = options?.ownedOnly
-      ? await pagesService.listMyPages({ per_page: 100 }, token)
-      : await pagesService.listPages({ per_page: 100, q: slug }, token)
+  async findPageBySlug(slug: string, token?: string | null) {
+    const response = await pagesService.listPages({ per_page: 100, q: slug }, token)
 
-    const match = response.data.find((page) => page.slug === slug) ?? null
-
-    if (match || options?.ownedOnly) {
-      return match
-    }
-
-    const fallbackResponse = await pagesService.listPages({ per_page: 100 }, token)
-    return fallbackResponse.data.find((page) => page.slug === slug) ?? null
+    return response.data.find((page) => page.slug === slug) ?? null
   },
 
   async createPage(payload: CreatePageRequest, token?: string | null) {
@@ -477,11 +461,10 @@ export const pagesService = {
     const response = await api.post<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pages, normalizedPayload, {
       token,
       timeoutMs: 60000,
-      suppressErrorModal: true,
       // The backend should persist responses by this key so a repeated create
       // after an uncertain timeout returns the original page instead of a duplicate.
       headers: {
-        'Idempotency-Key': `page-create:${normalizedPayload.type || normalizedPayload.pageType || normalizedPayload.page_type || 'page'}:${normalizedPayload.slug}`,
+        'Idempotency-Key': `page-create:${normalizedPayload.type}:${normalizedPayload.slug}`,
       },
     })
     return normalizeSuccess(response)
@@ -490,7 +473,6 @@ export const pagesService = {
   async getPage(id: string, token?: string | null) {
     const response = await api.get<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pageById(id), {
       token,
-      suppressErrorModal: true,
     })
     return normalizeSuccess(response)
   },
@@ -511,7 +493,6 @@ export const pagesService = {
     return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageAvatarFile(id), formData, {
       token,
       retry: false,
-      suppressErrorModal: true,
     })
   },
 
@@ -522,7 +503,6 @@ export const pagesService = {
     return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageCoverFile(id), formData, {
       token,
       retry: false,
-      suppressErrorModal: true,
     })
   },
 
@@ -530,7 +510,7 @@ export const pagesService = {
     return api.get<PaginatorPayload<Record<string, unknown>>>(withQuery(PAGE_ROUTES.pageUploads(id), {
       per_page: 100,
       sort: '-createdAt',
-    }), { token, suppressErrorModal: true })
+    }), { token })
   },
 
   deletePage(id: string, token?: string | null) {

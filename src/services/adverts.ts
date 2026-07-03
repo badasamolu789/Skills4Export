@@ -51,6 +51,9 @@ export type AdvertRecord = {
 export type AdvertListParams = {
   page?: number
   per_page?: number
+  perPage?: number
+  limit?: number
+  offset?: number
   q?: string
   status?: AdvertStatus | string
   sort?: string
@@ -93,10 +96,7 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
 }
 
 export const advertsService = {
-  listAdverts(params: AdvertListParams = {}, token?: string | null) {
-    return api.get<AdvertListResponse>(withQuery(ADVERT_ROUTES.adverts, params), {
-      token,
-      suppressErrorModal: true,
-    })
+  listAdverts(params: AdvertListParams = {}) {
+    return api.get<AdvertListResponse>(withQuery(ADVERT_ROUTES.adverts, params))
   },
 }

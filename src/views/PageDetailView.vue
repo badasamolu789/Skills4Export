@@ -51,32 +51,6 @@ type PageUploadItem = {
   title: string
   url: string
   mediaType: 'image' | 'video'
-  isLocal?: boolean
-}
-
-const PAGE_UPLOAD_FALLBACKS_KEY = 'skills4export-page-upload-fallbacks'
-
-const getStoredPageUploads = (pageId: string) => {
-  if (typeof window === 'undefined') return [] as PageUploadItem[]
-
-  try {
-    const records = JSON.parse(window.localStorage.getItem(PAGE_UPLOAD_FALLBACKS_KEY) || '{}') as Record<string, PageUploadItem[]>
-    return records[pageId] || []
-  } catch {
-    return []
-  }
-}
-
-const rememberPageUploads = (pageId: string, uploads: PageUploadItem[]) => {
-  if (typeof window === 'undefined') return
-
-  try {
-    const records = JSON.parse(window.localStorage.getItem(PAGE_UPLOAD_FALLBACKS_KEY) || '{}') as Record<string, PageUploadItem[]>
-    records[pageId] = uploads.filter((item) => !item.isLocal && /^https?:\/\//.test(item.url))
-    window.localStorage.setItem(PAGE_UPLOAD_FALLBACKS_KEY, JSON.stringify(records))
-  } catch {
-    // Ignore storage quota/privacy-mode failures; backend loading still works.
-  }
 }
 
 const route = useRoute()
@@ -464,7 +438,6 @@ const handlePagePostFileChange = (event: Event) => {
 
 type UploadedPagePostMedia = {
   mediaAssetIds: string[]
-  fallbackUrl?: string
   mediaType?: string
 }
 
@@ -482,7 +455,6 @@ const uploadSelectedPagePostMedia = async () => {
     token: authStore.authToken,
   })
   const assetId = uploadResponse.data.assetId || uploadResponse.data.id
-  const url = uploadResponse.data.url
 
   if (assetId) {
     return {
@@ -491,15 +463,7 @@ const uploadSelectedPagePostMedia = async () => {
     } satisfies UploadedPagePostMedia
   }
 
-  if (url) {
-    return {
-      mediaAssetIds: [],
-      fallbackUrl: url,
-      mediaType,
-    } satisfies UploadedPagePostMedia
-  }
-
-  throw new Error('Media upload completed without an asset ID or URL.')
+  throw new Error('Media upload completed without an asset ID.')
 }
 
 const openUploadModal = () => {
@@ -567,22 +531,23 @@ const submitPageUpload = async () => {
       token: authStore.authToken,
     })
 
-    const remoteUrl = uploadResponse.data.url || uploadPreviewUrl.value
-    const shouldKeepPreview = remoteUrl === uploadPreviewUrl.value
+    const remoteUrl = uploadResponse.data.url
+
+    if (!remoteUrl) {
+      throw new Error('Media upload completed without a URL.')
+    }
 
     pageUploads.value.unshift({
       id: uploadResponse.data.assetId || uploadResponse.data.id || makeClientId(),
       title,
       url: remoteUrl,
       mediaType,
-      isLocal: shouldKeepPreview,
     })
-    rememberPageUploads(page.value.id, pageUploads.value)
 
     toast.success('Upload added', { id: toastId })
     isUploadModalOpen.value = false
     uploadForm.value = { title: '' }
-    clearUploadSelection({ keepPreview: shouldKeepPreview })
+    clearUploadSelection()
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to upload this media.'
     toast.error('Upload failed', { id: toastId, description: message })
@@ -789,7 +754,6 @@ const togglePageFollow = async () => {
     }
 
     pagesStore.setPageFollowing(page.value.id, nextFollowing)
-    toast.success(nextFollowing ? 'Following page' : 'Unfollowed page')
   } catch (error) {
     toast.error('Unable to update page follow', {
       description: error instanceof Error ? error.message : 'Please try again.',
@@ -818,13 +782,13 @@ const loadPagePosts = async () => {
       const postPageId = post.pageId || post.page_id
       return postPageId === pageId
     })
-    const mediaResults = await Promise.allSettled(
+    const mediaResults = await Promise.all(
       records.map((post) => postsService.listPostMedia(post.id, authStore.authToken)),
     )
 
     pagePosts.value = records.map((record, index) => ({
       record,
-      media: mediaResults[index]?.status === 'fulfilled' ? mediaResults[index].value.data ?? [] : [],
+      media: mediaResults[index]?.data ?? [],
     }))
   } catch {
     pagePosts.value = []
@@ -840,7 +804,6 @@ const loadRecommendedJobs = async () => {
     const response = await jobsService.listJobs(
       { per_page: 20, sort: '-createdAt' },
       authStore.authToken,
-      { suppressErrorModal: true },
     )
     const jobs = response.data ?? []
     recommendedJobs.value = jobs
@@ -878,17 +841,16 @@ const loadPageUploads = async () => {
         mediaType: kind.includes('video') ? 'video' as const : 'image' as const,
       }]
     })
-    const storedUploads = getStoredPageUploads(page.value.id)
     const seen = new Set<string>()
-    pageUploads.value = [...apiUploads, ...storedUploads].filter((item) => {
+    pageUploads.value = apiUploads.filter((item) => {
       const key = item.id || item.url
       if (seen.has(key)) return false
       seen.add(key)
       return true
     })
-    rememberPageUploads(page.value.id, pageUploads.value)
-  } catch {
-    pageUploads.value = getStoredPageUploads(page.value.id)
+  } catch (error) {
+    pageUploads.value = []
+    throw error
   }
 }
 
@@ -928,7 +890,7 @@ const submitPagePost = async () => {
   try {
     const uploadedMedia = await uploadSelectedPagePostMedia()
 
-    if (uploadedMedia.mediaAssetIds.length > 0 || uploadedMedia.fallbackUrl) {
+    if (uploadedMedia.mediaAssetIds.length > 0) {
       toast.loading('Creating page post...', { id: loadingToastId })
     }
 
@@ -941,18 +903,6 @@ const submitPagePost = async () => {
       },
       authStore.authToken,
     )
-
-    if (uploadedMedia.fallbackUrl) {
-      await postsService.attachPostMedia(
-        response.data.id,
-        {
-          url: uploadedMedia.fallbackUrl,
-          mediaType: uploadedMedia.mediaType,
-          displayOrder: 0,
-        },
-        authStore.authToken,
-      )
-    }
 
     toast.success('Page post created', {
       id: loadingToastId,
@@ -997,11 +947,6 @@ onBeforeUnmount(() => {
     URL.revokeObjectURL(pagePostFilePreviewUrl.value)
   }
 
-  pageUploads.value.forEach((item) => {
-    if (item.isLocal) {
-      URL.revokeObjectURL(item.url)
-    }
-  })
 })
 
 watch(
@@ -1114,7 +1059,7 @@ watch(pagePostFile, (file, previousFile) => {
               class="inline-flex h-11 min-w-0 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
               @click="togglePageFollow"
             >
-              {{ isUpdatingPageFollow ? 'Updating...' : page.isFollowing ? 'Unfollow' : 'Follow page' }}
+              {{ isUpdatingPageFollow ? 'Updating...' : page.isFollowing ? 'Unfollow' : 'Follow' }}
             </button>
           </div>
         </div>

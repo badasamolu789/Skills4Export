@@ -78,26 +78,14 @@ export const useJobsStore = defineStore('jobs', () => {
     jobsError.value = ''
 
     try {
-      const [publicJobsResult, ownPostedJobsResult] = await Promise.allSettled([
-        jobsService.listJobs({ per_page: 100 }, authStore.authToken, { suppressErrorModal: true }),
-        authStore.authToken
-          ? jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken)
-          : Promise.resolve({ data: [] as JobRecord[] }),
-      ])
+      const publicJobsResponse = await jobsService.listJobs({ per_page: 100 }, authStore.authToken)
+      const publicJobs = publicJobsResponse.data.filter(isPublicJob)
+      let ownPostedJobs: JobRecord[] = []
 
-      const publicJobs =
-        publicJobsResult.status === 'fulfilled' ? publicJobsResult.value.data.filter(isPublicJob) : []
-      const ownPostedJobs =
-        ownPostedJobsResult.status === 'fulfilled'
-          ? ownPostedJobsResult.value.data.filter(isPublicJob)
-          : []
-
-      if (ownPostedJobsResult.status === 'fulfilled') {
+      if (authStore.authToken) {
+        const ownPostedJobsResponse = await jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken)
+        ownPostedJobs = ownPostedJobsResponse.data.filter(isPublicJob)
         postedJobs.value = ownPostedJobs
-      }
-
-      if (publicJobsResult.status === 'rejected' && !ownPostedJobs.length) {
-        throw publicJobsResult.reason
       }
 
       jobs.value = mergeJobs(ownPostedJobs, publicJobs)
