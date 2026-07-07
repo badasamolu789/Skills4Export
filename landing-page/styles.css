@@ -33,10 +33,47 @@
   --landing-text: #243045;
   --landing-muted: #5d6b85;
   --landing-border: #ffffff;
+  --landing-rule: #d9dfef;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --primary: #5c57c4;
+  --primary-deep: #353266;
+  --primary-soft: #818cf8;
+  --surface-base: #12121f;
+  --surface-muted-base: #1e1e30;
+  --surface-elevated: #25253a;
+  --neutral-50: #f5f7ff;
+  --neutral-100: #dde4ff;
+  --neutral-200: #c0cbef;
+  --neutral-300: #a8b4d6;
+  --neutral-400: #94a3b8;
+  --neutral-500: #8a95b2;
+  --neutral-600: #b4bfd8;
+  --neutral-700: #d4dbed;
+  --neutral-800: #e5eaf7;
+  --neutral-900: #f8fbff;
+  --app-bg: linear-gradient(180deg, #12121f 0%, #171729 54%, #1b1b31 100%);
+  --surface-primary: var(--surface-base);
+  --surface-secondary: var(--surface-muted-base);
+  --surface-muted: var(--surface-elevated);
+  --border-soft: #2f3450;
+  --accent: var(--primary);
+  --accent-strong: var(--primary-soft);
+  --accent-soft: #23273a;
+  --text-primary: var(--neutral-900);
+  --text-secondary: var(--neutral-600);
+  --landing-bg: linear-gradient(180deg, #12121f 0%, #18182b 48%, #1d1d34 100%);
+  --landing-heading: #f4f6ff;
+  --landing-text: #dfe6fb;
+  --landing-muted: #aeb9d4;
+  --landing-border: #2f3450;
+  --landing-rule: #a8b4d6;
 }
 
 html {

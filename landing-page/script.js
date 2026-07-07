@@ -35,14 +35,17 @@ const createLink = (item, className) => {
 
 const isAuthenticated = () => Boolean(window.localStorage.getItem('skills4export-auth-token'))
 
-const protectNavLink = (event, href) => {
+const startGuestSession = () => {
+  window.sessionStorage.setItem('skills4export-landing-guest', 'true')
+  window.sessionStorage.removeItem('skills4export-guest-auth-prompted')
+}
+
+const enterGuestNav = () => {
   if (isAuthenticated()) {
     return
   }
 
-  event.preventDefault()
-  window.alert('Please log in or create an account to view that page.')
-  window.location.assign(`/auth/login?redirect=${encodeURIComponent(href)}`)
+  startGuestSession()
 }
 
 const renderNavLinks = () => {
@@ -53,7 +56,7 @@ const renderNavLinks = () => {
       item,
       'rounded-full px-2.5 py-2 transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] xl:px-3',
     )
-    link.addEventListener('click', (event) => protectNavLink(event, item.href))
+    link.addEventListener('click', enterGuestNav)
     container.appendChild(link)
   })
 }
@@ -65,7 +68,7 @@ const renderFooterLinks = () => {
     const link = createLink(item, 'transition hover:text-[var(--accent-strong)]')
 
     if (item.requiresAuth) {
-      link.addEventListener('click', (event) => protectNavLink(event, item.href))
+      link.addEventListener('click', enterGuestNav)
     }
 
     container.appendChild(link)

@@ -15,7 +15,7 @@
     <header
       class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_94%,transparent)] px-4 py-2 backdrop-blur sm:px-6 lg:px-8">
       <a href="./index.html" class="flex items-center gap-3" aria-label="Skills4Export home">
-        <img loading="eager" decoding="async" fetchpriority="high" src="./assets/logo_1.svg" alt="Skills4Export logo"
+        <img id="landing-logo" loading="eager" decoding="async" fetchpriority="high" src="./assets/logo_1.svg" alt="Skills4Export logo"
           class="h-12 w-auto object-contain sm:h-14">
       </a>
 
@@ -109,9 +109,9 @@
       </main>
 
       <footer class="mx-auto w-full max-w-[96rem] px-2 py-4 text-sm text-[var(--text-secondary)] sm:px-6 lg:px-8">
-        <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-          <div id="footer-links" class="flex flex-wrap justify-center gap-x-5 gap-y-2 sm:justify-start"></div>
-          <p class="text-center text-[var(--text-secondary)] sm:text-right">&copy; 2026 Skills4Export</p>
+        <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-center">
+          <div id="footer-links" class="contents"></div>
+          <p class="text-[var(--text-secondary)]">&copy; 2026 Skills4Export</p>
         </div>
       </footer>
     </div>
@@ -127,6 +127,8 @@
       function applyTheme(mode) {
         document.documentElement.dataset.theme = mode
         document.documentElement.style.colorScheme = mode
+        const logo = document.getElementById('landing-logo')
+        if (logo) logo.setAttribute('src', mode === 'dark' ? './assets/logo_2.png' : './assets/logo_1.svg')
         const btn = document.getElementById('theme-toggle')
         const icon = document.getElementById('theme-toggle-icon')
         if (btn && icon) {

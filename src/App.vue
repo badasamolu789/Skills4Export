@@ -35,6 +35,7 @@ const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const router = useRouter()
 const isMobileSidebarOpen = ref(false)
+const guestPromptTimer = ref<number | null>(null)
 
 const currentUser = useCurrentUserIdentity()
 const isLoadingCurrentUserProfile = ref(false)
@@ -58,6 +59,7 @@ const userMenu = computed(() => [
 ])
 
 const { resolvedTheme } = useTheme()
+const appLogoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_2.png' : '/logo_1.svg')
 
 const toasterTheme = computed(() => resolvedTheme.value)
 const toasterOptions = {
@@ -185,6 +187,54 @@ const handleSessionExpired = (event: Event) => {
   }
 }
 
+const clearGuestPromptTimer = () => {
+  if (guestPromptTimer.value !== null) {
+    window.clearTimeout(guestPromptTimer.value)
+    guestPromptTimer.value = null
+  }
+}
+
+const isLandingGuestSession = () =>
+  typeof window !== 'undefined' &&
+  window.sessionStorage.getItem('skills4export-landing-guest') === 'true'
+
+const promptGuestToAuthenticate = () => {
+  if (authStore.isAuthenticated || !isLandingGuestSession()) {
+    return
+  }
+
+  window.sessionStorage.setItem('skills4export-guest-auth-prompted', 'true')
+
+  toast.info('Join Skills4Export', {
+    description: 'Create an account or sign in to keep exploring with your full profile.',
+    duration: 15000,
+    action: {
+      label: 'Sign in',
+      onClick: () => {
+        void router.push({
+          path: '/auth/login',
+          query: { redirect: route.fullPath },
+        })
+      },
+    },
+  })
+}
+
+const scheduleGuestAuthPrompt = () => {
+  clearGuestPromptTimer()
+
+  if (
+    authStore.isAuthenticated ||
+    currentLayout.value !== 'app' ||
+    !isLandingGuestSession() ||
+    window.sessionStorage.getItem('skills4export-guest-auth-prompted') === 'true'
+  ) {
+    return
+  }
+
+  guestPromptTimer.value = window.setTimeout(promptGuestToAuthenticate, 2 * 60 * 1000)
+}
+
 const reloadCurrentRoute = async () => {
   appStore.clearNetworkIssue()
   await router.replace({
@@ -201,9 +251,11 @@ onMounted(() => {
   window.addEventListener('offline', handleOffline)
   window.addEventListener('online', handleOnline)
   window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
+  scheduleGuestAuthPrompt()
 })
 
 onBeforeUnmount(() => {
+  clearGuestPromptTimer()
   window.removeEventListener('offline', handleOffline)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
@@ -264,6 +316,13 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => [route.fullPath, currentLayout.value, authStore.isAuthenticated] as const,
+  () => {
+    scheduleGuestAuthPrompt()
+  },
+)
+
 const handleMenuAction = async (action: 'logout') => {
   if (action !== 'logout') {
     return
@@ -309,7 +368,7 @@ const handleMenuAction = async (action: 'logout') => {
       v-if="showHeader"
       @open-sidebar="isMobileSidebarOpen = true"
       @menu-action="handleMenuAction"
-      logo-src="/logo_1.svg"
+      :logo-src="appLogoSrc"
       logo-alt="Skills4Export logo"
       platform-name="Skills4Export"
       :links="headerLinks"

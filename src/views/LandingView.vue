@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { Sun, Moon } from 'lucide-vue-next'
 import { useTheme } from '@/composables/useTheme'
+import type { RouteLocationRaw } from 'vue-router'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
@@ -17,6 +18,7 @@ const authStore = useAuthStore()
 const isRedirectingToGoogle = ref(false)
 
 const { resolvedTheme, setTheme } = useTheme()
+const logoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_2.png' : '/logo_1.svg')
 
 const toggleTheme = () => {
   const next = resolvedTheme.value === 'dark' ? 'light' : 'dark'
@@ -61,9 +63,13 @@ const redirectQuery = computed(() =>
     : {},
 )
 
-const handleProtectedNav = (
+const startGuestSession = () => {
+  window.sessionStorage.setItem('skills4export-landing-guest', 'true')
+  window.sessionStorage.removeItem('skills4export-guest-auth-prompted')
+}
+
+const handleGuestNav = (
   event: MouseEvent,
-  target: string,
   navigate: (event?: MouseEvent) => void,
 ) => {
   if (authStore.isAuthenticated) {
@@ -71,15 +77,24 @@ const handleProtectedNav = (
     return
   }
 
-  event.preventDefault()
-  toast.info('Sign in required', {
-    description: 'Please log in or create an account to view that page.',
-  })
-  router.push({
-    path: '/auth/login',
-    query: { redirect: target },
-  })
+  startGuestSession()
+  navigate(event)
 }
+
+const handleFooterNav = (
+  event: MouseEvent,
+  requiresAuth: boolean,
+  navigate: (event?: MouseEvent) => void,
+) => {
+  if (requiresAuth) {
+    handleGuestNav(event, navigate)
+    return
+  }
+
+  navigate(event)
+}
+
+const getFooterTarget = (to: RouteLocationRaw | '') => to || '/'
 
 const signUpWithGoogle = async () => {
   if (isRedirectingToGoogle.value) {
@@ -131,7 +146,7 @@ const signUpWithGoogle = async () => {
   <section class="min-h-screen bg-[var(--landing-bg)] text-[var(--landing-text)]">
     <header class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_94%,transparent)] px-4 py-2 shadow-[var(--shadow-soft)] backdrop-blur sm:px-6 lg:px-8">
       <RouterLink to="/" class="flex items-center gap-3" aria-label="Skills4Export home">
-        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-12 w-auto object-contain sm:h-14" />
+        <img loading="eager" decoding="async" fetchpriority="high" :src="logoSrc" alt="Skills4Export logo" class="h-12 w-auto object-contain sm:h-14" />
       </RouterLink>
 
       <nav class="hidden min-w-0 flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--landing-muted)] lg:flex" aria-label="Landing navigation">
@@ -145,7 +160,7 @@ const signUpWithGoogle = async () => {
           <a
             :href="href"
             class="rounded-full px-2.5 py-2 transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] xl:px-3"
-            @click="handleProtectedNav($event, item.to, navigate)"
+            @click="handleGuestNav($event, navigate)"
           >
             {{ item.label }}
           </a>
@@ -248,25 +263,23 @@ const signUpWithGoogle = async () => {
       </main>
 
       <footer class="mx-auto w-full max-w-[96rem] px-2 py-4 text-sm text-[var(--text-secondary)] sm:px-6 lg:px-8">
-        <div class="flex flex-col items-center gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
-          <div class="flex flex-wrap justify-center gap-x-5 gap-y-2 sm:justify-start">
+        <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-center">
             <RouterLink
               v-for="item in footerLinks"
               :key="item.label"
-              :to="item.to || '/'"
+              :to="getFooterTarget(item.to)"
               custom
               v-slot="{ href, navigate }"
             >
               <a
                 :href="href"
                 class="transition hover:text-[var(--accent-strong)]"
-                @click="item.requiresAuth ? handleProtectedNav($event, href, navigate) : navigate($event)"
+                @click="handleFooterNav($event, item.requiresAuth, navigate)"
               >
                 {{ item.label }}
               </a>
             </RouterLink>
-          </div>
-          <p class="text-center text-[var(--text-secondary)] sm:text-right">© 2026 Skills4Export</p>
+          <p class="text-[var(--text-secondary)]">© 2026 Skills4Export</p>
         </div>
       </footer>
     </div>

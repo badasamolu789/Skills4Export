@@ -484,6 +484,14 @@ const getStoredAuthToken = () => {
   return window.localStorage.getItem('skills4export-auth-token') ?? ''
 }
 
+const hasActiveLandingGuestSession = () => {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.sessionStorage.getItem('skills4export-landing-guest') === 'true'
+}
+
 router.beforeEach((to) => {
   const isAuthenticated = Boolean(getStoredAuthToken())
   const onboardingRequired = isAuthenticated && getStoredOnboardingRequired()
@@ -498,7 +506,7 @@ router.beforeEach((to) => {
     return '/feed'
   }
 
-  if (to.meta.requiresAuth && !isAuthenticated) {
+  if (to.meta.requiresAuth && !isAuthenticated && !hasActiveLandingGuestSession()) {
     return {
       name: 'login',
       query: {
