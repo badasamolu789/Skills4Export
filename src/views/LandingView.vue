@@ -6,7 +6,8 @@ import type { RouteLocationRaw } from 'vue-router'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
-import combinedScreenImage from '@/assets/combined_screen.png'
+import combinedScreenDarkImage from '@/assets/combine_img(dark_screen).png'
+import combinedScreenLightImage from '@/assets/combine_img(white_screen).png'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
@@ -19,6 +20,9 @@ const isRedirectingToGoogle = ref(false)
 
 const { resolvedTheme, setTheme } = useTheme()
 const logoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_2.png' : '/logo_1.svg')
+const combinedScreenImage = computed(
+  () => resolvedTheme.value === 'dark' ? combinedScreenDarkImage : combinedScreenLightImage,
+)
 
 const toggleTheme = () => {
   const next = resolvedTheme.value === 'dark' ? 'light' : 'dark'

@@ -690,11 +690,11 @@ onMounted(() => {
           </button>
         </div>
 
-        <RouterLink to="/feed" class="flex min-w-0 items-center justify-center justify-self-center">
+          <RouterLink to="/feed" class="flex min-w-0 items-center justify-center justify-self-center">
           <img loading="lazy" decoding="async"
             :src="logoSrc"
             :alt="logoAlt"
-            class="h-[2.55rem] w-auto max-w-[12.75rem] object-contain"
+            class="h-12 w-auto object-contain sm:h-14"
           />
         </RouterLink>
 
@@ -811,7 +811,7 @@ onMounted(() => {
           <img loading="lazy" decoding="async"
             :src="logoSrc"
             :alt="logoAlt"
-            class="h-[3.2rem] w-auto object-contain sm:h-16 lg:h-11"
+            class="h-12 w-auto object-contain sm:h-14"
           />
         </RouterLink>
 
