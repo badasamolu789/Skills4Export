@@ -373,12 +373,6 @@ const handleAvatarFileChange = async (event: Event) => {
 
     avatarFile.value = result.file
     avatarPreviewUrl.value = URL.createObjectURL(result.file)
-
-    if (result.wasOptimized) {
-      toast.success('Image prepared for upload', {
-        description: 'The image was compressed so the page can upload faster.',
-      })
-    }
   } catch {
     if (avatarPreviewUrl.value) {
       URL.revokeObjectURL(avatarPreviewUrl.value)

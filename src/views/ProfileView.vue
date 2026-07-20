@@ -2390,8 +2390,16 @@ const editModalTitle = computed(() => {
           </template>
           <div
             v-if="!isLoadingFollowers && followerAccounts.length === 0"
-            class="min-h-28 rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)]"
-          />
+            class="flex min-h-36 flex-col items-center justify-center rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-8 text-center"
+          >
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+              <UserPlus class="h-5 w-5" />
+            </span>
+            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">No followers yet.</p>
+            <p class="mt-1 max-w-sm text-xs leading-5 text-[var(--text-secondary)]">
+              People who follow you will appear here.
+            </p>
+          </div>
         </template>
 
         <template v-else>
@@ -2430,9 +2438,15 @@ const editModalTitle = computed(() => {
           </div>
           <div
             v-if="following.length === 0"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+            class="flex min-h-36 flex-col items-center justify-center rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-8 text-center"
           >
-            You are not following anyone yet.
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+              <UserCheck class="h-5 w-5" />
+            </span>
+            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">No following yet.</p>
+            <p class="mt-1 max-w-sm text-xs leading-5 text-[var(--text-secondary)]">
+              People you follow will appear here.
+            </p>
           </div>
         </template>
       </div>
@@ -2465,6 +2479,9 @@ const editModalTitle = computed(() => {
         <label class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Skill name</span>
           <input v-model="editSkillForm.skill" type="text" class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]" />
+          <span class="block text-xs leading-5 text-[var(--text-secondary)]">
+            You can add one skill at a time. To add multiple skills, separate each skill with a comma.
+          </span>
         </label>
         <label class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Level</span>

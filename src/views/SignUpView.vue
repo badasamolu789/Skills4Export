@@ -39,9 +39,6 @@ const continueSignUp = async () => {
 
   isSubmitting.value = true
   clearFieldErrors()
-  const loadingToastId = toast.loading('Creating your account...', {
-    description: 'Please wait while we send your verification code.',
-  })
 
   authStore.signUpDraft.name = form.value.name
   authStore.signUpDraft.email = form.value.email
@@ -54,16 +51,6 @@ const continueSignUp = async () => {
   authStore.signUpDraft.verificationSentAt = ''
 
   try {
-    const response = await authService.sendRegistrationOtp(form.value.email)
-
-    authStore.signUpDraft.verificationSentAt = new Date().toISOString()
-
-    toast.success('Verification code sent', {
-      id: loadingToastId,
-      description:
-        response.message || 'Check your email for the OTP to continue. Redirecting now.',
-    })
-
     router.push('/auth/signup/details')
   } catch (error) {
     const message =
@@ -74,7 +61,6 @@ const continueSignUp = async () => {
     setApiFieldErrors(error)
 
     toast.error('Sign up failed', {
-      id: loadingToastId,
       description: message,
     })
   } finally {
@@ -249,7 +235,7 @@ const signUpWithGoogle = async () => {
           :disabled="isSubmitting"
           class="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-(--accent) text-sm font-semibold text-white transition hover:bg-(--accent-strong) sm:h-13 sm:text-base"
         >
-          {{ isSubmitting ? 'Sending verification...' : 'Continue to details' }}
+          {{ isSubmitting ? 'Saving details...' : 'Continue to details' }}
         </button>
 
         <div class="flex items-center gap-4 pt-1">

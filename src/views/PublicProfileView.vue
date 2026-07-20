@@ -952,9 +952,15 @@ watch(
 
           <div
             v-if="followerAccounts.length === 0"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+            class="flex min-h-36 flex-col items-center justify-center rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-8 text-center"
           >
-            No followers yet.
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+              <UserPlus class="h-5 w-5" />
+            </span>
+            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">No followers yet.</p>
+            <p class="mt-1 max-w-sm text-xs leading-5 text-[var(--text-secondary)]">
+              People who follow this profile will appear here.
+            </p>
           </div>
         </template>
 
@@ -1005,9 +1011,15 @@ watch(
           </div>
           <div
             v-if="following.length === 0"
-            class="rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] px-4 py-8 text-center text-sm text-[var(--text-secondary)]"
+            class="flex min-h-36 flex-col items-center justify-center rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-8 text-center"
           >
-            No following profiles yet.
+            <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">
+              <UserCheck class="h-5 w-5" />
+            </span>
+            <p class="mt-3 text-sm font-semibold text-[var(--text-primary)]">No following yet.</p>
+            <p class="mt-1 max-w-sm text-xs leading-5 text-[var(--text-secondary)]">
+              Profiles this member follows will appear here.
+            </p>
           </div>
         </template>
       </div>

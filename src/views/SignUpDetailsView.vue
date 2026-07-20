@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { NIGERIA_COUNTRY, nigeriaStates } from '@/data/locations'
 import { ApiError } from '@/lib/api'
+import { authService } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
 
@@ -39,8 +40,7 @@ const canAccessDetails = computed(() => {
     authStore.signUpDraft.name &&
       authStore.signUpDraft.email &&
       authStore.signUpDraft.password &&
-      authStore.signUpDraft.acceptedTerms &&
-      authStore.signUpDraft.verificationSentAt,
+      authStore.signUpDraft.acceptedTerms,
   )
 })
 
@@ -118,6 +118,7 @@ const submitDetails = async () => {
   }
 
   isSubmitting.value = true
+  let loadingToastId: string | number | undefined
 
   try {
     persistDraftDetails()
@@ -138,14 +139,27 @@ const submitDetails = async () => {
       return
     }
 
+    loadingToastId = toast.loading('Sending verification code...', {
+      description: 'Please wait while we request your OTP.',
+    })
+    const response = await authService.sendRegistrationOtp(authStore.signUpDraft.email)
+    authStore.signUpDraft.verificationCode = ''
+    authStore.signUpDraft.verificationSentAt = new Date().toISOString()
+
+    toast.success('Verification code sent', {
+      id: loadingToastId,
+      description: response.message || 'Check your email for the OTP to continue.',
+    })
+
     router.push('/auth/signup/verify')
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
         ? error.message
-        : 'We could not save your details. Please try again.'
+        : 'We could not continue to verification. Please try again.'
 
-    toast.error('Setup details not saved', {
+    toast.error('Verification code not sent', {
+      id: loadingToastId,
       description: message,
     })
   } finally {
@@ -324,7 +338,7 @@ const submitDetails = async () => {
         :disabled="!canSubmit || isSubmitting"
         class="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
       >
-        {{ isSubmitting ? 'Saving details...' : isGoogleOnboarding ? 'Finish setup' : 'Continue to verification' }}
+        {{ isSubmitting ? (isGoogleOnboarding ? 'Saving details...' : 'Sending verification...') : isGoogleOnboarding ? 'Finish setup' : 'Continue to verification' }}
       </button>
     </form>
   </AuthShell>

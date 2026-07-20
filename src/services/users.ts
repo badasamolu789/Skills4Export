@@ -341,7 +341,7 @@ const toApiSkillLevel = (value: unknown): string | undefined => {
   }
 
   const normalized = value.trim().toLowerCase()
-  return normalized === 'expert' ? 'advanced' : normalized
+  return normalized === 'advanced' ? 'expert' : normalized
 }
 
 export const normalizeUserSkill = (skill: unknown): UserSkill => {

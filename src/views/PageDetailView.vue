@@ -671,12 +671,6 @@ const handleEditAvatarFileChange = async (event: Event) => {
     clearEditAvatarSelection()
     editAvatarFile.value = result.file
     editAvatarPreviewUrl.value = URL.createObjectURL(result.file)
-
-    if (result.wasOptimized) {
-      toast.success('Image prepared for upload', {
-        description: 'The image was compressed so the page can upload faster.',
-      })
-    }
   } catch {
     clearEditAvatarSelection()
     editAvatarFile.value = file

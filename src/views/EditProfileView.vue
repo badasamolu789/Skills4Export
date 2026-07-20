@@ -1973,6 +1973,9 @@ const addExperienceFromModal = async () => {
             <div class="space-y-2">
               <label class="text-sm font-semibold text-[var(--text-primary)]">Skill name</label>
               <SkillPillInput v-model="newSkill.skill" placeholder="e.g., JavaScript, Python, Design..." />
+              <p class="text-xs leading-5 text-[var(--text-secondary)]">
+                You can add one skill at a time. To add multiple skills, separate each skill with a comma.
+              </p>
             </div>
 
             <div class="space-y-2">
@@ -2413,6 +2416,9 @@ const addExperienceFromModal = async () => {
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">Skill name</span>
         <SkillPillInput v-model="newSkill.skill" placeholder="e.g., JavaScript, Python, Design..." />
+        <span class="mt-2 block text-xs leading-5 text-[var(--text-secondary)]">
+          You can add one skill at a time. To add multiple skills, separate each skill with a comma.
+        </span>
       </label>
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">Level</span>

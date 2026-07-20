@@ -183,7 +183,7 @@ const sidebarCommunityLinks = computed(() =>
       label: community.name,
       iconClass: getCommunityLineAwesomeClass(community),
       to: getSpecialCommunityPath(community) || `/communities/${community.id}`,
-      target: getSpecialCommunityPath(community) ? undefined : '_blank',
+      target: '_blank',
     }))
     .sort((first, second) => first.label.localeCompare(second.label)),
 )
