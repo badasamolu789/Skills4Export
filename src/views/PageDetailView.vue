@@ -9,9 +9,13 @@ import {
   Edit3,
   ExternalLink,
   Image as ImageIcon,
+  Loader2,
   MoreVertical,
   PenLine,
   UploadCloud,
+  UserCheck,
+  UserPlus,
+  Users,
   Video,
   X,
 } from 'lucide-vue-next'
@@ -25,10 +29,13 @@ import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { jobsService, type JobRecord } from '@/services/jobs'
 import { mediaService } from '@/services/media'
-import { pagesService } from '@/services/pages'
+import { getUploadedPageAvatarUrl, pagesService } from '@/services/pages'
 import { postsService, type PostMediaRecord, type PostRecord } from '@/services/posts'
+import { usersService, type UserRecord } from '@/services/users'
 import { usePagesStore } from '@/stores/pages'
 import { useAuthStore } from '@/stores/auth'
+import { getDisplayName, getInitialsFromName } from '@/utils/displayName'
+import { optimizeImageFile, optimizePageAvatarFile } from '@/utils/imageOptimization'
 import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
 
 type PageTab = 'about' | 'posts' | 'photos' | 'jobs' | 'dates'
@@ -53,6 +60,16 @@ type PageUploadItem = {
   mediaType: 'image' | 'video'
 }
 
+type PageFollowerRecord = {
+  id: string
+  pageId: string
+  userId: string
+  role: string
+  createdAt: string
+  user: UserRecord | null
+  isFollowing: boolean
+}
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
@@ -71,6 +88,11 @@ const isPagePostModalOpen = ref(false)
 const isSubmittingPagePost = ref(false)
 const isInternshipModalOpen = ref(false)
 const isUploadModalOpen = ref(false)
+const isFollowersModalOpen = ref(false)
+const isLoadingPageFollowers = ref(false)
+const pageFollowersError = ref('')
+const pageFollowers = ref<PageFollowerRecord[]>([])
+const isTogglingFollowerUser = ref<Record<string, boolean>>({})
 const isUploadingPageMedia = ref(false)
 const uploadFileInput = ref<HTMLInputElement | null>(null)
 const uploadFile = ref<File | null>(null)
@@ -88,6 +110,7 @@ const pagePostFilePreviewUrl = ref('')
 const agreedToPagePostTerms = ref(false)
 const internshipRows = ref<InternshipDateRow[]>([])
 const internshipDraftRows = ref<InternshipDateRow[]>([])
+const PAGE_AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const editBusinessForm = ref({
   name: '',
   slogan: '',
@@ -109,6 +132,7 @@ const editStudentForm = ref({
 const editAvatarFile = ref<File | null>(null)
 const editAvatarPreviewUrl = ref('')
 const editAvatarFileInput = ref<HTMLInputElement | null>(null)
+const isOptimizingEditAvatar = ref(false)
 const isUpdatingPageFollow = ref(false)
 
 const POST_IMAGE_MAX_BYTES = 5 * 1024 * 1024
@@ -409,21 +433,23 @@ const openPagePostModal = () => {
   isPagePostModalOpen.value = true
 }
 
-const handlePagePostFileChange = (event: Event) => {
+const handlePagePostFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
 
   if (file?.type.startsWith('image/')) {
-    if (!POST_IMAGE_ALLOWED_TYPES.has(file.type)) {
+    if (!POST_IMAGE_ALLOWED_TYPES.has(file.type) && file.type !== 'image/webp') {
       toast.error('Unsupported post image format', {
-        description: 'Use PNG, JPG, JPEG, or GIF for post images.',
+        description: 'Use PNG, JPG, JPEG, WebP, or GIF for post images.',
       })
       target.value = ''
       pagePostFile.value = null
       return
     }
 
-    if (file.size > POST_IMAGE_MAX_BYTES) {
+    const uploadFile = file.type === 'image/gif' ? file : (await optimizeImageFile(file)).file
+
+    if (uploadFile.size > POST_IMAGE_MAX_BYTES) {
       toast.error('Post image is too large', {
         description: 'Post images must be 5 MB or smaller.',
       })
@@ -431,6 +457,9 @@ const handlePagePostFileChange = (event: Event) => {
       pagePostFile.value = null
       return
     }
+
+    pagePostFile.value = uploadFile
+    return
   }
 
   pagePostFile.value = file
@@ -472,7 +501,7 @@ const openUploadModal = () => {
   isUploadModalOpen.value = true
 }
 
-const selectUploadFile = (file?: File | null) => {
+const selectUploadFile = async (file?: File | null) => {
   if (!file) {
     return
   }
@@ -482,19 +511,23 @@ const selectUploadFile = (file?: File | null) => {
     return
   }
 
+  const optimizedFile = file.type.startsWith('image/')
+    ? (await optimizeImageFile(file)).file
+    : file
+
   clearUploadSelection()
-  uploadFile.value = file
-  uploadFileName.value = file.name
-  uploadPreviewUrl.value = URL.createObjectURL(file)
+  uploadFile.value = optimizedFile
+  uploadFileName.value = optimizedFile.name
+  uploadPreviewUrl.value = URL.createObjectURL(optimizedFile)
 }
 
 const handleUploadFileChange = (event: Event) => {
   const input = event.target as HTMLInputElement
-  selectUploadFile(input.files?.[0])
+  void selectUploadFile(input.files?.[0])
 }
 
 const handleUploadDrop = (event: DragEvent) => {
-  selectUploadFile(event.dataTransfer?.files?.[0])
+  void selectUploadFile(event.dataTransfer?.files?.[0])
 }
 
 const submitPageUpload = async () => {
@@ -615,11 +648,11 @@ const clearEditAvatarSelection = () => {
   }
 }
 
-const handleEditAvatarFileChange = (event: Event) => {
+const handleEditAvatarFileChange = async (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0] ?? null
 
-  if (!file?.type.startsWith('image/')) {
-    toast.error('Choose an image file.')
+  if (!file || !PAGE_AVATAR_ALLOWED_TYPES.has(file.type)) {
+    toast.error('Choose a JPG, PNG, or WebP image.')
     clearEditAvatarSelection()
     return
   }
@@ -630,9 +663,27 @@ const handleEditAvatarFileChange = (event: Event) => {
     return
   }
 
-  clearEditAvatarSelection()
-  editAvatarFile.value = file
-  editAvatarPreviewUrl.value = URL.createObjectURL(file)
+  isOptimizingEditAvatar.value = true
+
+  try {
+    const result = await optimizePageAvatarFile(file)
+
+    clearEditAvatarSelection()
+    editAvatarFile.value = result.file
+    editAvatarPreviewUrl.value = URL.createObjectURL(result.file)
+
+    if (result.wasOptimized) {
+      toast.success('Image prepared for upload', {
+        description: 'The image was compressed so the page can upload faster.',
+      })
+    }
+  } catch {
+    clearEditAvatarSelection()
+    editAvatarFile.value = file
+    editAvatarPreviewUrl.value = URL.createObjectURL(file)
+  } finally {
+    isOptimizingEditAvatar.value = false
+  }
 }
 
 const getEditMetadata = () => {
@@ -658,8 +709,192 @@ const getEditMetadata = () => {
   }
 }
 
+const waitForPersistedPageAvatar = async (
+  pageId: string,
+  previousAvatar = '',
+  fallbackUrl = '',
+) => {
+  const maxAttempts = 8
+  const delayMs = 2500
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const refreshedPage = await pagesStore.loadPage(pageId)
+    const nextAvatar = refreshedPage?.avatar || ''
+
+    if (nextAvatar && nextAvatar !== previousAvatar) {
+      return {
+        url: nextAvatar,
+        persisted: true,
+      }
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
+  return {
+    url: fallbackUrl,
+    persisted: false,
+  }
+}
+
+const readStringField = (source: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = source[key]
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
+}
+
+const normalizePageFollower = (record: Record<string, unknown>, user: UserRecord | null): PageFollowerRecord => ({
+  id: readStringField(record, ['id', 'uuid']),
+  pageId: readStringField(record, ['page_id', 'pageId']),
+  userId: readStringField(record, ['user_id', 'userId']),
+  role: readStringField(record, ['role']) || 'follower',
+  createdAt: readStringField(record, ['created_at', 'createdAt', 'updated_at', 'updatedAt']),
+  user,
+  isFollowing: false,
+})
+
+const followerUserName = (follower: PageFollowerRecord) =>
+  getDisplayName(
+    typeof follower.user?.name === 'string' ? follower.user.name : '',
+    typeof follower.user?.username === 'string' ? follower.user.username : '',
+  ) || `User ${follower.userId.slice(0, 8)}`
+
+const followerUserAvatar = (follower: PageFollowerRecord) => {
+  const user = follower.user as (UserRecord & {
+    avatar?: string | null
+    avatarUrl?: string | null
+    avatar_url?: string | null
+    profile?: {
+      avatar?: string | null
+      avatarUrl?: string | null
+      avatar_url?: string | null
+    } | null
+  }) | null
+
+  return user?.avatar || user?.avatarUrl || user?.avatar_url || user?.profile?.avatar || user?.profile?.avatarUrl || user?.profile?.avatar_url || ''
+}
+
+const followerUserMeta = (follower: PageFollowerRecord) => {
+  const user = follower.user as (UserRecord & {
+    profile?: {
+      bio?: string | null
+      headline?: string | null
+      displayName?: string | null
+    } | null
+  }) | null
+  const username = typeof user?.username === 'string' && user.username.trim() ? `@${user.username.trim()}` : ''
+  const bio = user?.profile?.bio || user?.profile?.headline || ''
+
+  return username || bio || (follower.createdAt ? `Followed ${new Date(follower.createdAt).toLocaleDateString()}` : 'Page follower')
+}
+
+const loadPageFollowers = async () => {
+  if (!page.value?.id || isLoadingPageFollowers.value) {
+    return
+  }
+
+  isLoadingPageFollowers.value = true
+  pageFollowersError.value = ''
+
+  try {
+    const response = await pagesService.listPageFollowers(page.value.id, { per_page: 100 }, authStore.authToken)
+    const rawFollowers = Array.isArray(response.data) ? response.data : []
+    const followers = await Promise.all(
+      rawFollowers.map(async (item) => {
+        const record = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+        const userId = readStringField(record, ['user_id', 'userId'])
+        let user: UserRecord | null = null
+        let isFollowing = false
+
+        if (userId) {
+          try {
+            const userResponse = await usersService.getUser(userId, authStore.authToken)
+            user = userResponse.data ?? null
+          } catch {
+            user = null
+          }
+
+          if (authStore.userId && userId !== authStore.userId) {
+            try {
+              const statusResponse = await usersService.getUserFollowStatus(userId, authStore.authToken)
+              isFollowing = Boolean(statusResponse.data?.following ?? statusResponse.data?.is_following)
+            } catch {
+              isFollowing = false
+            }
+          }
+        }
+
+        return {
+          ...normalizePageFollower(record, user),
+          isFollowing,
+        }
+      }),
+    )
+
+    pageFollowers.value = followers.filter((follower) => follower.userId)
+  } catch (error) {
+    pageFollowersError.value = error instanceof Error ? error.message : 'Unable to load page followers.'
+  } finally {
+    isLoadingPageFollowers.value = false
+  }
+}
+
+const openFollowersModal = () => {
+  isFollowersModalOpen.value = true
+  void loadPageFollowers()
+}
+
+const toggleFollowerUser = async (follower: PageFollowerRecord) => {
+  if (!authStore.isAuthenticated) {
+    await router.push({
+      path: '/auth/login',
+      query: { redirect: route.fullPath },
+    })
+    return
+  }
+
+  if (!authStore.userId) {
+    toast.error('Unable to update follow status because your session is missing a user id.')
+    return
+  }
+
+  if (follower.userId === authStore.userId) {
+    toast.info('This is your account.')
+    return
+  }
+
+  isTogglingFollowerUser.value[follower.userId] = true
+
+  try {
+    if (follower.isFollowing) {
+      await usersService.unfollowUser(follower.userId, authStore.authToken)
+    } else {
+      await usersService.followUser(follower.userId, { followerId: authStore.userId }, authStore.authToken)
+    }
+
+    const nextFollowing = !follower.isFollowing
+    pageFollowers.value = pageFollowers.value.map((item) =>
+      item.userId === follower.userId
+        ? { ...item, isFollowing: nextFollowing }
+        : item,
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to update this follower.'
+    toast.error('Follow action failed', { description: message })
+  } finally {
+    isTogglingFollowerUser.value[follower.userId] = false
+  }
+}
+
 const savePageEdit = async () => {
-  if (!page.value || isSavingPage.value) {
+  if (!page.value || isSavingPage.value || isOptimizingEditAvatar.value) {
     return
   }
 
@@ -693,16 +928,20 @@ const savePageEdit = async () => {
 
     if (editAvatarFile.value) {
       toast.loading('Uploading page image...', { id: toastId })
+      const previousAvatar = page.value.avatar || ''
       const uploadResponse = await pagesService.uploadPageAvatarFile(pageId, editAvatarFile.value, authStore.authToken)
-      const refreshedPage = await pagesStore.loadPage(pageId)
-      const processedUrl =
-        uploadResponse.data.avatar ||
-        uploadResponse.data.page?.avatar ||
-        uploadResponse.data.url ||
-        ''
+      const uploadUrl = getUploadedPageAvatarUrl(uploadResponse)
+      const avatarResult = await waitForPersistedPageAvatar(pageId, previousAvatar, uploadUrl)
+      const processedUrl = avatarResult.url
 
-      if (!refreshedPage?.avatar || (processedUrl && refreshedPage.avatar !== processedUrl)) {
+      if (processedUrl) {
+        pagesStore.updatePageAvatar(pageId, processedUrl)
+      }
+
+      if (!processedUrl) {
         avatarPersistenceWarning = 'The page image upload finished, but the saved page record did not return the uploaded image.'
+      } else if (!avatarResult.persisted) {
+        avatarPersistenceWarning = 'The page image uploaded, but the saved page record is still catching up. It should settle shortly.'
       }
     }
 
@@ -1021,7 +1260,13 @@ watch(pagePostFile, (file, previousFile) => {
                 {{ pageMetaLine || pageTypeLabel }}
               </p>
               <p class="mt-1 text-sm font-semibold text-[var(--text-secondary)]">
-                {{ page.followers }} {{ page.followers === 1 ? 'follower' : 'followers' }}
+                <button
+                  type="button"
+                  class="rounded-md text-left transition hover:text-[var(--accent-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                  @click="openFollowersModal"
+                >
+                  {{ page.followers }} {{ page.followers === 1 ? 'follower' : 'followers' }}
+                </button>
                 <span class="mx-2 text-[var(--text-tertiary)]">|</span>
                 {{ page.posts }} {{ page.posts === 1 ? 'post' : 'posts' }}
               </p>
@@ -1308,6 +1553,113 @@ watch(pagePostFile, (file, previousFile) => {
   </section>
 
   <ResponsiveOverlay
+    v-model="isFollowersModalOpen"
+    label="Page followers"
+    :title="page ? `${page.name} followers` : 'Page followers'"
+    max-width-class="sm:max-w-2xl"
+  >
+    <section class="space-y-4">
+      <div
+        v-if="isLoadingPageFollowers"
+        class="space-y-3"
+        aria-live="polite"
+      >
+        <div
+          v-for="item in 4"
+          :key="item"
+          class="flex animate-pulse items-center justify-between gap-4 rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
+        >
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="h-12 w-12 rounded-full bg-[var(--surface-muted)]" />
+            <div class="min-w-0 space-y-2">
+              <div class="h-4 w-40 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-3 w-28 rounded-full bg-[var(--surface-muted)]" />
+            </div>
+          </div>
+          <div class="h-9 w-24 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+        </div>
+      </div>
+
+      <div
+        v-else-if="pageFollowersError"
+        class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-7 text-center"
+      >
+        <p class="text-base font-semibold text-[var(--text-primary)]">Followers could not load</p>
+        <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{{ pageFollowersError }}</p>
+        <button
+          type="button"
+          class="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+          @click="loadPageFollowers"
+        >
+          <Loader2 v-if="isLoadingPageFollowers" class="h-4 w-4 animate-spin" />
+          Retry
+        </button>
+      </div>
+
+      <div
+        v-else-if="!pageFollowers.length"
+        class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center"
+      >
+        <Users class="mx-auto h-11 w-11 text-[var(--text-tertiary)]" />
+        <p class="mt-4 text-lg font-semibold text-[var(--text-primary)]">You have no followers yet</p>
+        <p class="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+          When people follow this page, they will appear here.
+        </p>
+      </div>
+
+      <div v-else class="space-y-3">
+        <article
+          v-for="follower in pageFollowers"
+          :key="follower.id || follower.userId"
+          class="flex items-center justify-between gap-3 rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
+        >
+          <RouterLink
+            :to="`/profile/view/${follower.userId}`"
+            class="flex min-w-0 flex-1 items-center gap-3 transition hover:text-[var(--accent-strong)]"
+          >
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-sm font-semibold text-[var(--accent-strong)]">
+              <img
+                v-if="followerUserAvatar(follower)"
+                :src="followerUserAvatar(follower)"
+                :alt="followerUserName(follower)"
+                class="h-full w-full object-cover"
+                loading="lazy"
+                decoding="async"
+              />
+              <span v-else>{{ getInitialsFromName(followerUserName(follower), 'UF') }}</span>
+            </span>
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-semibold text-[var(--text-primary)]">
+                {{ followerUserName(follower) }}
+              </span>
+              <span class="block truncate text-xs text-[var(--text-secondary)]">
+                {{ followerUserMeta(follower) }}
+              </span>
+            </span>
+          </RouterLink>
+
+          <button
+            v-if="follower.userId !== authStore.userId"
+            type="button"
+            :disabled="Boolean(isTogglingFollowerUser[follower.userId])"
+            class="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-[0.75rem] px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+            :class="
+              follower.isFollowing
+                ? 'border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:border-red-200 hover:text-red-500'
+                : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
+            "
+            @click="toggleFollowerUser(follower)"
+          >
+            <Loader2 v-if="isTogglingFollowerUser[follower.userId]" class="h-4 w-4 animate-spin" />
+            <component v-else :is="follower.isFollowing ? UserCheck : UserPlus" class="h-4 w-4" />
+            {{ follower.isFollowing ? 'Unfollow' : 'Follow' }}
+          </button>
+        </article>
+      </div>
+    </section>
+  </ResponsiveOverlay>
+
+  <ResponsiveOverlay
     v-model="isInternshipModalOpen"
     label="Internship dates"
     title="Post Internship/IT dates"
@@ -1503,17 +1855,17 @@ watch(pagePostFile, (file, previousFile) => {
             {{ page.category === 'student' ? 'Upload Passport' : 'Upload Logo' }}
           </button>
           <p class="text-sm text-[var(--text-secondary)]">Maximum file size: 10 MB.</p>
-          <input ref="editAvatarFileInput" type="file" accept="image/*" class="sr-only" @change="handleEditAvatarFileChange" />
+          <input ref="editAvatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="handleEditAvatarFileChange" />
         </div>
       </div>
 
       <div class="flex justify-end gap-2 border-t border-[color:var(--border-soft)] pt-4">
         <button
           type="submit"
-          :disabled="isSavingPage"
+        :disabled="isSavingPage || isOptimizingEditAvatar"
           class="inline-flex h-10 items-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
         >
-          {{ isSavingPage ? 'Saving...' : 'Save changes' }}
+        {{ isSavingPage ? 'Saving...' : isOptimizingEditAvatar ? 'Preparing image...' : 'Save changes' }}
         </button>
       </div>
     </form>

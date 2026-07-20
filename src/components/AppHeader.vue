@@ -32,6 +32,7 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { isPrivateCommunity } from '@/utils/communityFilters'
+import { optimizeImageFile } from '@/utils/imageOptimization'
 import { mapApiPostToFeedPost } from '@/utils/postMapper'
 import { mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { richTextToPlainText } from '@/utils/richText'
@@ -227,21 +228,23 @@ const submitSearch = async () => {
   })
 }
 
-const handlePostFileChange = (event: Event) => {
+const handlePostFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
 
   if (file?.type.startsWith('image/')) {
-    if (!POST_IMAGE_ALLOWED_TYPES.has(file.type)) {
+    if (!POST_IMAGE_ALLOWED_TYPES.has(file.type) && file.type !== 'image/webp') {
       toast.error('Unsupported post image format', {
-        description: 'Use PNG, JPG, JPEG, or GIF for post images.',
+        description: 'Use PNG, JPG, JPEG, WebP, or GIF for post images.',
       })
       target.value = ''
       postFile.value = null
       return
     }
 
-    if (file.size > POST_IMAGE_MAX_BYTES) {
+    const uploadFile = file.type === 'image/gif' ? file : (await optimizeImageFile(file)).file
+
+    if (uploadFile.size > POST_IMAGE_MAX_BYTES) {
       toast.error('Post image is too large', {
         description: 'Post images must be 5 MB or smaller.',
       })
@@ -249,6 +252,9 @@ const handlePostFileChange = (event: Event) => {
       postFile.value = null
       return
     }
+
+    postFile.value = uploadFile
+    return
   }
 
   postFile.value = file

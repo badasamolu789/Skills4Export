@@ -203,7 +203,7 @@ const submitReset = async () => {
         <button
           type="submit"
           :disabled="isRequestingOtp"
-          class="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[var(--accent) text-sm font-semibold text-white transition hover:bg-[var(--accent-strong) disabled:cursor-not-allowed disabled:bg-(--accent-soft) sm:h-13 sm:text-base"
+          class="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-(--accent) text-sm font-semibold text-white transition hover:bg-(--accent-strong) disabled:cursor-not-allowed disabled:bg-(--accent-soft) sm:h-13 sm:text-base"
         >
           {{ isRequestingOtp ? 'Sending reset link...' : 'Continue to email check' }}
         </button>

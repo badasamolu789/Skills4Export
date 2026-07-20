@@ -11,6 +11,7 @@ import { mediaService } from '@/services/media'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
+import { optimizeImageFile } from '@/utils/imageOptimization'
 import { richTextToPlainText } from '@/utils/richText'
 import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower, UserProfile } from '@/services/users'
 
@@ -180,7 +181,7 @@ const openUploadModal = () => {
   isUploadModalOpen.value = true
 }
 
-const selectUploadFile = (file?: File | null) => {
+const selectUploadFile = async (file?: File | null) => {
   if (!file) {
     return
   }
@@ -190,19 +191,23 @@ const selectUploadFile = (file?: File | null) => {
     return
   }
 
+  const optimizedFile = file.type.startsWith('image/')
+    ? (await optimizeImageFile(file)).file
+    : file
+
   clearUploadSelection()
-  uploadFile.value = file
-  uploadFileName.value = file.name
-  uploadPreviewUrl.value = URL.createObjectURL(file)
+  uploadFile.value = optimizedFile
+  uploadFileName.value = optimizedFile.name
+  uploadPreviewUrl.value = URL.createObjectURL(optimizedFile)
 }
 
 const handleUploadFileChange = (event: Event) => {
   const input = event.target as HTMLInputElement
-  selectUploadFile(input.files?.[0])
+  void selectUploadFile(input.files?.[0])
 }
 
 const handleUploadDrop = (event: DragEvent) => {
-  selectUploadFile(event.dataTransfer?.files?.[0])
+  void selectUploadFile(event.dataTransfer?.files?.[0])
 }
 
 const submitProfileUpload = async () => {

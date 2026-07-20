@@ -12,6 +12,7 @@ import { normalizeUserSkills, usersService } from '@/services/users'
 import type { UserPortfolio, UserProfile, UserSkill, UserCertification, UserEducation, UserExperience } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
+import { optimizeImageFile } from '@/utils/imageOptimization'
 
 type ProfileUploadItem = {
   id: string
@@ -519,14 +520,20 @@ const uploadBannerFile = async () => {
   }
 }
 
-const handleAvatarFileChange = (event: Event) => {
+const handleAvatarFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
-  avatarFile.value = target.files?.[0] ?? null
+  const file = target.files?.[0] ?? null
+  avatarFile.value = file?.type.startsWith('image/')
+    ? (await optimizeImageFile(file, { maxDimension: 1280 })).file
+    : file
 }
 
-const handleBannerFileChange = (event: Event) => {
+const handleBannerFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
-  bannerFile.value = target.files?.[0] ?? null
+  const file = target.files?.[0] ?? null
+  bannerFile.value = file?.type.startsWith('image/')
+    ? (await optimizeImageFile(file, { maxDimension: 1920 })).file
+    : file
 }
 
 const makeUploadClientId = () => {
@@ -565,7 +572,7 @@ const clearProjectMediaSelection = () => {
   }
 }
 
-const selectProjectMediaFile = (file?: File | null) => {
+const selectProjectMediaFile = async (file?: File | null) => {
   if (!file) {
     return
   }
@@ -575,14 +582,18 @@ const selectProjectMediaFile = (file?: File | null) => {
     return
   }
 
+  const uploadFile = file.type.startsWith('image/')
+    ? (await optimizeImageFile(file)).file
+    : file
+
   clearProjectMediaSelection()
-  projectMediaFile.value = file
-  projectMediaFileName.value = file.name
-  projectMediaPreviewUrl.value = URL.createObjectURL(file)
+  projectMediaFile.value = uploadFile
+  projectMediaFileName.value = uploadFile.name
+  projectMediaPreviewUrl.value = URL.createObjectURL(uploadFile)
 }
 
 const handleProjectMediaFileChange = (event: Event) => {
-  selectProjectMediaFile((event.target as HTMLInputElement).files?.[0])
+  void selectProjectMediaFile((event.target as HTMLInputElement).files?.[0])
 }
 
 const uploadProjectMedia = async () => {
@@ -605,7 +616,7 @@ const uploadProjectMedia = async () => {
   return uploadResponse.data.url || ''
 }
 
-const selectProfileUploadFile = (file?: File | null) => {
+const selectProfileUploadFile = async (file?: File | null) => {
   if (!file) {
     return
   }
@@ -615,20 +626,24 @@ const selectProfileUploadFile = (file?: File | null) => {
     return
   }
 
+  const uploadFile = file.type.startsWith('image/')
+    ? (await optimizeImageFile(file)).file
+    : file
+
   clearProfileUploadSelection()
   clearProjectMediaSelection()
-  profileUploadFile.value = file
-  profileUploadFileName.value = file.name
-  profileUploadPreviewUrl.value = URL.createObjectURL(file)
+  profileUploadFile.value = uploadFile
+  profileUploadFileName.value = uploadFile.name
+  profileUploadPreviewUrl.value = URL.createObjectURL(uploadFile)
 }
 
 const handleProfileUploadFileChange = (event: Event) => {
   const input = event.target as HTMLInputElement
-  selectProfileUploadFile(input.files?.[0])
+  void selectProfileUploadFile(input.files?.[0])
 }
 
 const handleProfileUploadDrop = (event: DragEvent) => {
-  selectProfileUploadFile(event.dataTransfer?.files?.[0])
+  void selectProfileUploadFile(event.dataTransfer?.files?.[0])
 }
 
 const submitProfileUpload = async () => {

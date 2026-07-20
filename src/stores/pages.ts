@@ -323,6 +323,7 @@ export const usePagesStore = defineStore('pages', () => {
     const ownerId = getPageOwnerId(record)
     const ownedReferences = getOwnedPageReferences()
     const isKnownOwnedPage = ownedReferences.has(record.id) || ownedReferences.has(record.slug)
+    const existingPage = getPageByIdOrSlug(record.id) || getPageByIdOrSlug(record.slug)
 
     if (ownerId && ownerId !== currentUserId.value) {
       return null
@@ -332,7 +333,12 @@ export const usePagesStore = defineStore('pages', () => {
       return null
     }
 
-    const page = mapPageRecordToManagedPage(record)
+    const recordWithLocalMedia = {
+      ...record,
+      avatar: record.avatar || existingPage?.avatar || null,
+      coverImage: record.coverImage || existingPage?.coverImage || null,
+    }
+    const page = mapPageRecordToManagedPage(recordWithLocalMedia)
     rememberOwnedPage(page)
     rememberPageCategory(page, page.category)
     pages.value = [page, ...pages.value.filter((item) => item.id !== page.id)]
@@ -466,9 +472,28 @@ export const usePagesStore = defineStore('pages', () => {
     const payloadCategory = getPayloadPageCategory(payload)
     pagePersistenceWarning.value = ''
     const response = await pagesService.createPage(payload, authStore.authToken)
+    let verifiedRecord = response.data
+
+    try {
+      const pageId = response.data.id || response.data.slug
+      if (pageId) {
+        const verifiedResponse = await pagesService.getPage(pageId, authStore.authToken)
+        verifiedRecord = verifiedResponse.data
+      }
+    } catch {
+      pagePersistenceWarning.value = 'The backend accepted the page, but the saved record could not be verified immediately.'
+    }
+
+    if (!pagePersistenceWarning.value) {
+      const persistenceIssues = getPagePersistenceIssues(payload, verifiedRecord)
+      if (persistenceIssues.length) {
+        pagePersistenceWarning.value = `The backend accepted the page but the saved page does not match these fields: ${persistenceIssues.join(', ')}.`
+      }
+    }
+
     const record = {
-      ...response.data,
-      ownerId: response.data.ownerId || currentUserId.value,
+      ...verifiedRecord,
+      ownerId: verifiedRecord.ownerId || response.data.ownerId || currentUserId.value,
     }
     const page = addPageFromApi(record, { trustAsOwned: true }) ?? mapPageRecordToManagedPage(record)
 

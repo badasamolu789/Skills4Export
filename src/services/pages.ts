@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import type { ApiSuccessResponse, PaginatorPayload } from '@/services/posts'
+import { optimizePageAvatarFile } from '@/utils/imageOptimization'
 
 export type PageRecord = {
   id: string
@@ -88,6 +89,11 @@ export type UploadPageAvatarFileResponse = {
     mimeType?: string | null
     sizeBytes?: number | null
     avatar?: string | null
+    avatarUrl?: string | null
+    avatar_url?: string | null
+    logo?: string | null
+    logoUrl?: string | null
+    logo_url?: string | null
     coverImage?: string | null
     cover_image?: string | null
     page?: Partial<PageRecord> | null
@@ -414,6 +420,27 @@ const normalizeSuccess = (response: ApiSuccessResponse<PageRecord>): ApiSuccessR
   data: normalizePage(response.data),
 })
 
+export const getUploadedPageAvatarUrl = (response?: UploadPageAvatarFileResponse | null) => {
+  const data = asRecord(response?.data)
+  const page = asRecord(data.page)
+
+  return readString(
+    data.avatar,
+    page.avatar,
+    data.avatarUrl,
+    page.avatarUrl,
+    data.avatar_url,
+    page.avatar_url,
+    data.logo,
+    page.logo,
+    data.logoUrl,
+    page.logoUrl,
+    data.logo_url,
+    page.logo_url,
+    data.url,
+  )
+}
+
 export const pagesService = {
   async listPageCategories(token?: string | null) {
     const response = await api.get<PaginatorPayload<PageCategoryRecord>>(PAGE_ROUTES.pageCategories, {
@@ -461,11 +488,6 @@ export const pagesService = {
     const response = await api.post<ApiSuccessResponse<PageRecord>>(PAGE_ROUTES.pages, normalizedPayload, {
       token,
       timeoutMs: 60000,
-      // The backend should persist responses by this key so a repeated create
-      // after an uncertain timeout returns the original page instead of a duplicate.
-      headers: {
-        'Idempotency-Key': `page-create:${normalizedPayload.type}:${normalizedPayload.slug}`,
-      },
     })
     return normalizeSuccess(response)
   },
@@ -486,19 +508,26 @@ export const pagesService = {
     return normalizeSuccess(response)
   },
 
-  uploadPageAvatarFile(id: string, file: File, token?: string | null) {
+  async uploadPageAvatarFile(id: string, file: File, token?: string | null) {
+    const uploadFile = file.type.startsWith('image/')
+      ? (await optimizePageAvatarFile(file)).file
+      : file
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', uploadFile)
 
     return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageAvatarFile(id), formData, {
       token,
       retry: false,
+      timeoutMs: 45000,
     })
   },
 
-  uploadPageCoverFile(id: string, file: File, token?: string | null) {
+  async uploadPageCoverFile(id: string, file: File, token?: string | null) {
+    const uploadFile = file.type.startsWith('image/')
+      ? (await optimizePageAvatarFile(file)).file
+      : file
     const formData = new FormData()
-    formData.append('file', file)
+    formData.append('file', uploadFile)
 
     return api.post<UploadPageAvatarFileResponse>(PAGE_ROUTES.pageCoverFile(id), formData, {
       token,

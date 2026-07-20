@@ -13,9 +13,15 @@ import {
 } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
 import SkillPillInput from '@/components/SkillPillInput.vue'
-import { pagesService, type PageCategoryRecord, type PagePrefillRecord } from '@/services/pages'
+import {
+  getUploadedPageAvatarUrl,
+  pagesService,
+  type PageCategoryRecord,
+  type PagePrefillRecord,
+} from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore, type PageCategory } from '@/stores/pages'
+import { optimizePageAvatarFile } from '@/utils/imageOptimization'
 import { slugify } from '@/utils/slugify'
 
 const route = useRoute()
@@ -39,11 +45,13 @@ const pageCategoriesError = ref('')
 const agreedToTerms = ref(false)
 const isSubmitting = ref(false)
 const isLoadingPrefill = ref(false)
+const isOptimizingAvatar = ref(false)
 const avatarFile = ref<File | null>(null)
 const avatarPreviewUrl = ref('')
 const prefilledAvatarUrl = ref('')
 const avatarFileInput = ref<HTMLInputElement | null>(null)
 const loadedPrefillTypes = new Set<PageCategory>()
+const PAGE_AVATAR_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const businessForm = ref({
   name: '',
@@ -75,9 +83,11 @@ const currentTitle = computed(() => {
   return 'Choose a Page Category'
 })
 
-const categoryToPageType = (category?: PageCategoryRecord | null): PageCategory => {
+const categoryToPageType = (category?: PageCategoryRecord | null): PageCategory | null => {
   const signal = `${category?.slug || ''} ${category?.name || ''}`.toLowerCase()
-  return signal.includes('student') ? 'student' : 'business'
+  if (signal.includes('student')) return 'student'
+  if (signal.includes('business') || signal.includes('product')) return 'business'
+  return null
 }
 
 const getCategoryIcon = (type: PageCategory) => type === 'student' ? GraduationCap : Building2
@@ -88,19 +98,24 @@ const getCategoryCardLabel = (type: PageCategory) =>
 const pageTypes = computed<PageTypeOption[]>(() => {
   const activeCategories = pageCategories.value.filter((category) => category.is_active !== 0)
 
-  return activeCategories.map((category) => {
+  return activeCategories.flatMap((category) => {
     const value = categoryToPageType(category)
+
+    if (!value) {
+      return []
+    }
+
     const maxPages = category.max_pages_per_user
     const totalPages = category.total_pages ?? 0
     const isLimitReached = typeof maxPages === 'number' && maxPages > 0 && totalPages >= maxPages
 
-    return {
+    return [{
       label: getCategoryCardLabel(value),
       value,
       icon: getCategoryIcon(value),
       category,
       isLimitReached,
-    }
+    }]
   })
 })
 
@@ -325,7 +340,7 @@ const loadPageCategories = async () => {
   }
 }
 
-const handleAvatarFileChange = (event: Event) => {
+const handleAvatarFileChange = async (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0] ?? null
 
   if (!file) {
@@ -333,8 +348,8 @@ const handleAvatarFileChange = (event: Event) => {
     return
   }
 
-  if (!file.type.startsWith('image/')) {
-    toast.error('Choose an image file.')
+  if (!PAGE_AVATAR_ALLOWED_TYPES.has(file.type)) {
+    toast.error('Choose a JPG, PNG, or WebP image.')
     resetUpload()
     return
   }
@@ -347,12 +362,33 @@ const handleAvatarFileChange = (event: Event) => {
     return
   }
 
-  if (avatarPreviewUrl.value) {
-    URL.revokeObjectURL(avatarPreviewUrl.value)
-  }
+  isOptimizingAvatar.value = true
 
-  avatarFile.value = file
-  avatarPreviewUrl.value = URL.createObjectURL(file)
+  try {
+    const result = await optimizePageAvatarFile(file)
+
+    if (avatarPreviewUrl.value) {
+      URL.revokeObjectURL(avatarPreviewUrl.value)
+    }
+
+    avatarFile.value = result.file
+    avatarPreviewUrl.value = URL.createObjectURL(result.file)
+
+    if (result.wasOptimized) {
+      toast.success('Image prepared for upload', {
+        description: 'The image was compressed so the page can upload faster.',
+      })
+    }
+  } catch {
+    if (avatarPreviewUrl.value) {
+      URL.revokeObjectURL(avatarPreviewUrl.value)
+    }
+
+    avatarFile.value = file
+    avatarPreviewUrl.value = URL.createObjectURL(file)
+  } finally {
+    isOptimizingAvatar.value = false
+  }
 }
 
 const getBusinessMetadata = () => ({
@@ -425,6 +461,30 @@ const validateCurrentForm = () => {
   return true
 }
 
+const waitForPageAvatar = async (pageId: string, fallbackUrl = '') => {
+  const maxAttempts = 8
+  const delayMs = 2500
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const refreshedPage = await pagesStore.loadPage(pageId)
+    if (refreshedPage?.avatar) {
+      return {
+        url: refreshedPage.avatar,
+        persisted: true,
+      }
+    }
+
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+
+  return {
+    url: fallbackUrl,
+    persisted: false,
+  }
+}
+
 const findCreatedPage = async (slug: string) => {
   const cachedPage = pagesStore.getPageByIdOrSlug(slug)
 
@@ -437,7 +497,7 @@ const findCreatedPage = async (slug: string) => {
 }
 
 const submitPage = async () => {
-  if (isSubmitting.value || !selectedPageType.value || !validateCurrentForm()) {
+  if (isSubmitting.value || isOptimizingAvatar.value || !selectedPageType.value || !validateCurrentForm()) {
     return
   }
 
@@ -491,17 +551,18 @@ const submitPage = async () => {
 
       try {
         const uploadResponse = await pagesService.uploadPageAvatarFile(page.id, avatarFile.value, authStore.authToken)
-        const processedUrl =
-          uploadResponse.data.avatar ||
-          uploadResponse.data.page?.avatar ||
-          uploadResponse.data.url ||
-          ''
+        const uploadUrl = getUploadedPageAvatarUrl(uploadResponse)
+        const avatarResult = await waitForPageAvatar(page.id, uploadUrl)
+        const processedUrl = avatarResult.url
 
         if (processedUrl) {
           page = { ...page, avatar: processedUrl }
           pagesStore.updatePageAvatar(page.id, processedUrl)
+          if (!avatarResult.persisted) {
+            avatarPersistenceWarning = 'The page image uploaded, but the saved page record is still catching up. It should settle shortly.'
+          }
         } else {
-          avatarPersistenceWarning = 'The page image is still being processed and will appear shortly.'
+          avatarPersistenceWarning = 'The page image upload completed, but the image is still being processed. It should appear shortly.'
         }
       } catch (error) {
         toast.warning('Page saved without its image', {
@@ -743,7 +804,7 @@ onMounted(() => {
               {{ uploadLabel }}
             </button>
             <p class="text-sm text-[var(--text-secondary)]">Maximum file size: 10 MB.</p>
-            <input ref="avatarFileInput" type="file" accept="image/*" class="sr-only" @change="handleAvatarFileChange" />
+            <input ref="avatarFileInput" type="file" accept="image/jpeg,image/png,image/webp" class="sr-only" @change="handleAvatarFileChange" />
           </div>
         </div>
 
@@ -778,12 +839,12 @@ onMounted(() => {
         <div class="mt-6">
           <button
             type="submit"
-            :disabled="isSubmitting || isLoadingPrefill"
+            :disabled="isSubmitting || isLoadingPrefill || isOptimizingAvatar"
             class="inline-flex h-12 items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Loader2 v-if="isSubmitting" class="h-4 w-4 animate-spin" />
             <Check v-else class="h-4 w-4" />
-            {{ isSubmitting ? 'Creating...' : 'Create page' }}
+            {{ isSubmitting ? 'Creating...' : isOptimizingAvatar ? 'Preparing image...' : 'Create page' }}
           </button>
         </div>
       </form>

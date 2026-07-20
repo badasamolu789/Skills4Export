@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { optimizeImageFile } from '@/utils/imageOptimization'
 
 // ============================================================================
 // Types
@@ -372,8 +373,11 @@ export const mediaService = {
             timeoutMs?: number
         },
     ) => {
+        const uploadFile = file.type.startsWith('image/')
+            ? (await optimizeImageFile(file)).file
+            : file
         const formData = new FormData()
-        formData.append('file', file)
+        formData.append('file', uploadFile)
 
         if (options?.kind) {
             formData.append('kind', options.kind)
@@ -527,8 +531,16 @@ export const mediaService = {
             token?: string | null
         },
     ) => {
+        const uploadFile = file.type.startsWith('image/')
+            ? (await optimizeImageFile(file, {
+                maxDimension: 1280,
+                quality: 0.86,
+                outputType: 'image/webp',
+                outputExtension: 'webp',
+            })).file
+            : file
         const formData = new FormData()
-        formData.append('file', file)
+        formData.append('file', uploadFile)
 
         const kind = options?.kind ?? 'avatar'
         formData.append('kind', kind)
