@@ -6,8 +6,8 @@ import type { RouteLocationRaw } from 'vue-router'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
-import combinedScreenDarkImage from '@/assets/combine_img(dark_screen).png'
-import combinedScreenLightImage from '@/assets/combine_img(white_screen).png'
+import combinedScreenDarkImage from '@/assets/combine_img(dark_screen).webp'
+import combinedScreenLightImage from '@/assets/combine_img(white_screen).webp'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
@@ -19,7 +19,7 @@ const authStore = useAuthStore()
 const isRedirectingToGoogle = ref(false)
 
 const { resolvedTheme, setTheme } = useTheme()
-const logoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_2.png' : '/logo_1.svg')
+const logoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_dark.webp' : '/logo_light.webp')
 const combinedScreenImage = computed(
   () => resolvedTheme.value === 'dark' ? combinedScreenDarkImage : combinedScreenLightImage,
 )
@@ -257,6 +257,8 @@ const signUpWithGoogle = async () => {
               :src="combinedScreenImage"
               alt="Skills4Export app preview"
               class="block w-full h-auto object-contain"
+              width="1600"
+              height="911"
               loading="eager"
               decoding="async"
               fetchpriority="high"

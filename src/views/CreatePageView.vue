@@ -57,6 +57,7 @@ const businessForm = ref({
   name: '',
   slogan: '',
   contactEmail: '',
+  phone: '',
   website: '',
   staffSize: '',
   businessCategory: '',
@@ -142,6 +143,15 @@ const readFirstValue = (...values: unknown[]) => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const getProfilePhone = () =>
+  readFirstValue(
+    authStore.userProfile?.phone,
+    authStore.userProfile?.phoneNumber,
+    authStore.userProfile?.phone_number,
+    authStore.currentUser?.phone,
+    authStore.signUpDraft.phone,
+  )
+
 const fillIfEmpty = (
   currentValue: string,
   value: unknown,
@@ -206,6 +216,11 @@ const applyPagePrefill = (type: PageCategory, prefill: PagePrefillRecord) => {
       (value) => { businessForm.value.contactEmail = value },
     )
     fillIfEmpty(
+      businessForm.value.phone,
+      readFirstValue(prefill.phone, getProfilePhone()),
+      (value) => { businessForm.value.phone = value },
+    )
+    fillIfEmpty(
       businessForm.value.website,
       prefill.website,
       (value) => { businessForm.value.website = value },
@@ -230,7 +245,7 @@ const applyPagePrefill = (type: PageCategory, prefill: PagePrefillRecord) => {
   )
   fillIfEmpty(
     studentForm.value.phone,
-    prefill.phone,
+    readFirstValue(prefill.phone, getProfilePhone()),
     (value) => { studentForm.value.phone = value },
   )
   fillIfEmpty(
@@ -388,6 +403,7 @@ const handleAvatarFileChange = async (event: Event) => {
 const getBusinessMetadata = () => ({
   slogan: businessForm.value.slogan.trim(),
   contactEmail: businessForm.value.contactEmail.trim(),
+  phone: businessForm.value.phone.trim(),
   website: normalizeWebsiteUrl(businessForm.value.website),
   staffSize: businessForm.value.staffSize,
   businessCategory: businessForm.value.businessCategory.trim(),
@@ -420,6 +436,21 @@ const validateCurrentForm = () => {
       return false
     }
 
+    if (!businessForm.value.phone.trim()) {
+      toast.error('Phone number is required.')
+      return false
+    }
+
+    if (!businessForm.value.staffSize) {
+      toast.error('Staff size is required.')
+      return false
+    }
+
+    if (!businessForm.value.businessCategory.trim()) {
+      toast.error('Category of business is required.')
+      return false
+    }
+
     if (businessForm.value.website.trim()) {
       try {
         businessForm.value.website = normalizeWebsiteUrl(businessForm.value.website)
@@ -433,6 +464,11 @@ const validateCurrentForm = () => {
   if (selectedPageType.value === 'student') {
     if (!studentForm.value.fullName.trim()) {
       toast.error('Full name is required.')
+      return false
+    }
+
+    if (!studentForm.value.phone.trim()) {
+      toast.error('Phone number is required.')
       return false
     }
 
@@ -703,7 +739,7 @@ onMounted(() => {
         <div v-if="selectedPageType === 'business'" class="grid gap-5">
           <label class="space-y-2">
             <span class="text-sm font-semibold text-[var(--text-primary)]">Product/Service/Business Name <span class="text-[var(--danger)]">*</span></span>
-            <input v-model="businessForm.name" class="s4e-page-input" placeholder="e.g. Ben Confectioneries" />
+            <input v-model="businessForm.name" required class="s4e-page-input" placeholder="e.g. Ben Confectioneries" />
           </label>
 
           <label class="space-y-2">
@@ -714,7 +750,12 @@ onMounted(() => {
           <div class="grid gap-5 md:grid-cols-2">
             <label class="space-y-2">
               <span class="text-sm font-semibold text-[var(--text-primary)]">Contact email <span class="text-[var(--danger)]">*</span></span>
-              <input v-model="businessForm.contactEmail" type="email" class="s4e-page-input" placeholder="e.g. aliofor@email.com" />
+              <input v-model="businessForm.contactEmail" required type="email" class="s4e-page-input" placeholder="e.g. aliofor@email.com" />
+            </label>
+
+            <label class="space-y-2">
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Phone number <span class="text-[var(--danger)]">*</span></span>
+              <input v-model="businessForm.phone" required type="tel" class="s4e-page-input" placeholder="+234 000 000 0000" />
             </label>
 
             <label class="space-y-2">
@@ -731,8 +772,8 @@ onMounted(() => {
             </label>
 
             <label class="space-y-2">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Staff size</span>
-              <select v-model="businessForm.staffSize" class="s4e-page-input">
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Staff size <span class="text-[var(--danger)]">*</span></span>
+              <select v-model="businessForm.staffSize" required class="s4e-page-input">
                 <option value="">Select</option>
                 <option value="1-10">1 - 10</option>
                 <option value="11-50">11 - 50</option>
@@ -742,8 +783,8 @@ onMounted(() => {
             </label>
 
             <label class="space-y-2">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Category of business</span>
-              <input v-model="businessForm.businessCategory" class="s4e-page-input" placeholder="e.g. Information Technology" />
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Category of business <span class="text-[var(--danger)]">*</span></span>
+              <input v-model="businessForm.businessCategory" required class="s4e-page-input" placeholder="e.g. Information Technology" />
             </label>
           </div>
         </div>
@@ -751,7 +792,7 @@ onMounted(() => {
         <div v-else class="grid gap-5">
           <label class="space-y-2">
             <span class="text-sm font-semibold text-[var(--text-primary)]">Your Full Name<span class="text-[var(--danger)]">*</span></span>
-            <input v-model="studentForm.fullName" class="s4e-page-input" placeholder="e.g. Alex Smith Okwuchi" />
+            <input v-model="studentForm.fullName" required class="s4e-page-input" placeholder="e.g. Alex Smith Okwuchi" />
           </label>
 
           <div class="grid gap-5 md:grid-cols-2">
@@ -761,18 +802,18 @@ onMounted(() => {
             </label>
 
             <label class="space-y-2">
-              <span class="text-sm font-semibold text-[var(--text-primary)]">Phone number</span>
-              <input v-model="studentForm.phone" type="tel" class="s4e-page-input" placeholder="+234 000 000 0000" />
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Phone number<span class="text-[var(--danger)]">*</span></span>
+              <input v-model="studentForm.phone" required type="tel" class="s4e-page-input" placeholder="+234 000 000 0000" />
             </label>
 
             <label class="space-y-2">
               <span class="text-sm font-semibold text-[var(--text-primary)]">Course of study<span class="text-[var(--danger)]">*</span></span>
-              <input v-model="studentForm.courseOfStudy" class="s4e-page-input" placeholder="e.g. Mass Communication" />
+              <input v-model="studentForm.courseOfStudy" required class="s4e-page-input" placeholder="e.g. Mass Communication" />
             </label>
 
             <label class="space-y-2">
               <span class="text-sm font-semibold text-[var(--text-primary)]">Year of Graduation<span class="text-[var(--danger)]">*</span></span>
-              <input v-model="studentForm.graduationDate" type="date" class="s4e-page-input" />
+              <input v-model="studentForm.graduationDate" required type="date" class="s4e-page-input" />
             </label>
           </div>
 

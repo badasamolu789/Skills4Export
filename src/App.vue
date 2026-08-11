@@ -59,7 +59,7 @@ const userMenu = computed(() => [
 ])
 
 const { resolvedTheme } = useTheme()
-const appLogoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_2.png' : '/logo_1.svg')
+const appLogoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_dark.webp' : '/logo_light.webp')
 
 const toasterTheme = computed(() => resolvedTheme.value)
 const toasterOptions = {
@@ -445,7 +445,7 @@ const handleMenuAction = async (action: 'logout') => {
   >
     <AppSidebar
       dismissible
-      logo-src="/logo_1.svg"
+      logo-src="/logo_light.webp"
       logo-alt="Skills4Export logo"
       @close="isMobileSidebarOpen = false"
     />

@@ -44,13 +44,21 @@ const filteredJobs = computed(() => {
 })
 
 const visibleJobs = computed(() => filteredJobs.value.slice(0, visibleJobCount.value))
-const hasMoreJobs = computed(() => visibleJobCount.value < filteredJobs.value.length)
+const hasMoreLoadedJobs = computed(() => visibleJobCount.value < filteredJobs.value.length)
+const canLoadMoreFromBackend = computed(() => !searchQuery.value.trim() && jobsStore.hasMoreJobs)
+const hasMoreJobs = computed(() => hasMoreLoadedJobs.value || canLoadMoreFromBackend.value)
 
-const loadMoreJobs = () => {
-  if (!hasMoreJobs.value) {
+const loadMoreJobs = async () => {
+  if (!hasMoreJobs.value || jobsStore.isLoadingMoreJobs) {
     return
   }
 
+  if (hasMoreLoadedJobs.value) {
+    visibleJobCount.value = Math.min(visibleJobCount.value + 6, filteredJobs.value.length)
+    return
+  }
+
+  await jobsStore.loadMoreJobs()
   visibleJobCount.value = Math.min(visibleJobCount.value + 6, filteredJobs.value.length)
 }
 
@@ -73,7 +81,7 @@ onMounted(() => {
 
   loadMoreObserver = new IntersectionObserver((entries) => {
     if (entries.some((entry) => entry.isIntersecting)) {
-      loadMoreJobs()
+      void loadMoreJobs()
     }
   })
 
@@ -173,7 +181,7 @@ onBeforeUnmount(() => {
         ref="loadMoreTarget"
         class="py-4 text-center text-sm font-medium text-[var(--text-secondary)]"
       >
-        Loading more jobs...
+        {{ jobsStore.isLoadingMoreJobs ? 'Loading more jobs...' : 'Scroll for more jobs' }}
       </div>
     </div>
 

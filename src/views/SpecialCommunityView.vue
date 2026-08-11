@@ -93,7 +93,7 @@ const loadPage = async () => {
 
   try {
     const communitiesResponse = await communitiesService.listCommunities(
-      { per_page: 100, limit: 100 },
+      { per_page: 20, limit: 20 },
       authStore.authToken,
     )
     const matchedCommunity = findSpecialCommunity(communitiesResponse.data ?? [])
@@ -105,7 +105,7 @@ const loadPage = async () => {
     community.value = matchedCommunity
 
     const postsResponse = await postsService.listPosts(
-      { per_page: 100, sort: '-createdAt', communityId: matchedCommunity.id },
+      { per_page: 20, sort: '-createdAt', communityId: matchedCommunity.id },
       authStore.authToken,
     )
     const communityPosts = (postsResponse.data ?? []).filter(

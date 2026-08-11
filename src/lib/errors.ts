@@ -74,6 +74,13 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
         return fallback
     }
 
+    if (typeof error === 'object') {
+        const backendMessage = extractBackendErrorMessage(error as Record<string, unknown>, fallback)
+        if (backendMessage) {
+            return backendMessage
+        }
+    }
+
     if (error instanceof Error) {
         return sanitizeUserMessage(error.message, fallback)
     }
@@ -83,6 +90,108 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
     }
 
     return fallback
+}
+
+const toMessageList = (value: unknown): string[] => {
+    if (!value) {
+        return []
+    }
+
+    if (typeof value === 'string') {
+        return [value]
+    }
+
+    if (Array.isArray(value)) {
+        return value.flatMap(toMessageList)
+    }
+
+    if (typeof value === 'object') {
+        return Object.values(value as Record<string, unknown>).flatMap(toMessageList)
+    }
+
+    return []
+}
+
+const firstUserMessage = (values: unknown[], fallback: string) => {
+    for (const value of values) {
+        const messages = toMessageList(value)
+        for (const message of messages) {
+            const sanitized = sanitizeUserMessage(message, '')
+            if (sanitized) {
+                return sanitizeUserMessage(sanitized, fallback)
+            }
+        }
+    }
+
+    return ''
+}
+
+/**
+ * Extract a human-facing message from common backend error response shapes.
+ * Frontend fallbacks should be used only when this returns an empty string.
+ */
+export function extractBackendErrorMessage(
+    payload: Record<string, unknown> | null | undefined,
+    fallback = 'Something went wrong. Please try again.'
+): string {
+    if (!payload) {
+        return ''
+    }
+
+    const error = payload.error
+    const data = payload.data
+
+    const directMessage = firstUserMessage(
+        [
+            payload.message,
+            payload.detail,
+            payload.description,
+            payload.reason,
+            payload.friendlyMessage,
+            typeof error === 'string' ? error : undefined,
+            typeof error === 'object' && error ? (error as Record<string, unknown>).message : undefined,
+            typeof error === 'object' && error ? (error as Record<string, unknown>).detail : undefined,
+            typeof error === 'object' && error ? (error as Record<string, unknown>).description : undefined,
+            typeof data === 'object' && data ? (data as Record<string, unknown>).message : undefined,
+            typeof data === 'object' && data ? (data as Record<string, unknown>).error : undefined,
+        ],
+        fallback,
+    )
+
+    if (directMessage) {
+        return directMessage
+    }
+
+    return firstUserMessage([payload.errors], fallback)
+}
+
+export function getDisplayErrorMessage(
+    error: unknown,
+    fallback = 'Something went wrong. Please try again.'
+): string {
+    if (error && typeof error === 'object') {
+        const payload = (error as { payload?: Record<string, unknown> | null }).payload
+        const status = (error as { status?: unknown }).status
+        const backendMessage = extractBackendErrorMessage(payload, fallback)
+        if (backendMessage) {
+            return backendMessage
+        }
+
+        if (payload || typeof status === 'number') {
+            const errorCode = extractErrorCode(payload)
+            const mappedMessage = getUserFriendlyErrorMessage(
+                errorCode,
+                typeof status === 'number' ? status : undefined,
+                fallback,
+            )
+
+            if (mappedMessage) {
+                return mappedMessage
+            }
+        }
+    }
+
+    return getErrorMessage(error, fallback)
 }
 
 export function sanitizeUserMessage(

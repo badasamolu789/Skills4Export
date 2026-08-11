@@ -10,6 +10,7 @@ import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
+import { collectValidationErrors, isValidEmail } from '@/utils/formValidation'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -20,6 +21,7 @@ const passwordToggle = usePasswordToggle()
 const {
   getFieldAttrs,
   getFieldError,
+  setFieldErrors,
   setApiFieldErrors,
   clearFieldError,
   clearFieldErrors,
@@ -35,8 +37,33 @@ const submitLogin = async () => {
     return
   }
 
-  isSubmitting.value = true
   clearFieldErrors()
+  const validationErrors = collectValidationErrors([
+    {
+      field: 'email',
+      value: form.value.email,
+      message: 'Email address is required.',
+    },
+    {
+      field: 'email',
+      value: form.value.email,
+      message: 'Enter a valid email address.',
+      validate: (value) => isValidEmail(String(value)),
+    },
+    {
+      field: 'password',
+      value: form.value.password,
+      message: 'Password is required.',
+    },
+  ])
+
+  if (Object.keys(validationErrors).length) {
+    setFieldErrors(validationErrors)
+    toast.error('Complete the required fields first.')
+    return
+  }
+
+  isSubmitting.value = true
   const loadingToastId = toast.loading('Signing you in...', {
     description: 'Please wait while we validate your credentials.',
   })
@@ -140,14 +167,14 @@ const continueWithGoogle = async () => {
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-14 w-auto sm:h-16" />
+        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_light.webp" alt="Skills4Export logo" class="h-14 w-auto sm:h-16" />
       </div>
 
       <p class="mb-4 text-center text-xl font-semibold tracking-[0.04em] text-[var(--accent-strong)] sm:text-2xl">
         Log In
       </p>
 
-      <form class="space-y-3.5 sm:space-y-4" @submit.prevent="submitLogin">
+      <form class="space-y-3.5 sm:space-y-4" novalidate @submit.prevent="submitLogin">
       <div class="space-y-2">
         <label class="text-sm font-semibold text-[var(--text-primary)] sm:text-base">Email address</label>
         <input

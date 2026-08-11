@@ -10,6 +10,7 @@ import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
+import { collectValidationErrors, isValidEmail } from '@/utils/formValidation'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -19,6 +20,7 @@ const passwordToggle = usePasswordToggle()
 const {
   getFieldAttrs,
   getFieldError,
+  setFieldErrors,
   setApiFieldErrors,
   clearFieldError,
   clearFieldErrors,
@@ -37,8 +39,50 @@ const continueSignUp = async () => {
     return
   }
 
-  isSubmitting.value = true
   clearFieldErrors()
+  const validationErrors = collectValidationErrors([
+    {
+      field: 'name',
+      value: form.value.name,
+      message: 'Full name is required.',
+    },
+    {
+      field: 'email',
+      value: form.value.email,
+      message: 'Email address is required.',
+    },
+    {
+      field: 'email',
+      value: form.value.email,
+      message: 'Enter a valid email address.',
+      validate: (value) => isValidEmail(String(value)),
+    },
+    {
+      field: 'password',
+      value: form.value.password,
+      message: 'Password is required.',
+    },
+    {
+      field: 'password',
+      value: form.value.password,
+      message: 'Password must be at least 8 characters.',
+      validate: (value) => String(value).trim().length >= 8,
+    },
+    {
+      field: 'acceptedTerms',
+      value: form.value.acceptedTerms,
+      message: 'Accept the terms before continuing.',
+      validate: (value) => value === true,
+    },
+  ])
+
+  if (Object.keys(validationErrors).length) {
+    setFieldErrors(validationErrors)
+    toast.error('Complete the required fields first.')
+    return
+  }
+
+  isSubmitting.value = true
 
   authStore.signUpDraft.name = form.value.name
   authStore.signUpDraft.email = form.value.email
@@ -130,14 +174,14 @@ const signUpWithGoogle = async () => {
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-14 w-auto sm:h-16" />
+        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_light.webp" alt="Skills4Export logo" class="h-14 w-auto sm:h-16" />
       </div>
 
       <p class="mb-4 text-center text-xl font-semibold tracking-[0.04em] text-(--accent-strong) sm:text-2xl">
         Sign Up
       </p>
 
-      <form class="space-y-3.5 sm:space-y-4" @submit.prevent="continueSignUp">
+      <form class="space-y-3.5 sm:space-y-4" novalidate @submit.prevent="continueSignUp">
         <div class="space-y-2">
           <label class="text-sm font-semibold text-(--text-primary) sm:text-base">Full Name</label>
           <input
@@ -219,7 +263,9 @@ const signUpWithGoogle = async () => {
               v-model="form.acceptedTerms"
               type="checkbox"
               required
+              v-bind="getFieldAttrs('acceptedTerms')"
               class="mt-1 h-4 w-4 accent-(--accent)"
+              @change="clearFieldError('acceptedTerms')"
             />
             <span>
               I accept the
@@ -228,6 +274,9 @@ const signUpWithGoogle = async () => {
               </RouterLink>
             </span>
           </label>
+          <p v-if="getFieldError('acceptedTerms')" class="input-feedback input-feedback--error">
+            {{ getFieldError('acceptedTerms') }}
+          </p>
         </div>
 
         <button

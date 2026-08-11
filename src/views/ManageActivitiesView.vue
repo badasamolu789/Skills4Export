@@ -240,9 +240,9 @@ const loadActivities = async () => {
     }
 
     const [postsResponse, questionsResponse, savedPostsResponse] = await Promise.all([
-      postsService.listPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
-      postsService.listSavedPosts({ per_page: 100, sort: '-createdAt' }, authStore.authToken),
+      postsService.listPosts({ per_page: 20, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions({ per_page: 20, sort: '-createdAt' }, authStore.authToken),
+      postsService.listSavedPosts({ per_page: 20, sort: '-createdAt' }, authStore.authToken),
     ])
 
     const allPosts = postsResponse.data ?? []

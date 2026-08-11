@@ -8,12 +8,30 @@ import { NIGERIA_COUNTRY, nigeriaStates } from '@/data/locations'
 import { ApiError } from '@/lib/api'
 import { authService } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { useFormFieldStates } from '@/composables/useFormFieldStates'
+import { collectValidationErrors } from '@/utils/formValidation'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const isSubmitting = ref(false)
+const {
+  getFieldAttrs,
+  getFieldError,
+  setFieldErrors,
+  clearFieldError,
+  clearFieldErrors,
+} = useFormFieldStates<
+  | 'is16OrAbove'
+  | 'country'
+  | 'state'
+  | 'jobTitle'
+  | 'workplace'
+  | 'university'
+  | 'yearStarted'
+  | 'courseOfStudy'
+>()
 
 const currentYear = new Date().getFullYear()
 const yearStartedOptions = Array.from({ length: 50 }, (_, index) => String(currentYear - index))
@@ -112,7 +130,58 @@ const submitDetails = async () => {
     return
   }
 
-  if (!canSubmit.value) {
+  clearFieldErrors()
+  const validationErrors = collectValidationErrors([
+    {
+      field: 'is16OrAbove',
+      value: form.value.is16OrAbove,
+      message: 'Confirm that you are 16 or above.',
+      validate: (value) => value === true,
+    },
+    {
+      field: 'country',
+      value: form.value.country,
+      message: 'Country is required.',
+    },
+    {
+      field: 'state',
+      value: form.value.state,
+      message: 'State is required.',
+    },
+    ...(isStudentAccount.value
+      ? [
+          {
+            field: 'university' as const,
+            value: form.value.university,
+            message: 'College or university is required.',
+          },
+          {
+            field: 'yearStarted' as const,
+            value: form.value.yearStarted,
+            message: 'Graduation year is required.',
+          },
+          {
+            field: 'courseOfStudy' as const,
+            value: form.value.courseOfStudy,
+            message: 'Course of study is required.',
+          },
+        ]
+      : [
+          {
+            field: 'jobTitle' as const,
+            value: form.value.jobTitle,
+            message: 'Current job title is required.',
+          },
+          {
+            field: 'workplace' as const,
+            value: form.value.workplace,
+            message: 'Current place of work is required.',
+          },
+        ]),
+  ])
+
+  if (Object.keys(validationErrors).length || !canSubmit.value) {
+    setFieldErrors(validationErrors)
     toast.error('Complete the required details before continuing.')
     return
   }
@@ -175,7 +244,7 @@ const submitDetails = async () => {
     :description="isGoogleOnboarding ? 'These details finish your Google account setup before entering the app.' : 'These details help shape profile setup, discovery, jobs, and recommendations after verification.'"
     centered
   >
-    <form class="space-y-5" @submit.prevent="submitDetails">
+    <form class="space-y-5" novalidate @submit.prevent="submitDetails">
       <div class="px-1">
         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
           {{ isGoogleOnboarding ? 'Step 2 of 2' : 'Step 2 of 3' }}
@@ -193,10 +262,15 @@ const submitDetails = async () => {
           v-model="form.is16OrAbove"
           type="checkbox"
           required
+          v-bind="getFieldAttrs('is16OrAbove')"
           class="mt-1 h-4 w-4 accent-[var(--accent)]"
+          @change="clearFieldError('is16OrAbove')"
         />
         <span>I am 16 or above.</span>
       </label>
+      <p v-if="getFieldError('is16OrAbove')" class="input-feedback input-feedback--error">
+        {{ getFieldError('is16OrAbove') }}
+      </p>
 
       <div class="space-y-3">
         <p class="text-sm font-semibold text-[var(--text-primary)]">Location</p>
@@ -206,7 +280,9 @@ const submitDetails = async () => {
             <select
               v-model="form.country"
               required
+              v-bind="getFieldAttrs('country')"
               class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+              @change="clearFieldError('country')"
             >
               <option value="">Select country</option>
               <option v-for="country in countryOptions" :key="country" :value="country">
@@ -221,7 +297,9 @@ const submitDetails = async () => {
               v-model="form.state"
               required
               :disabled="!form.country"
+              v-bind="getFieldAttrs('state')"
               class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-60"
+              @change="clearFieldError('state')"
             >
               <option value="">
                 {{ form.country ? 'Select state' : 'Select a country first' }}
@@ -232,6 +310,9 @@ const submitDetails = async () => {
             </select>
           </div>
         </div>
+        <p v-if="getFieldError('country') || getFieldError('state')" class="input-feedback input-feedback--error">
+          {{ getFieldError('country') || getFieldError('state') }}
+        </p>
         <p v-if="form.state && form.country" class="text-xs text-[var(--text-tertiary)]">
           Profile location: {{ form.state }}, {{ form.country }}
         </p>
@@ -279,8 +360,13 @@ const submitDetails = async () => {
             type="text"
             required
             placeholder="e.g. Product Designer"
+            v-bind="getFieldAttrs('jobTitle')"
             class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            @input="clearFieldError('jobTitle')"
           />
+          <p v-if="getFieldError('jobTitle')" class="input-feedback input-feedback--error">
+            {{ getFieldError('jobTitle') }}
+          </p>
         </div>
 
         <div class="space-y-2 sm:col-span-2">
@@ -290,8 +376,13 @@ const submitDetails = async () => {
             type="text"
             required
             placeholder="e.g. Skills4Export"
+            v-bind="getFieldAttrs('workplace')"
             class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            @input="clearFieldError('workplace')"
           />
+          <p v-if="getFieldError('workplace')" class="input-feedback input-feedback--error">
+            {{ getFieldError('workplace') }}
+          </p>
         </div>
       </div>
 
@@ -303,8 +394,13 @@ const submitDetails = async () => {
             type="text"
             required
             placeholder="e.g. University of Lagos"
+            v-bind="getFieldAttrs('university')"
             class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            @input="clearFieldError('university')"
           />
+          <p v-if="getFieldError('university')" class="input-feedback input-feedback--error">
+            {{ getFieldError('university') }}
+          </p>
         </div>
 
         <div class="space-y-2">
@@ -312,13 +408,18 @@ const submitDetails = async () => {
           <select
             v-model="form.yearStarted"
             required
+            v-bind="getFieldAttrs('yearStarted')"
             class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            @change="clearFieldError('yearStarted')"
           >
             <option value="">Select year</option>
             <option v-for="year in yearStartedOptions" :key="year" :value="year">
               {{ year }}
             </option>
           </select>
+          <p v-if="getFieldError('yearStarted')" class="input-feedback input-feedback--error">
+            {{ getFieldError('yearStarted') }}
+          </p>
         </div>
 
         <div class="space-y-2">
@@ -328,14 +429,19 @@ const submitDetails = async () => {
             type="text"
             required
             placeholder="e.g. Computer Science"
+            v-bind="getFieldAttrs('courseOfStudy')"
             class="h-13 w-full rounded-2xl border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+            @input="clearFieldError('courseOfStudy')"
           />
+          <p v-if="getFieldError('courseOfStudy')" class="input-feedback input-feedback--error">
+            {{ getFieldError('courseOfStudy') }}
+          </p>
         </div>
       </div>
 
       <button
         type="submit"
-        :disabled="!canSubmit || isSubmitting"
+        :disabled="isSubmitting"
         class="inline-flex h-13 w-full items-center justify-center rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:bg-[var(--accent-soft)]"
       >
         {{ isSubmitting ? (isGoogleOnboarding ? 'Saving details...' : 'Sending verification...') : isGoogleOnboarding ? 'Finish setup' : 'Continue to verification' }}

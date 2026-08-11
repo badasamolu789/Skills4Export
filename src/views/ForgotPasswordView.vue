@@ -7,6 +7,7 @@ import { getErrorMessage } from '@/lib/errors'
 import { authService } from '@/services/auth'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
+import { collectValidationErrors, isValidEmail } from '@/utils/formValidation'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,6 +39,7 @@ const {
   getFieldAttrs,
   getFieldError,
   setFieldError,
+  setFieldErrors,
   setApiFieldErrors,
   clearFieldError,
   clearFieldErrors,
@@ -72,8 +74,28 @@ const requestResetLink = async () => {
     return
   }
 
-  isRequestingOtp.value = true
   clearFieldErrors()
+  const validationErrors = collectValidationErrors([
+    {
+      field: 'email',
+      value: requestForm.value.email,
+      message: 'Email address is required.',
+    },
+    {
+      field: 'email',
+      value: requestForm.value.email,
+      message: 'Enter a valid email address.',
+      validate: (value) => isValidEmail(String(value)),
+    },
+  ])
+
+  if (Object.keys(validationErrors).length) {
+    setFieldErrors(validationErrors)
+    toast.error('Complete the required fields first.')
+    return
+  }
+
+  isRequestingOtp.value = true
   const loadingToastId = toast.loading('Sending reset link...', {
     description: 'Please wait while we prepare your password reset email.',
   })
@@ -112,6 +134,38 @@ const submitReset = async () => {
     return
   }
 
+  clearFieldErrors()
+  const validationErrors = collectValidationErrors([
+    {
+      field: 'newPassword',
+      value: resetForm.value.newPassword,
+      message: 'New password is required.',
+    },
+    {
+      field: 'newPassword',
+      value: resetForm.value.newPassword,
+      message: 'Password must be at least 8 characters.',
+      validate: (value) => String(value).trim().length >= 8,
+    },
+    {
+      field: 'confirmPassword',
+      value: resetForm.value.confirmPassword,
+      message: 'Confirm your new password.',
+    },
+    {
+      field: 'confirmPassword',
+      value: resetForm.value.confirmPassword,
+      message: 'Please make sure both password fields are the same.',
+      validate: () => resetForm.value.newPassword === resetForm.value.confirmPassword,
+    },
+  ])
+
+  if (Object.keys(validationErrors).length) {
+    setFieldErrors(validationErrors)
+    toast.error('Complete the required fields first.')
+    return
+  }
+
   if (resetForm.value.newPassword !== resetForm.value.confirmPassword) {
     setFieldError('confirmPassword', 'Please make sure both password fields are the same.')
     toast.error('Passwords do not match', {
@@ -121,7 +175,6 @@ const submitReset = async () => {
   }
 
   isResettingPassword.value = true
-  clearFieldErrors()
   const loadingToastId = toast.loading('Resetting your password...', {
     description: 'Please wait while we update your password.',
   })
@@ -172,7 +225,7 @@ const submitReset = async () => {
       </div>
 
       <div class="mb-5 flex justify-center sm:mb-6">
-        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_1.svg" alt="Skills4Export logo" class="h-10 w-auto sm:h-12" />
+        <img loading="eager" decoding="async" fetchpriority="high" src="/logo_light.webp" alt="Skills4Export logo" class="h-10 w-auto sm:h-12" />
       </div>
 
       <p class="mb-4 text-center text-xl tracking-[0.08em] text-(--accent-strong) sm:text-2xl">
@@ -182,6 +235,7 @@ const submitReset = async () => {
       <form
         v-if="!isResetLinkFlow"
         class="space-y-3.5 sm:space-y-4"
+        novalidate
         @submit.prevent="requestResetLink"
       >
         <div class="space-y-2">
@@ -220,7 +274,7 @@ const submitReset = async () => {
         </p>
       </form>
 
-      <form v-else class="space-y-3.5 sm:space-y-4" @submit.prevent="submitReset">
+      <form v-else class="space-y-3.5 sm:space-y-4" novalidate @submit.prevent="submitReset">
         <div class="rounded-2xl border border-(--border-soft) bg-(--surface-secondary)] p-4 text-sm text-(--text-secondary)">
           This reset link is for
           <span class="font-semibold text-(--text-primary)">{{ email }}</span>.
@@ -297,7 +351,7 @@ const submitReset = async () => {
 
         <button
           type="submit"
-          :disabled="isResettingPassword || !canSubmitReset"
+          :disabled="isResettingPassword"
           class="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-(--accent) text-sm font-semibold text-white transition hover:bg-(--accent-strong) disabled:cursor-not-allowed disabled:bg-(--accent-soft) sm:h-13 sm:text-base"
         >
           {{ isResettingPassword ? 'Resetting password...' : 'Reset password' }}

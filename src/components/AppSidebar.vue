@@ -43,7 +43,7 @@ const props = withDefaults(
   {
     dismissible: false,
     pinnedLayout: false,
-    logoSrc: '/logo_1.svg',
+    logoSrc: '/logo_light.webp',
     logoAlt: 'Skills4Export logo',
   },
 )
@@ -202,7 +202,7 @@ const loadSidebarCommunities = async () => {
 
   try {
     const response = await communitiesService.listCommunities(
-      { per_page: 100, limit: 100 },
+      { per_page: 20, limit: 20 },
       authStore.authToken,
     )
     sidebarCommunities.value = response.data

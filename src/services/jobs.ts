@@ -68,6 +68,7 @@ export type CreateJobRequest = {
   senderEmail?: string
   companyName: string
   company?: string
+  applicationUrl?: string
   description: string
   qualifications?: string
   tasks?: string

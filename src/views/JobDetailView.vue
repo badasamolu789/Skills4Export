@@ -253,7 +253,7 @@ const loadAdverts = async () => {
   try {
     const response = await advertsService.listAdverts(
       {
-        per_page: 100,
+        per_page: 20,
         sort: '-createdAt',
       },
     )
@@ -357,7 +357,10 @@ watch(
             <h1 class="max-w-4xl text-[2.2rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[3rem]">
               {{ job.title }}
             </h1>
-            <p class="text-base font-medium text-[var(--text-secondary)] sm:text-lg">
+            <p class="text-base font-semibold text-[var(--accent-strong)] sm:text-lg">
+              {{ job.companyName || 'Company not listed' }}
+            </p>
+            <p class="text-sm font-medium text-[var(--text-secondary)] sm:text-base">
               {{ jobLocationLine }}
             </p>
           </div>

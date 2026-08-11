@@ -374,7 +374,7 @@ const loadCommunities = async () => {
   isLoadingCommunities.value = true
 
   try {
-    const response = await communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken)
+    const response = await communitiesService.listCommunities({ per_page: 20, limit: 20 }, authStore.authToken)
     communities.value = response.data ?? []
     hasLoadedCommunities.value = true
   } catch (error) {

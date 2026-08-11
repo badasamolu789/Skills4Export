@@ -1,5 +1,5 @@
 import { useAppStore } from '@/stores/app'
-import { getUserFriendlyErrorMessage, sanitizeUserMessage } from '@/lib/errors'
+import { extractBackendErrorMessage, getUserFriendlyErrorMessage, sanitizeUserMessage } from '@/lib/errors'
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -177,6 +177,11 @@ const getErrorMessage = (payload: ApiErrorPayload | null, status: number, fallba
     return fallback
   }
 
+  const backendMessage = extractBackendErrorMessage(payload as Record<string, unknown>, fallback)
+  if (backendMessage) {
+    return backendMessage
+  }
+
   // Try to extract error code from various locations
   const errorCode =
     (payload as any).code ||
@@ -190,19 +195,6 @@ const getErrorMessage = (payload: ApiErrorPayload | null, status: number, fallba
     if (userMessage && userMessage !== fallback) {
       return userMessage
     }
-  }
-
-  // Fallback to original message extraction
-  if (payload.message) {
-    return sanitizeUserMessage(payload.message, fallback)
-  }
-
-  if (typeof payload.error === 'string') {
-    return sanitizeUserMessage(payload.error, fallback)
-  }
-
-  if (payload.error?.message) {
-    return sanitizeUserMessage(payload.error.message, fallback)
   }
 
   return sanitizeUserMessage(fallback)

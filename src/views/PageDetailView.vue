@@ -115,6 +115,7 @@ const editBusinessForm = ref({
   name: '',
   slogan: '',
   contactEmail: '',
+  phone: '',
   website: '',
   staffSize: '',
   businessCategory: '',
@@ -220,16 +221,17 @@ const aboutRows = computed(() => {
   const rows = page.value?.category === 'business'
     ? [
       ['Slogan', getMetadataString('slogan')],
-      ['Contact email', getMetadataString('contactEmail')],
+      ['Contact Email', getMetadataString('contactEmail')],
+      ['Phone Number', getMetadataString('phone')],
       ['Website', getMetadataString('website')],
-      ['Staff size', getMetadataString('staffSize')],
-      ['Category of business', getMetadataString('businessCategory')],
+      ['Staff Size', getMetadataString('staffSize')],
+      ['Category Of Business', getMetadataString('businessCategory')],
     ]
     : [
       ['Email', getMetadataString('email')],
-      ['Phone number', getMetadataString('phone')],
-      ['Course of study', getMetadataString('courseOfStudy')],
-      ['Graduation date', getMetadataString('graduationDate')],
+      ['Phone Number', getMetadataString('phone')],
+      ['Course Of Study', getMetadataString('courseOfStudy')],
+      ['Graduation Date', getMetadataString('graduationDate')],
       ['Skills', pageSkills.value.join(', ')],
     ]
 
@@ -614,6 +616,7 @@ const openEditPageModal = async () => {
       name: page.value.name,
       slogan: getMetadataString('slogan'),
       contactEmail: getMetadataString('contactEmail'),
+      phone: getMetadataString('phone'),
       website: getMetadataString('website'),
       staffSize: getMetadataString('staffSize'),
       businessCategory: getMetadataString('businessCategory'),
@@ -685,6 +688,7 @@ const getEditMetadata = () => {
     return {
       slogan: editBusinessForm.value.slogan.trim(),
       contactEmail: editBusinessForm.value.contactEmail.trim(),
+      phone: editBusinessForm.value.phone.trim(),
       website: editBusinessForm.value.website.trim(),
       staffSize: editBusinessForm.value.staffSize,
       businessCategory: editBusinessForm.value.businessCategory.trim(),
@@ -798,7 +802,7 @@ const loadPageFollowers = async () => {
   pageFollowersError.value = ''
 
   try {
-    const response = await pagesService.listPageFollowers(page.value.id, { per_page: 100 }, authStore.authToken)
+    const response = await pagesService.listPageFollowers(page.value.id, { per_page: 20 }, authStore.authToken)
     const rawFollowers = Array.isArray(response.data) ? response.data : []
     const followers = await Promise.all(
       rawFollowers.map(async (item) => {
@@ -1322,7 +1326,7 @@ watch(pagePostFile, (file, previousFile) => {
       <section v-if="activeTab === 'about'" class="space-y-8">
         <div class="max-w-4xl space-y-8 text-base leading-8 text-[var(--text-secondary)]">
           <div>
-            <h2 class="text-sm font-bold uppercase tracking-wide text-[var(--text-secondary)]">About</h2>
+            <h2 class="text-sm font-bold tracking-wide text-[var(--text-secondary)]">About</h2>
             <RichTextContent
               v-if="page.description"
               class="s4e-rich-content mt-3"
@@ -1336,7 +1340,7 @@ watch(pagePostFile, (file, previousFile) => {
             :key="row.label"
             class="border-t border-[color:var(--border-soft)] pt-5"
           >
-            <h3 class="text-sm font-bold uppercase tracking-wide text-[var(--text-secondary)]">{{ row.label }}</h3>
+            <h3 class="text-sm font-bold tracking-wide text-[var(--text-secondary)]">{{ row.label }}</h3>
             <a
               v-if="row.label.toLowerCase().includes('email')"
               :href="`mailto:${row.value}`"
@@ -1765,6 +1769,10 @@ watch(pagePostFile, (file, previousFile) => {
         <label>
           <span class="text-sm font-semibold text-[var(--text-primary)]">Contact email</span>
           <input v-model="editBusinessForm.contactEmail" type="email" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Phone number</span>
+          <input v-model="editBusinessForm.phone" type="tel" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label>
           <span class="text-sm font-semibold text-[var(--text-primary)]">Website</span>

@@ -157,9 +157,9 @@ const loadCommunityFeed = async (communityId: string) => {
 
   try {
     const [postsResponse, questionsResponse] = await Promise.all([
-      postsService.listPosts({ per_page: 100, sort: '-createdAt', communityId }, authStore.authToken),
+      postsService.listPosts({ per_page: 20, sort: '-createdAt', communityId }, authStore.authToken),
       questionsService.listQuestions(
-        { per_page: 100, sort: '-createdAt', communityId },
+        { per_page: 20, sort: '-createdAt', communityId },
         authStore.authToken,
       ),
     ])

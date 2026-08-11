@@ -27,8 +27,10 @@ import { NIGERIA_COUNTRY, nigeriaProfileLocationOptions, nigeriaStates } from '@
 import { useAuthStore } from '@/stores/auth'
 import { useFreelancersStore } from '@/stores/freelancers'
 import { getDisplayName } from '@/utils/displayName'
+import { collectValidationErrors } from '@/utils/formValidation'
 import { richTextToPlainText } from '@/utils/richText'
 import { slugify } from '@/utils/slugify'
+import { useFormFieldStates } from '@/composables/useFormFieldStates'
 
 const authStore = useAuthStore()
 const freelancersStore = useFreelancersStore()
@@ -42,6 +44,24 @@ const isRegisterModalOpen = ref(false)
 const isPostJobModalOpen = ref(false)
 const isSubmittingFreelancerRegistration = ref(false)
 const isSubmittingFreelanceJob = ref(false)
+const {
+  getFieldAttrs: getFreelanceJobFieldAttrs,
+  getFieldError: getFreelanceJobFieldError,
+  getFieldState: getFreelanceJobFieldState,
+  setFieldErrors: setFreelanceJobFieldErrors,
+  clearFieldError: clearFreelanceJobFieldError,
+  clearFieldErrors: clearFreelanceJobFieldErrors,
+} = useFormFieldStates<
+  | 'title'
+  | 'skills'
+  | 'location'
+  | 'type'
+  | 'description'
+  | 'qualifications'
+  | 'companyName'
+  | 'applicationEndDate'
+  | 'agreedToTerms'
+>()
 const agreedToTerms = ref(false)
 const freelancerTermsAgreed = ref(false)
 const passportFileName = ref('')
@@ -128,6 +148,7 @@ const formatLocationWithCountry = (value?: string | null) => {
 }
 
 const getPlainCardText = (value?: string | null) => richTextToPlainText(value)
+const getPlainEditorText = (value: string) => richTextToPlainText(value).trim()
 
 const formatStatusLabel = (value?: string | null) => {
   if (!value) {
@@ -512,8 +533,62 @@ const submitFreelanceJob = async () => {
     return
   }
 
-  if (!agreedToTerms.value) {
-    toast.error('Accept the terms before posting.')
+  clearFreelanceJobFieldErrors()
+  const validationErrors = collectValidationErrors([
+    {
+      field: 'title',
+      value: freelanceJobForm.value.title,
+      message: 'Job title is required.',
+    },
+    {
+      field: 'skills',
+      value: splitList(freelanceJobForm.value.skills).length,
+      message: 'Add at least one required skill.',
+      validate: (value) => Number(value) > 0,
+    },
+    {
+      field: 'location',
+      value: freelanceJobForm.value.location,
+      message: 'Location is required.',
+    },
+    {
+      field: 'type',
+      value: freelanceJobForm.value.type,
+      message: 'Job type is required.',
+    },
+    {
+      field: 'description',
+      value: freelanceJobForm.value.description,
+      message: 'Job description is required.',
+    },
+    {
+      field: 'qualifications',
+      value: getPlainEditorText(freelanceJobForm.value.qualifications),
+      message: 'Qualifications and skills are required.',
+    },
+    {
+      field: 'companyName',
+      value: freelanceJobForm.value.companyName,
+      message: 'Company name is required.',
+    },
+    {
+      field: 'applicationEndDate',
+      value: freelanceJobForm.value.applicationEndDate,
+      message: 'Application end date is required.',
+    },
+    {
+      field: 'agreedToTerms',
+      value: agreedToTerms.value,
+      message: 'Accept the terms before posting.',
+      validate: (value) => value === true,
+    },
+  ])
+
+  if (Object.keys(validationErrors).length) {
+    setFreelanceJobFieldErrors(validationErrors)
+    toast.error('Fill the required fields first.', {
+      description: 'Check the highlighted fields and complete the missing information.',
+    })
     return
   }
 
@@ -1113,45 +1188,56 @@ const clearPassportUpload = () => {
     title="Post Freelance Job"
     max-width-class="sm:max-w-4xl"
   >
-    <form class="space-y-4" @submit.prevent="submitFreelanceJob">
+    <form class="space-y-4" novalidate @submit.prevent="submitFreelanceJob">
       <div class="grid gap-4 sm:grid-cols-2">
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Title / Designation:<span class="text-[var(--danger)]">*</span></span>
-          <input v-model="freelanceJobForm.title" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Senior Software Engineer, Business Development Mgr" />
+          <input v-model="freelanceJobForm.title" v-bind="getFreelanceJobFieldAttrs('title')" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" placeholder="Senior Software Engineer, Business Development Mgr" @input="clearFreelanceJobFieldError('title')" />
+          <p v-if="getFreelanceJobFieldError('title')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('title') }}</p>
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Required skills:<span class="text-[var(--danger)]">*</span></span>
-          <SkillPillInput v-model="freelanceJobForm.skills" placeholder="Java, Project Mgt, Event management" />
+          <div v-bind="getFreelanceJobFieldAttrs('skills')" :class="getFreelanceJobFieldState('skills') === 'error' ? 'input-shell rounded-[0.75rem]' : ''">
+            <SkillPillInput v-model="freelanceJobForm.skills" placeholder="Java, Project Mgt, Event management" @update:model-value="clearFreelanceJobFieldError('skills')" />
+          </div>
+          <p v-if="getFreelanceJobFieldError('skills')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('skills') }}</p>
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location:<span class="text-[var(--danger)]">*</span></span>
-          <select v-model="freelanceJobForm.location" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+          <select v-model="freelanceJobForm.location" v-bind="getFreelanceJobFieldAttrs('location')" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" @change="clearFreelanceJobFieldError('location')">
             <option value="">Select location</option>
             <option v-for="location in nigeriaProfileLocationOptions" :key="location" :value="location">
               {{ location }}
             </option>
           </select>
+          <p v-if="getFreelanceJobFieldError('location')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('location') }}</p>
         </label>
         <label>
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Type:<span class="text-[var(--danger)]">*</span></span>
-          <select v-model="freelanceJobForm.type" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]">
+          <select v-model="freelanceJobForm.type" v-bind="getFreelanceJobFieldAttrs('type')" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" @change="clearFreelanceJobFieldError('type')">
             <option value="contract">Contract</option>
             <option value="part-time">Part time</option>
             <option value="project-based">Project based</option>
             <option value="remote">Remote</option>
             <option value="hybrid">Hybrid</option>
           </select>
+          <p v-if="getFreelanceJobFieldError('type')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('type') }}</p>
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Description:<span class="text-[var(--danger)]">*</span></span>
-          <textarea v-model="freelanceJobForm.description" rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <textarea v-model="freelanceJobForm.description" v-bind="getFreelanceJobFieldAttrs('description')" rows="3" class="mt-1 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" @input="clearFreelanceJobFieldError('description')" />
+          <p v-if="getFreelanceJobFieldError('description')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('description') }}</p>
         </label>
         <label class="sm:col-span-2">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Qualifications and Skills:<span class="text-[var(--danger)]">*</span></span>
-          <RichTextEditor
-            v-model="freelanceJobForm.qualifications"
-            placeholder="List the qualifications, skills, certifications, and requirements for this freelance job."
-          />
+          <div v-bind="getFreelanceJobFieldAttrs('qualifications')" class="input-shell rounded-[0.75rem]">
+            <RichTextEditor
+              v-model="freelanceJobForm.qualifications"
+              placeholder="List the qualifications, skills, certifications, and requirements for this freelance job."
+              @update:model-value="clearFreelanceJobFieldError('qualifications')"
+            />
+          </div>
+          <p v-if="getFreelanceJobFieldError('qualifications')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('qualifications') }}</p>
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Min fee:N</span>
@@ -1163,23 +1249,26 @@ const clearPassportUpload = () => {
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Company Name :<span class="text-[var(--danger)]">*</span></span>
-          <input v-model="freelanceJobForm.companyName" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+          <input v-model="freelanceJobForm.companyName" v-bind="getFreelanceJobFieldAttrs('companyName')" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" @input="clearFreelanceJobFieldError('companyName')" />
+          <p v-if="getFreelanceJobFieldError('companyName')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('companyName') }}</p>
         </label>
         <label>
           <span class="text-[0.82rem] text-[var(--text-secondary)]">Application end date:<span class="text-[var(--danger)]">*</span></span>
-          <div class="mt-1 flex h-11 items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3">
-            <input v-model="freelanceJobForm.applicationEndDate" type="date" class="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+          <div v-bind="getFreelanceJobFieldAttrs('applicationEndDate')" class="input-shell mt-1 flex h-11 items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3">
+            <input v-model="freelanceJobForm.applicationEndDate" type="date" class="min-w-0 flex-1 bg-transparent text-sm outline-none" @input="clearFreelanceJobFieldError('applicationEndDate')" />
             <Calendar class="h-4 w-4 text-[var(--text-tertiary)]" />
           </div>
+          <p v-if="getFreelanceJobFieldError('applicationEndDate')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('applicationEndDate') }}</p>
         </label>
       </div>
       <label class="flex items-start gap-2 text-[0.82rem] leading-6 text-[var(--text-secondary)]">
-        <input v-model="agreedToTerms" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
+        <input v-model="agreedToTerms" v-bind="getFreelanceJobFieldAttrs('agreedToTerms')" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" @change="clearFreelanceJobFieldError('agreedToTerms')" />
         <span>
           <span class="text-[var(--danger)]">*</span>
           By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.
         </span>
       </label>
+      <p v-if="getFreelanceJobFieldError('agreedToTerms')" class="input-feedback input-feedback--error">{{ getFreelanceJobFieldError('agreedToTerms') }}</p>
       <div class="flex justify-end gap-2 border-t border-[color:var(--border-soft)] pt-4">
         <button
           type="submit"

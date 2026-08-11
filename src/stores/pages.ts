@@ -1,14 +1,17 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { ApiError } from '@/lib/api'
+import { getDisplayErrorMessage } from '@/lib/errors'
 import { extractUserIdFromToken } from '@/services/auth'
 import { pagesService, type CreatePageRequest, type PageRecord } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
+import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 
 export type PageCategory = 'student' | 'business'
 
 const OWNED_PAGE_REFERENCES_KEY = 'skills4export-owned-page-references'
 const PAGE_CATEGORY_REFERENCES_KEY = 'skills4export-page-category-references'
+const PAGES_PAGE_SIZE = 20
 const PAGE_METADATA_KEYS = [
   'slogan',
   'contactEmail',
@@ -374,10 +377,14 @@ export const usePagesStore = defineStore('pages', () => {
     pagesError.value = ''
 
     try {
-      const response = await pagesService.listMyPages({ per_page: 100 }, authStore.authToken)
+      const response = await loadPaginatedRecords(
+        (params) => pagesService.listMyPages(params, authStore.authToken),
+        {},
+        { perPage: PAGES_PAGE_SIZE, maxPages: 3 },
+      )
       setPagesFromApi(response.data)
     } catch (error) {
-      pagesError.value = error instanceof ApiError ? error.message : 'Unable to load pages.'
+      pagesError.value = getDisplayErrorMessage(error, 'Unable to load pages.')
 
       if (!pages.value.length) {
         pages.value = []
@@ -417,7 +424,7 @@ export const usePagesStore = defineStore('pages', () => {
         return page
       }
 
-      pagesError.value = error instanceof ApiError ? error.message : 'Unable to load page.'
+      pagesError.value = getDisplayErrorMessage(error, 'Unable to load page.')
       return null
     } finally {
       isLoadingPages.value = false
@@ -447,7 +454,7 @@ export const usePagesStore = defineStore('pages', () => {
       ]
       return publicPage
     } catch (error) {
-      pagesError.value = error instanceof ApiError ? error.message : 'Unable to load page.'
+      pagesError.value = getDisplayErrorMessage(error, 'Unable to load page.')
       return null
     } finally {
       isLoadingPages.value = false

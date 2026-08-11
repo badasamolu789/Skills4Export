@@ -478,7 +478,7 @@ export const pagesService = {
   },
 
   async findPageBySlug(slug: string, token?: string | null) {
-    const response = await pagesService.listPages({ per_page: 100, q: slug }, token)
+    const response = await pagesService.listPages({ per_page: 20, q: slug }, token)
 
     return response.data.find((page) => page.slug === slug) ?? null
   },
@@ -537,7 +537,7 @@ export const pagesService = {
 
   listPageUploads(id: string, token?: string | null) {
     return api.get<PaginatorPayload<Record<string, unknown>>>(withQuery(PAGE_ROUTES.pageUploads(id), {
-      per_page: 100,
+      per_page: 20,
       sort: '-createdAt',
     }), { token })
   },

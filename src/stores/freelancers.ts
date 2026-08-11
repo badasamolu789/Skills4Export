@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ApiError } from '@/lib/api'
+import { getDisplayErrorMessage } from '@/lib/errors'
 import {
   freelancersService,
   type ApplyToFreelanceJobRequest,
@@ -11,9 +11,12 @@ import {
 } from '@/services/freelancers'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 
 const PUBLIC_FREELANCER_STATUSES = new Set(['available', 'certified'])
 const PUBLIC_FREELANCE_JOB_STATUSES = new Set(['approved', 'active', 'live'])
+const FREELANCERS_PAGE_SIZE = 20
+const FREELANCE_JOBS_PAGE_SIZE = 20
 
 const isPublicFreelancer = (freelancer: FreelancerRecord) => {
   const status = freelancer.status?.toLowerCase()
@@ -90,13 +93,13 @@ export const useFreelancersStore = defineStore('freelancers', () => {
     freelancersError.value = ''
 
     try {
-      const response = await freelancersService.listFreelancers({ per_page: 100 }, authStore.authToken)
+      const response = await freelancersService.listFreelancers({ per_page: FREELANCERS_PAGE_SIZE }, authStore.authToken)
       freelancers.value = await enrichFreelancerProfiles(
         response.data.filter(isPublicFreelancer),
         authStore.authToken,
       )
     } catch (error) {
-      freelancersError.value = error instanceof ApiError ? error.message : 'Unable to load freelancers.'
+      freelancersError.value = getDisplayErrorMessage(error, 'Unable to load freelancers.')
       freelancers.value = []
     } finally {
       isLoadingFreelancers.value = false
@@ -120,19 +123,25 @@ export const useFreelancersStore = defineStore('freelancers', () => {
     freelanceJobsError.value = ''
 
     try {
-      const publicJobsResponse = await freelancersService.listFreelanceJobs({ per_page: 100 }, authStore.authToken)
+      const publicJobsResponse = await freelancersService.listFreelanceJobs(
+        { per_page: FREELANCE_JOBS_PAGE_SIZE },
+        authStore.authToken,
+      )
       const publicJobs = publicJobsResponse.data.filter(isPublicFreelanceJob)
       let ownPostedJobs: FreelanceJobRecord[] = []
 
       if (authStore.authToken) {
-        const ownPostedJobsResponse = await freelancersService.listMyFreelanceJobs({ per_page: 100 }, authStore.authToken)
+        const ownPostedJobsResponse = await loadPaginatedRecords(
+          (params) => freelancersService.listMyFreelanceJobs(params, authStore.authToken),
+          {},
+          { perPage: FREELANCE_JOBS_PAGE_SIZE, maxPages: 2 },
+        )
         ownPostedJobs = ownPostedJobsResponse.data.filter(isPublicFreelanceJob)
       }
 
       freelanceJobs.value = mergeFreelanceJobs(ownPostedJobs, publicJobs)
     } catch (error) {
-      freelanceJobsError.value =
-        error instanceof ApiError ? error.message : 'Unable to load freelance jobs.'
+      freelanceJobsError.value = getDisplayErrorMessage(error, 'Unable to load freelance jobs.')
       freelanceJobs.value = []
     } finally {
       isLoadingFreelanceJobs.value = false
@@ -155,8 +164,7 @@ export const useFreelancersStore = defineStore('freelancers', () => {
       const response = await freelancersService.getFreelanceJob(idOrSlug, authStore.authToken)
       currentFreelanceJob.value = response.data
     } catch (error) {
-      freelanceJobDetailError.value =
-        error instanceof ApiError ? error.message : 'Unable to load this freelance job.'
+      freelanceJobDetailError.value = getDisplayErrorMessage(error, 'Unable to load this freelance job.')
     } finally {
       isLoadingFreelanceJobDetail.value = false
     }

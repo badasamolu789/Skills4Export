@@ -13,7 +13,7 @@ import {
   UserRound,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import { ApiError } from '@/lib/api'
+import { getDisplayErrorMessage } from '@/lib/errors'
 import { useTheme, type ThemeMode } from '@/composables/useTheme'
 import { authService } from '@/services/auth'
 import { usersService, type UserPrivacyResponse, type UserSettings } from '@/services/users'
@@ -31,7 +31,7 @@ type SettingsTab =
 const authStore = useAuthStore()
 const pagesStore = usePagesStore()
 const router = useRouter()
-const activeTab = ref<SettingsTab>('privacy')
+const activeTab = ref<SettingsTab>('theme')
 const showPasswordFields = ref({
   current: false,
   next: false,
@@ -326,7 +326,7 @@ const updateNotificationPreference = async (
     applyNotificationSettings(response.data)
   } catch (error) {
     notificationPreferences.value = previousPreferences
-    const message = error instanceof Error ? error.message : 'Unable to save notification preferences.'
+    const message = getDisplayErrorMessage(error, 'Unable to save notification preferences.')
     toast.error('Notification preference failed', { description: message })
   } finally {
     isSavingNotificationPreferences.value = false
@@ -362,7 +362,7 @@ const changePassword = async () => {
     passwordForm.value = { current: '', next: '', confirm: '' }
     toast.success('Password changed.')
   } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to change password.'
+    const message = getDisplayErrorMessage(error, 'Unable to change password.')
     toast.error('Password failed', { description: message })
   } finally {
     isSavingPassword.value = false
@@ -392,7 +392,7 @@ const deleteSelectedPage = async () => {
     deletePageConfirmed.value = false
     toast.success('Page deleted.')
   } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to delete page.'
+    const message = getDisplayErrorMessage(error, 'Unable to delete page.')
     toast.error('Delete failed', { description: message })
   } finally {
     isDeletingPage.value = false
@@ -426,7 +426,7 @@ const deleteAccount = async () => {
     authStore.clearAuthenticatedSession()
     await router.push('/auth/login')
   } catch (error) {
-    const message = error instanceof ApiError ? error.message : 'Unable to disable account.'
+    const message = getDisplayErrorMessage(error, 'Unable to disable account.')
     toast.error('Account disable failed', { description: message })
   } finally {
     isDisablingAccount.value = false
@@ -440,7 +440,7 @@ const savePrivacy = async () => {
   try {
     await usersService.updatePrivacy(buildPrivacyPayload(), authStore.authToken)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to save privacy settings.'
+    const message = getDisplayErrorMessage(error, 'Unable to save privacy settings.')
     toast.error('Privacy update failed', { description: message })
   } finally {
     isSavingPrivacy.value = false
@@ -699,18 +699,23 @@ onMounted(() => {
         <h2 class="text-xl font-semibold text-[var(--danger)]">{{ deleteCopy.title }}</h2>
         <p class="mt-1 text-lg font-semibold text-[var(--danger)]">Sorry to see you go</p>
         <p class="mt-4 text-sm leading-7 text-[var(--text-primary)]">
-          Before confirming that you would like your profile deleted, we'd like to take a moment to explain the implications of deletion:
+          <template v-if="activeTab === 'delete-page'">
+            Before confirming that you would like your page deleted, we would like to take a moment to explain the implications of page deletion:
+          </template>
+          <template v-else>
+            Before confirming that you would like your profile deleted, we'd like to take a moment to explain the implications of deletion:
+          </template>
         </p>
         <ul class="mt-4 list-disc space-y-3 pl-5 text-sm leading-7 text-[var(--text-secondary)]">
           <li>
             Deletion is irreversible, and you will have no way to regain any of your original content, should this deletion be carried out and you change your mind later on.
           </li>
-          <li>
+          <li v-if="activeTab === 'delete-account'">
             Your questions and answers will remain on the site, but will be disassociated and anonymized, and will not indicate your authorship even if you later return to the site.
           </li>
         </ul>
         <p class="mt-5 text-sm leading-7 text-[var(--text-primary)]">
-          Once you delete your account, there is no going back. Please be certain.
+          {{ activeTab === 'delete-page' ? 'Once you delete your page, there is no going back. Please be certain.' : 'Once you delete your account, there is no going back. Please be certain.' }}
         </p>
         <label v-if="activeTab === 'delete-page'" class="mt-5 block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Page to delete</span>
@@ -738,7 +743,7 @@ onMounted(() => {
             class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]"
           />
           <span>
-            I have read the information stated above and understand the implications of having my profile deleted. I wish to proceed with the deletion of my profile.
+            {{ activeTab === 'delete-page' ? 'I have read the information stated above and understand the implications of having my page deleted. I wish to proceed with the deletion of my page.' : 'I have read the information stated above and understand the implications of having my profile deleted. I wish to proceed with the deletion of my profile.' }}
           </span>
         </label>
         <button

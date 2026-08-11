@@ -2,11 +2,10 @@ import { toast } from 'vue-sonner'
 import type { ApiError } from '@/lib/api'
 import {
     getUserFriendlyErrorMessage,
-    getRecoveryAction,
     extractErrorCode,
     extractFieldErrors,
     getErrorSeverity,
-    sanitizeUserMessage,
+    getDisplayErrorMessage,
 } from '@/lib/errors'
 
 export interface ErrorHandlerOptions {
@@ -91,8 +90,8 @@ export function useErrorHandler() {
                 }
             }
 
-            const message = sanitizeUserMessage(
-                apiError.message,
+            const message = getDisplayErrorMessage(
+                apiError,
                 getUserFriendlyErrorMessage(errorCode, apiError.status),
             )
 

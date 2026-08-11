@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import { ApiError } from '@/lib/api'
+import { getDisplayErrorMessage } from '@/lib/errors'
 import {
   jobsService,
   type ApplyToJobRequest,
@@ -9,6 +10,7 @@ import {
   type JobRecord,
 } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
+import { hasNextPage, loadPaginatedRecords } from '@/utils/paginatedLoader'
 
 const PUBLIC_JOB_STATUSES = new Set(['approved', 'active', 'live'])
 
@@ -35,6 +37,9 @@ const mergeJobs = (...groups: JobRecord[][]) => {
 const isCompleteUuid = (value?: string | null) =>
   Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
 
+const JOBS_PAGE_SIZE = 12
+const MANAGE_JOBS_PAGE_SIZE = 20
+
 export const useJobsStore = defineStore('jobs', () => {
   const authStore = useAuthStore()
   const jobs = ref<JobRecord[]>([])
@@ -42,9 +47,12 @@ export const useJobsStore = defineStore('jobs', () => {
   const appliedJobs = ref<JobApplicationRecord[]>([])
   const currentJob = ref<JobRecord | null>(null)
   const isLoadingJobs = ref(false)
+  const isLoadingMoreJobs = ref(false)
   const isLoadingManageJobs = ref(false)
   const isLoadingJob = ref(false)
   const jobsError = ref('')
+  const nextJobsPage = ref<number | null>(null)
+  const hasMoreJobs = ref(false)
   const manageJobsError = ref('')
   const jobError = ref('')
 
@@ -73,27 +81,65 @@ export const useJobsStore = defineStore('jobs', () => {
     return [job.id, cachedJob?.id].find((value) => isCompleteUuid(value)) || ''
   }
 
+  const loadJobsPage = async (page = 1) => {
+    const publicJobsResponse = await jobsService.listJobs(
+      { page, per_page: JOBS_PAGE_SIZE },
+      authStore.authToken,
+    )
+    const publicJobs = publicJobsResponse.data.filter(isPublicJob)
+    let ownPostedJobs: JobRecord[] = []
+
+    if (authStore.authToken && page === 1) {
+      const ownPostedJobsResponse = await jobsService.listMyPostedJobs(
+        { page: 1, per_page: JOBS_PAGE_SIZE },
+        authStore.authToken,
+      )
+      ownPostedJobs = ownPostedJobsResponse.data.filter(isPublicJob)
+      postedJobs.value = ownPostedJobs
+    }
+
+    return {
+      records: mergeJobs(ownPostedJobs, publicJobs),
+      nextPage: hasNextPage(publicJobsResponse) ? publicJobsResponse.current_page + 1 : null,
+    }
+  }
+
   const loadJobs = async () => {
     isLoadingJobs.value = true
     jobsError.value = ''
+    nextJobsPage.value = null
+    hasMoreJobs.value = false
 
     try {
-      const publicJobsResponse = await jobsService.listJobs({ per_page: 100 }, authStore.authToken)
-      const publicJobs = publicJobsResponse.data.filter(isPublicJob)
-      let ownPostedJobs: JobRecord[] = []
-
-      if (authStore.authToken) {
-        const ownPostedJobsResponse = await jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken)
-        ownPostedJobs = ownPostedJobsResponse.data.filter(isPublicJob)
-        postedJobs.value = ownPostedJobs
-      }
-
-      jobs.value = mergeJobs(ownPostedJobs, publicJobs)
+      const response = await loadJobsPage(1)
+      jobs.value = response.records
+      nextJobsPage.value = response.nextPage
+      hasMoreJobs.value = Boolean(response.nextPage)
     } catch (error) {
-      jobsError.value = error instanceof ApiError ? error.message : 'Unable to load jobs.'
+      jobsError.value = getDisplayErrorMessage(error, 'Unable to load jobs.')
       jobs.value = []
     } finally {
       isLoadingJobs.value = false
+    }
+  }
+
+  const loadMoreJobs = async () => {
+    if (!nextJobsPage.value || isLoadingJobs.value || isLoadingMoreJobs.value) {
+      return
+    }
+
+    isLoadingMoreJobs.value = true
+
+    try {
+      const response = await loadJobsPage(nextJobsPage.value)
+      jobs.value = mergeJobs(jobs.value, response.records)
+      nextJobsPage.value = response.nextPage
+      hasMoreJobs.value = Boolean(response.nextPage)
+      jobsError.value = ''
+    } catch (error) {
+      jobsError.value = getDisplayErrorMessage(error, 'Unable to load more jobs.')
+    } finally {
+      isLoadingMoreJobs.value = false
     }
   }
 
@@ -115,7 +161,7 @@ export const useJobsStore = defineStore('jobs', () => {
       const response = await jobsService.getJob(idOrSlug, authStore.authToken)
       currentJob.value = mergeWithCachedJobIdentity(response.data, idOrSlug)
     } catch (error) {
-      jobError.value = error instanceof ApiError ? error.message : 'Unable to load this job.'
+      jobError.value = getDisplayErrorMessage(error, 'Unable to load this job.')
     } finally {
       isLoadingJob.value = false
     }
@@ -189,15 +235,21 @@ export const useJobsStore = defineStore('jobs', () => {
     manageJobsError.value = ''
 
     try {
-      const [postedResponse, appliedResponse] = await Promise.all([
-        jobsService.listMyPostedJobs({ per_page: 100 }, authStore.authToken),
-        jobsService.listMyJobApplications({ per_page: 100 }, authStore.authToken),
-      ])
+      const postedResponse = await loadPaginatedRecords(
+        (params) => jobsService.listMyPostedJobs(params, authStore.authToken),
+        {},
+        { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 3 },
+      )
+      const appliedResponse = await loadPaginatedRecords(
+        (params) => jobsService.listMyJobApplications(params, authStore.authToken),
+        {},
+        { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 3 },
+      )
 
       postedJobs.value = postedResponse.data
       appliedJobs.value = appliedResponse.data
     } catch (error) {
-      manageJobsError.value = error instanceof ApiError ? error.message : 'Unable to load your jobs.'
+      manageJobsError.value = getDisplayErrorMessage(error, 'Unable to load your jobs.')
       postedJobs.value = []
       appliedJobs.value = []
     } finally {
@@ -211,12 +263,15 @@ export const useJobsStore = defineStore('jobs', () => {
     appliedJobs,
     currentJob,
     isLoadingJobs,
+    isLoadingMoreJobs,
     isLoadingManageJobs,
     isLoadingJob,
     jobsError,
+    hasMoreJobs,
     manageJobsError,
     jobError,
     loadJobs,
+    loadMoreJobs,
     createJob,
     loadJob,
     applyToCurrentJob,

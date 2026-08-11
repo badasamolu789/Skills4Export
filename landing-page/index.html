@@ -15,7 +15,7 @@
     <header
       class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-[color:var(--landing-border)] bg-[color:color-mix(in_srgb,var(--surface-primary)_94%,transparent)] px-4 py-2 backdrop-blur sm:px-6 lg:px-8">
       <a href="./index.html" class="flex items-center gap-3" aria-label="Skills4Export home">
-        <img id="landing-logo" loading="eager" decoding="async" fetchpriority="high" src="./assets/logo_1.svg"
+        <img id="landing-logo" loading="eager" decoding="async" fetchpriority="high" src="./assets/logo_light.webp"
           alt="Skills4Export logo" class="h-12 w-auto object-contain sm:h-14">
       </a>
 
@@ -102,8 +102,9 @@
 
           <div
             class="landing-preview mx-auto hidden w-full max-w-[20rem] sm:max-w-[28rem] md:block md:max-w-[34rem] lg:mx-0 lg:max-w-[36rem] xl:max-w-[40rem] lg:justify-self-stretch">
-            <img id="landing-preview-image" src="./assets/combine_img(white_screen).png" alt="Skills4Export app preview"
-              class="block w-full h-auto object-contain" loading="eager" decoding="async" fetchpriority="high">
+            <img id="landing-preview-image" src="./assets/combine_img(white_screen).webp"
+              alt="Skills4Export app preview" class="block w-full h-auto object-contain" width="1600" height="911"
+              loading="eager" decoding="async" fetchpriority="high">
           </div>
         </section>
       </main>
@@ -128,9 +129,9 @@
         document.documentElement.dataset.theme = mode
         document.documentElement.style.colorScheme = mode
         const logo = document.getElementById('landing-logo')
-        if (logo) logo.setAttribute('src', mode === 'dark' ? './assets/logo_2.png' : './assets/logo_1.svg')
+        if (logo) logo.setAttribute('src', mode === 'dark' ? './assets/logo_dark.webp' : './assets/logo_light.webp')
         const previewImage = document.getElementById('landing-preview-image')
-        if (previewImage) previewImage.setAttribute('src', mode === 'dark' ? './assets/combine_img(dark_screen).png' : './assets/combine_img(white_screen).png')
+        if (previewImage) previewImage.setAttribute('src', mode === 'dark' ? './assets/combine_img(dark_screen).webp' : './assets/combine_img(white_screen).webp')
         const btn = document.getElementById('theme-toggle')
         const icon = document.getElementById('theme-toggle-icon')
         if (btn && icon) {

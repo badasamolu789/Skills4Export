@@ -3,13 +3,17 @@ import { computed, onMounted, ref } from 'vue'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import type { QuestionPost } from '@/data/feedPosts'
-import { ApiError } from '@/lib/api'
+import { getDisplayErrorMessage } from '@/lib/errors'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
+import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
+
+const QUESTIONS_PAGE_SIZE = 20
+const COMMUNITIES_PAGE_SIZE = 20
 
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
@@ -61,13 +65,15 @@ const loadQuestions = async () => {
   questionsError.value = ''
 
   try {
-    const [response, communitiesResponse] = await Promise.all([
-      questionsService.listQuestions(
-        { per_page: 100, sort: '-createdAt' },
-        authStore.authToken,
-      ),
-      communitiesService.listCommunities({ per_page: 100, limit: 100 }, authStore.authToken),
-    ])
+    const communitiesResponse = await loadPaginatedRecords(
+      (params) => communitiesService.listCommunities(params, authStore.authToken),
+      {},
+      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 3 },
+    )
+    const response = await questionsService.listQuestions(
+      { per_page: QUESTIONS_PAGE_SIZE, sort: '-createdAt' },
+      authStore.authToken,
+    )
     communitiesById.value = new Map(
       (communitiesResponse.data ?? []).map((community) => [community.id, community]),
     )
@@ -77,8 +83,7 @@ const loadQuestions = async () => {
     })
     hasLoadedApiQuestions.value = true
   } catch (error) {
-    questionsError.value =
-      error instanceof ApiError ? error.message : 'Unable to load questions from the server.'
+    questionsError.value = getDisplayErrorMessage(error, 'Unable to load questions from the server.')
     apiQuestions.value = []
     hasLoadedApiQuestions.value = true
   } finally {

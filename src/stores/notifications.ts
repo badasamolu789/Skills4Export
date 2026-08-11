@@ -65,7 +65,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
     const browserNotification = new Notification(item.title, {
       body: item.description,
-      icon: item.actor?.avatar || '/logo_1.svg',
+      icon: item.actor?.avatar || '/logo_light.webp',
       tag: item.id,
     })
 

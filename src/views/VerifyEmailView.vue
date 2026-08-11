@@ -270,7 +270,7 @@ const resendOtp = async () => {
         </p>
       </div>
 
-      <form class="mt-6 space-y-4" @submit.prevent="verifyOtp">
+      <form class="mt-6 space-y-4" novalidate @submit.prevent="verifyOtp">
         <div class="space-y-2">
           <label class="text-sm font-semibold text-[var(--text-primary)] sm:text-base">One-time password</label>
           <div class="grid grid-cols-6 gap-2 sm:gap-3">

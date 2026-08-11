@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ApiError } from '@/lib/api'
+import { getDisplayErrorMessage } from '@/lib/errors'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
 import { isPublicCommunity } from '@/utils/communityFilters'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { richTextToPlainText } from '@/utils/richText'
+
+const COMMUNITIES_PAGE_SIZE = 20
 
 const authStore = useAuthStore()
 const searchQuery = ref('')
@@ -32,14 +35,18 @@ const loadCommunities = async () => {
   communitiesError.value = ''
 
   try {
-    const response = await communitiesService.listCommunities({ per_page: 100 }, authStore.authToken)
+    const response = await loadPaginatedRecords(
+      (params) => communitiesService.listCommunities(params, authStore.authToken),
+      {},
+      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 3 },
+    )
     communities.value = response.data.filter(
       (community) =>
         community.is_active !== 0 &&
         isPublicCommunity(community),
     )
   } catch (error) {
-    communitiesError.value = error instanceof ApiError ? error.message : 'Unable to load communities.'
+    communitiesError.value = getDisplayErrorMessage(error, 'Unable to load communities.')
     communities.value = []
   } finally {
     isLoadingCommunities.value = false
