@@ -234,6 +234,7 @@ const restoreCachedFeed = () => {
     if (
       cached?.storedAt &&
       Array.isArray(cached.items) &&
+      cached.items.length > 0 &&
       Date.now() - cached.storedAt < FEED_CACHE_TTL_MS
     ) {
       socialActionsStore.setFeed(cached.items)
@@ -248,6 +249,11 @@ const restoreCachedFeed = () => {
 
 const cacheFeed = (items: FeedPost[]) => {
   if (typeof window === 'undefined') {
+    return
+  }
+
+  if (!items.length) {
+    window.sessionStorage.removeItem(getFeedCacheKey())
     return
   }
 
@@ -375,10 +381,15 @@ const loadFeed = async (options: {
 
     currentFeedPage.value = compactFeedResponse.current_page || requestedPage
     lastFeedPage.value = compactFeedResponse.last_page || 1
-    publishFeed(
-      (compactFeedResponse.data ?? []).map(mapCompactFeedItemToFeedPost),
-      Boolean(options.append),
-    )
+    const mappedFeedItems = (compactFeedResponse.data ?? []).flatMap((item) => {
+      try {
+        return [mapCompactFeedItemToFeedPost(item)]
+      } catch {
+        return []
+      }
+    })
+
+    publishFeed(mappedFeedItems, Boolean(options.append))
     isLoadingFeed.value = false
 
     if (advertsResponse) {

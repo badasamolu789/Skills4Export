@@ -720,6 +720,11 @@ export type FollowUserResponse = {
 export type UserFollowStatus = {
   following?: boolean
   is_following?: boolean
+  isFollow?: boolean | number | string | null
+  is_follow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
+  followedByMe?: boolean | number | string | null
+  followed_by_me?: boolean | number | string | null
   followerId?: string
   followingId?: string
 }

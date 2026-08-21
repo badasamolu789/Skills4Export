@@ -6,6 +6,7 @@ const FOLLOW_STATE_KEYS = [
   'isfollow',
   'followedByMe',
   'followed_by_me',
+  'following',
   'follows',
 ] as const
 
@@ -46,13 +47,13 @@ export const readBooleanFlag = (value: unknown): boolean | undefined => {
 
 export const readFollowState = (...sources: unknown[]): boolean | undefined => {
   for (const source of sources) {
-    const directValue = readBooleanFlag(source)
-
-    if (directValue !== undefined && !isRecord(source)) {
-      return directValue
-    }
-
     if (!isRecord(source)) {
+      const directValue = readBooleanFlag(source)
+
+      if (directValue !== undefined) {
+        return directValue
+      }
+
       continue
     }
 

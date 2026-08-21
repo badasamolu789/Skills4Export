@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
+import { readFollowState } from '@/utils/followState'
 import { richTextToPlainText } from '@/utils/richText'
 
 type ProfileUploadItem = {
@@ -185,7 +186,7 @@ const getFollowerAccount = (follower: UserFollower) => {
   const avatar =
     getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
     getStringField(userRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image'])
-  const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+  const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'isFollow', 'is_follow', 'isfollow', 'followedByMe', 'followed_by_me'])
 
   return {
     id,
@@ -293,7 +294,7 @@ const loadProfile = async () => {
       const account = getFollowerAccount(follower)
       if (account.id) {
         const followerRecord = follower as Record<string, unknown>
-        const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+        const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'isFollow', 'is_follow', 'isfollow', 'followedByMe', 'followed_by_me'])
         const isFollowing = explicitState ?? nextFollowingIds.has(account.id)
         nextFollowStates[account.id] = isFollowing
         socialActionsStore.setUserFollowingState(account.id, isFollowing)
@@ -308,13 +309,7 @@ const loadProfile = async () => {
 
     if (authStore.authToken && authStore.userId && authStore.userId !== userId.value) {
       const followStatusResponse = await usersService.getUserFollowStatus(userId.value, authStore.authToken)
-      const followStatus = followStatusResponse.data
-      const isFollowingFromStatus =
-        typeof followStatus?.following === 'boolean'
-          ? followStatus.following
-          : typeof followStatus?.is_following === 'boolean'
-            ? followStatus.is_following
-            : false
+      const isFollowingFromStatus = readFollowState(followStatusResponse.data) ?? false
 
       socialActionsStore.setUserFollowingState(userId.value, isFollowingFromStatus)
     } else {

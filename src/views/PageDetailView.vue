@@ -34,7 +34,9 @@ import { postsService, type PostMediaRecord, type PostRecord } from '@/services/
 import { usersService, type UserRecord } from '@/services/users'
 import { usePagesStore } from '@/stores/pages'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, getInitialsFromName } from '@/utils/displayName'
+import { readFollowState } from '@/utils/followState'
 import { optimizeImageFile, optimizePageAvatarFile } from '@/utils/imageOptimization'
 import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
 
@@ -74,6 +76,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const pagesStore = usePagesStore()
+const socialActionsStore = useSocialActionsStore()
 
 const activeTab = ref<PageTab>('posts')
 const pagePosts = ref<PagePost[]>([])
@@ -822,7 +825,8 @@ const loadPageFollowers = async () => {
           if (authStore.userId && userId !== authStore.userId) {
             try {
               const statusResponse = await usersService.getUserFollowStatus(userId, authStore.authToken)
-              isFollowing = Boolean(statusResponse.data?.following ?? statusResponse.data?.is_following)
+              isFollowing = readFollowState(statusResponse.data) ?? false
+              socialActionsStore.setUserFollowingState(userId, isFollowing)
             } catch {
               isFollowing = false
             }
@@ -878,6 +882,7 @@ const toggleFollowerUser = async (follower: PageFollowerRecord) => {
     }
 
     const nextFollowing = !follower.isFollowing
+    socialActionsStore.setUserFollowingState(follower.userId, nextFollowing)
     pageFollowers.value = pageFollowers.value.map((item) =>
       item.userId === follower.userId
         ? { ...item, isFollowing: nextFollowing }

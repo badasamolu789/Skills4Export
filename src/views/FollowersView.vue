@@ -6,8 +6,11 @@ import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
+import { readFollowState } from '@/utils/followState'
 
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -26,6 +29,28 @@ const isLoadingFollowers = ref(false)
 const isFollowing = ref<Record<string, boolean>>({})
 const isToggling = ref<Record<string, boolean>>({})
 
+const syncFollowerStatus = async (targetUserId?: string) => {
+  if (!targetUserId || targetUserId === authStore.userId || !authStore.authToken) {
+    return
+  }
+
+  try {
+    const response = await usersService.getUserFollowStatus(targetUserId, authStore.authToken)
+    const nextFollowing = readFollowState(response.data) ?? false
+    isFollowing.value[targetUserId] = nextFollowing
+    socialActionsStore.setUserFollowingState(targetUserId, nextFollowing)
+  } catch {
+    isFollowing.value[targetUserId] = socialActionsStore.isFollowingUser(targetUserId)
+  }
+}
+
+const isFollowingUser = (targetUserId?: string) =>
+  Boolean(targetUserId && (
+    socialActionsStore.followingUserIds[targetUserId] !== undefined
+      ? socialActionsStore.isFollowingUser(targetUserId)
+      : isFollowing.value[targetUserId]
+  ))
+
 const loadFollowers = async () => {
   if (!userId.value) {
     return
@@ -36,6 +61,7 @@ const loadFollowers = async () => {
   try {
     const response = await usersService.listFollowers(userId.value, authStore.authToken)
     followers.value = response.data
+    await Promise.all(response.data.map((follower) => syncFollowerStatus(follower.followerId)))
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -69,8 +95,7 @@ const followUser = async (targetUserId: string) => {
   isToggling.value[targetUserId] = true
 
   try {
-    await usersService.followUser(targetUserId, { followerId: authStore.userId }, authStore.authToken)
-
+    await socialActionsStore.followUser(targetUserId)
     isFollowing.value[targetUserId] = true
   } catch (error) {
     const message =
@@ -88,8 +113,7 @@ const unfollowUser = async (targetUserId: string) => {
   isToggling.value[targetUserId] = true
 
   try {
-    await usersService.unfollowUser(targetUserId, authStore.authToken)
-
+    await socialActionsStore.unfollowUser(targetUserId)
     isFollowing.value[targetUserId] = false
   } catch (error) {
     const message =
@@ -181,14 +205,14 @@ onMounted(() => {
             :disabled="isToggling[follower.followerId]"
             class="flex-shrink-0 inline-flex items-center justify-center gap-2 rounded-[0.875rem] px-3 py-2 text-sm font-semibold transition"
             :class="
-              isFollowing[follower.followerId]
+              isFollowingUser(follower.followerId)
                 ? 'bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-red-100 hover:text-red-500'
                 : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'
             "
-            @click="isFollowing[follower.followerId] ? unfollowUser(follower.followerId) : followUser(follower.followerId)"
+            @click="isFollowingUser(follower.followerId) ? unfollowUser(follower.followerId) : followUser(follower.followerId)"
           >
-            <component :is="isFollowing[follower.followerId] ? UserCheck : UserPlus" class="h-4 w-4" />
-            {{ isFollowing[follower.followerId] ? 'Unfollow' : 'Follow' }}
+            <component :is="isFollowingUser(follower.followerId) ? UserCheck : UserPlus" class="h-4 w-4" />
+            {{ isFollowingUser(follower.followerId) ? 'Unfollow' : 'Follow' }}
           </button>
         </div>
       </div>

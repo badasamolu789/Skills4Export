@@ -845,7 +845,7 @@ const loadProfile = async () => {
       const followerId =
         getStringField(followerRecord, ['followerId', 'follower_id', 'userId', 'user_id']) ||
         followerAccount.id
-      const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+      const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'isFollow', 'is_follow', 'isfollow', 'followedByMe', 'followed_by_me'])
 
       if (followerId) {
         const isFollowing = explicitState ?? nextFollowingIds.has(followerId)
@@ -897,7 +897,7 @@ const getFollowerAccount = (follower: UserFollower) => {
   const avatar =
     getStringField(profileRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) ||
     getStringField(userRecord, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image'])
-  const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'followedByMe', 'followed_by_me'])
+  const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'isFollow', 'is_follow', 'isfollow', 'followedByMe', 'followed_by_me'])
 
   return {
     id,

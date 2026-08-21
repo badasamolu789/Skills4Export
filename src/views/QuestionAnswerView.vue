@@ -9,6 +9,7 @@ import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
+import { readFollowState } from '@/utils/followState'
 import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
@@ -63,11 +64,14 @@ const loadQuestion = async (question: QuestionRecord) => {
     community,
   )
 
+  const isFollowingAuthor = readFollowState(followStatusResponse?.data, mappedQuestion)
+  if (userId && isFollowingAuthor !== undefined) {
+    socialActionsStore.setUserFollowingState(userId, isFollowingAuthor)
+  }
+
   return {
     ...mappedQuestion,
-    isFollowing: Boolean(
-      followStatusResponse?.data?.following ?? followStatusResponse?.data?.is_following,
-    ),
+    ...(isFollowingAuthor !== undefined ? { isFollowing: isFollowingAuthor } : {}),
   }
 }
 
