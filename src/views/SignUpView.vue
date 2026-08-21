@@ -3,14 +3,14 @@ import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
-import { ApiError } from '@/lib/api'
+import { getErrorMessage } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 import { usePasswordToggle } from '@/composables/usePasswordToggle'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
-import { collectValidationErrors, isValidEmail } from '@/utils/formValidation'
+import { collectValidationErrors, isStrongPassword, isValidEmail } from '@/utils/formValidation'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -33,6 +33,9 @@ const form = ref({
   rememberMe: authStore.signUpDraft.rememberMe,
   acceptedTerms: authStore.signUpDraft.acceptedTerms,
 })
+
+const passwordRequirementMessage =
+  'Password must be at least 8 characters and include uppercase, lowercase, and a number.'
 
 const continueSignUp = async () => {
   if (isSubmitting.value) {
@@ -65,8 +68,8 @@ const continueSignUp = async () => {
     {
       field: 'password',
       value: form.value.password,
-      message: 'Password must be at least 8 characters.',
-      validate: (value) => String(value).trim().length >= 8,
+      message: passwordRequirementMessage,
+      validate: (value) => isStrongPassword(String(value)),
     },
     {
       field: 'acceptedTerms',
@@ -97,10 +100,7 @@ const continueSignUp = async () => {
   try {
     router.push('/auth/signup/details')
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'We could not start your registration. Please try again.'
+    const message = getErrorMessage(error, 'We could not start your registration. Please try again.')
 
     setApiFieldErrors(error)
 
@@ -144,10 +144,7 @@ const signUpWithGoogle = async () => {
     })
     router.push(redirectTarget)
   } catch (error) {
-    const message =
-      error instanceof ApiError || error instanceof Error
-        ? error.message
-        : 'Google sign-up could not be completed.'
+    const message = getErrorMessage(error, 'Google sign-up could not be completed.')
 
     toast.error('Google sign-up failed', {
       id: loadingToastId,
@@ -243,6 +240,7 @@ const signUpWithGoogle = async () => {
               </svg>
             </button>
           </div>
+          <p class="mt-2 text-[0.7rem] text-(--text-secondary)">{{ passwordRequirementMessage }}</p>
           <p v-if="getFieldError('password')" class="input-feedback input-feedback--error">
             {{ getFieldError('password') }}
           </p>

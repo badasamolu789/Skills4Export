@@ -6,6 +6,7 @@ import type { QuestionPost } from '@/data/feedPosts'
 import { getDisplayErrorMessage } from '@/lib/errors'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { questionsService, type QuestionRecord } from '@/services/questions'
+import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { loadPaginatedRecords } from '@/utils/paginatedLoader'
@@ -41,14 +42,17 @@ const questions = computed(() => {
 const loadQuestion = async (question: QuestionRecord) => {
   const userId = getQuestionUserId(question)
   const community = communitiesById.value.get(question.communityId || question.community_id || '')
-  const [authorData, answersResponse] = await Promise.all([
+  const [authorData, answersResponse, followStatusResponse] = await Promise.all([
     userId
       ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
       : Promise.resolve(null),
     questionsService.listAnswers(question.id, authStore.authToken),
+    userId && userId !== authStore.userId
+      ? usersService.getUserFollowStatus(userId, authStore.authToken)
+      : Promise.resolve(null),
   ])
 
-  return mapApiQuestionToFeedPost(
+  const mappedQuestion = mapApiQuestionToFeedPost(
     {
       ...question,
       answers_count: answersResponse.total ?? question.answers_count,
@@ -58,6 +62,13 @@ const loadQuestion = async (question: QuestionRecord) => {
     community?.name,
     community,
   )
+
+  return {
+    ...mappedQuestion,
+    isFollowing: Boolean(
+      followStatusResponse?.data?.following ?? followStatusResponse?.data?.is_following,
+    ),
+  }
 }
 
 const loadQuestions = async () => {
@@ -99,11 +110,11 @@ onMounted(() => {
 <template>
   <section class="space-y-5">
     <div class="space-y-3 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+      <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
         <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>
         <span class="font-medium text-[var(--accent-strong)]">Question</span>
-      </div>
+      </div> -->
     </div>
 
     <div
@@ -146,6 +157,7 @@ onMounted(() => {
         v-for="post in questions"
         :key="post.apiId || `${post.communityName}-${post.title}`"
         :post="post"
+        follow-question-author
       />
       <div
         v-if="hasLoadedApiQuestions && !questions.length"

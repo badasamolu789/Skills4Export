@@ -164,11 +164,11 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
   }
 
   const followUser = async (userId: string) => {
-    if (!authStore.userId || !authStore.authToken || isFollowingUser(userId)) {
+    const key = `follow:${userId}`
+    if (!authStore.userId || !authStore.authToken || isFollowingUser(userId) || loadingActions.value[key]) {
       return
     }
 
-    const key = `follow:${userId}`
     followingUserIds.value = { ...followingUserIds.value, [userId]: true }
     adjustProfileStats(userId, { followers: 1 })
     adjustProfileStats(authStore.userId, { following: 1 })
@@ -193,11 +193,11 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
   }
 
   const unfollowUser = async (userId: string) => {
-    if (!authStore.authToken || !isFollowingUser(userId)) {
+    const key = `follow:${userId}`
+    if (!authStore.authToken || !isFollowingUser(userId) || loadingActions.value[key]) {
       return
     }
 
-    const key = `follow:${userId}`
     followingUserIds.value = { ...followingUserIds.value, [userId]: false }
     adjustProfileStats(userId, { followers: -1 })
     if (authStore.userId) {

@@ -5,6 +5,7 @@ import type { QuestionRecord } from '@/services/questions'
 import type { MyProfileData } from '@/services/users'
 import { getOptionalCount } from '@/utils/postMapper'
 import { getDisplayName } from '@/utils/displayName'
+import { readFollowState } from '@/utils/followState'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getProfileContextTag } from '@/utils/profileContextTag'
 
@@ -166,6 +167,7 @@ export const mapApiQuestionToFeedPost = (
     ),
     Array.isArray(question.answers) ? question.answers.length : 0,
   )
+  const isFollowingAuthor = readFollowState(question, question.user, question.asker, author)
 
   return {
     type: 'question',
@@ -195,5 +197,6 @@ export const mapApiQuestionToFeedPost = (
     ),
     isSaved: Boolean(question.is_saved),
     isScored: Boolean(question.is_liked),
+    ...(isFollowingAuthor !== undefined ? { isFollowing: isFollowingAuthor } : {}),
   }
 }

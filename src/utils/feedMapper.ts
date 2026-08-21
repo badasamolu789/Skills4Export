@@ -2,6 +2,7 @@ import { slugify } from '@/utils/slugify'
 import type { FeedPost } from '@/data/feedPosts'
 import type { CompactFeedMedia, CompactFeedRecord } from '@/services/feeds'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
+import { readBooleanFlag, readFollowState } from '@/utils/followState'
 import { getOptionalCount, isVideoPostMedia } from '@/utils/postMapper'
 import { getProfileContextTag } from '@/utils/profileContextTag'
 
@@ -25,12 +26,8 @@ const readString = (source: unknown, keys: string[]) => {
 }
 
 const readBoolean = (...values: unknown[]) => {
-  const value = values.find((item) => item !== undefined && item !== null && item !== '')
-
-  return value === true ||
-    value === 1 ||
-    String(value ?? '').trim().toLowerCase() === 'true' ||
-    String(value ?? '').trim() === '1'
+  const value = values.map(readBooleanFlag).find((item) => item !== undefined)
+  return value ?? false
 }
 
 const formatFeedTime = (value?: string | null) => {
@@ -152,7 +149,9 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       tag: getAuthorSkills(author),
       answers: getOptionalCount(item.answersCount, item.answers_count, item.answer_count),
       score: getOptionalCount(item.score),
-      isFollowing: readBoolean(viewerState?.isFollowing, viewerState?.is_following),
+      ...(readFollowState(viewerState, item, author) !== undefined
+        ? { isFollowing: readFollowState(viewerState, item, author) }
+        : {}),
       isSaved: readBoolean(viewerState?.isSaved, viewerState?.is_saved, item.isSaved, item.is_saved),
       isScored: readBoolean(viewerState?.isScored, viewerState?.is_scored, item.isLiked, item.is_liked),
     }
@@ -194,9 +193,13 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
     media,
     score: getOptionalCount(item.score),
     comments: getOptionalCount(item.commentsCount, item.comments_count, item.comment_count),
-    isFollowing: pageId
-      ? readBoolean(item.page?.isFollow, item.page?.is_follow, viewerState?.isFollowing, viewerState?.is_following)
-      : readBoolean(viewerState?.isFollowing, viewerState?.is_following),
+    ...(pageId
+      ? readFollowState(item.page, viewerState, item) !== undefined
+        ? { isFollowing: readFollowState(item.page, viewerState, item) }
+        : {}
+      : readFollowState(viewerState, item, author) !== undefined
+        ? { isFollowing: readFollowState(viewerState, item, author) }
+        : {}),
     isSaved: readBoolean(viewerState?.isSaved, viewerState?.is_saved, item.isSaved, item.is_saved),
     isScored: readBoolean(viewerState?.isScored, viewerState?.is_scored, item.isLiked, item.is_liked),
   }

@@ -1,33 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Sun, Moon } from 'lucide-vue-next'
-import { useTheme } from '@/composables/useTheme'
 import type { RouteLocationRaw } from 'vue-router'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
-import combinedScreenDarkImage from '@/assets/combine_img(dark_screen).webp'
 import combinedScreenLightImage from '@/assets/combine_img(white_screen).webp'
+import combinedScreenDarkImage from '@/assets/combine_img(dark_screen).webp'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { isGoogleClientConfigured, requestGoogleIdToken } from '@/composables/useGoogleAuth'
+import { useTheme } from '@/composables/useTheme'
 import { resolveGoogleOnboardingRedirect } from '@/utils/googleOnboarding'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { resolvedTheme } = useTheme()
 const isRedirectingToGoogle = ref(false)
 
-const { resolvedTheme, setTheme } = useTheme()
 const logoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_dark.webp' : '/logo_light.webp')
-const combinedScreenImage = computed(
-  () => resolvedTheme.value === 'dark' ? combinedScreenDarkImage : combinedScreenLightImage,
-)
-
-const toggleTheme = () => {
-  const next = resolvedTheme.value === 'dark' ? 'light' : 'dark'
-  setTheme(next)
-}
+const combinedScreenImage = computed(() => resolvedTheme.value === 'dark' ? combinedScreenDarkImage : combinedScreenLightImage)
 
 if (authStore.isAuthenticated) {
   const redirect = (route.query.redirect as string) || '/feed'
@@ -45,12 +37,6 @@ const navLinks = [
 ]
 
 const footerLinks = [
-  { label: 'Showcase Skills', to: '/freelancers', requiresAuth: true },
-  { label: 'Career Pathways', to: '/communities', requiresAuth: true },
-  { label: 'Student Page', to: { path: '/pages/create', query: { type: 'student' } }, requiresAuth: true },
-  { label: 'Art&Character', to: '/communities', requiresAuth: true },
-  { label: 'Jokes', to: '/jokes', requiresAuth: true },
-  { label: 'Headlines', to: '/headlines', requiresAuth: true },
   { label: 'Product Page', to: { path: '/pages/create', query: { type: 'business' } }, requiresAuth: true },
   { label: 'Privacy Policy', to: '/privacy-policy', requiresAuth: false },
   { label: 'Terms', to: '/terms-and-conditions', requiresAuth: false },
@@ -153,24 +139,6 @@ const signUpWithGoogle = async () => {
         <img loading="eager" decoding="async" fetchpriority="high" :src="logoSrc" alt="Skills4Export logo" class="h-12 w-auto object-contain sm:h-14" />
       </RouterLink>
 
-      <nav class="hidden min-w-0 flex-1 items-center justify-center gap-1 text-sm font-medium text-[var(--landing-muted)] lg:flex" aria-label="Landing navigation">
-        <RouterLink
-          v-for="item in navLinks"
-          :key="item.label"
-          :to="item.to"
-          custom
-          v-slot="{ href, navigate }"
-        >
-          <a
-            :href="href"
-            class="rounded-full px-2.5 py-2 transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] xl:px-3"
-            @click="handleGuestNav($event, navigate)"
-          >
-            {{ item.label }}
-          </a>
-        </RouterLink>
-      </nav>
-
       <div class="flex items-center gap-2">
         <RouterLink
           :to="{ path: '/auth/signup', query: redirectQuery }"
@@ -184,16 +152,6 @@ const signUpWithGoogle = async () => {
         >
           Sign in
         </RouterLink>
-        <button
-          type="button"
-          @click="toggleTheme"
-          :aria-pressed="resolvedTheme === 'dark'"
-          class="ml-2 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--border-soft)] bg-[var(--surface-primary)] text-[var(--landing-muted)] hover:bg-[var(--surface-muted)]"
-          title="Toggle theme"
-        >
-          <Sun v-if="resolvedTheme === 'dark'" class="h-5 w-5" />
-          <Moon v-else class="h-5 w-5" />
-        </button>
       </div>
     </header>
 

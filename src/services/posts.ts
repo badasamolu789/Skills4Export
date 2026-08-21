@@ -22,6 +22,11 @@ export type PostRecord = {
     avatar_url?: string | null
     profileImage?: string | null
     profile_image?: string | null
+    is_follow?: boolean | number | string | null
+    isFollow?: boolean | number | string | null
+    isfollow?: boolean | number | string | Record<string, unknown> | null
+    is_following?: boolean | number | string | null
+    isFollowing?: boolean | number | string | null
   } | null
   page_id: string | null
   pageId?: string | null
@@ -42,6 +47,7 @@ export type PostRecord = {
     logo_url?: string | null
     is_follow?: boolean
     isFollow?: boolean
+    isfollow?: boolean | number | string | Record<string, unknown> | null
   } | null
   parent_post_id?: string | null
   originalPostId?: string | null
@@ -65,6 +71,10 @@ export type PostRecord = {
   is_liked?: boolean
   is_report?: boolean
   is_follow?: boolean
+  isFollow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
+  is_following?: boolean | number | string | null
+  isFollowing?: boolean | number | string | null
 }
 
 export type PostMediaRecord = {

@@ -5,6 +5,7 @@ import RichTextContent from '@/components/RichTextContent.vue'
 export type PostCommentThreadItem = {
   id: number | string
   parentId?: string | null
+  authorUserId?: string
   author: string
   authorTo?: string
   avatarSrc?: string | null

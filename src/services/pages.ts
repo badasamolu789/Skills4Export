@@ -1,6 +1,7 @@
 import { api } from '@/lib/api'
 import type { ApiSuccessResponse, PaginatorPayload } from '@/services/posts'
 import { optimizePageAvatarFile } from '@/utils/imageOptimization'
+import { readFollowState } from '@/utils/followState'
 
 export type PageRecord = {
   id: string
@@ -32,6 +33,7 @@ export type PageRecord = {
   category_pages_count?: number | null
   is_follow?: boolean
   isFollow?: boolean
+  isfollow?: boolean | number | string | Record<string, unknown> | null
   createdAt: string
   updatedAt: string
 }
@@ -376,7 +378,7 @@ const normalizePage = (page: unknown): PageRecord => {
     followers_count: readNumber(record.followers_count, record.followersCount),
     posts_count: readNumber(record.posts_count, record.postsCount),
     category_pages_count: readNumber(record.category_pages_count, record.categoryPagesCount),
-    is_follow: Boolean(record.is_follow ?? record.isFollow),
+    is_follow: readFollowState(record) ?? false,
     createdAt: readString(record.createdAt, record.created_at) || new Date().toISOString(),
     updatedAt: readString(record.updatedAt, record.updated_at) || readString(record.createdAt, record.created_at) || new Date().toISOString(),
   }

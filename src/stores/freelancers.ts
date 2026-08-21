@@ -13,7 +13,7 @@ import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 
-const PUBLIC_FREELANCER_STATUSES = new Set(['available', 'certified'])
+const PUBLIC_FREELANCER_STATUSES = new Set(['available', 'certified', 'verified'])
 const PUBLIC_FREELANCE_JOB_STATUSES = new Set(['approved', 'active', 'live'])
 const FREELANCERS_PAGE_SIZE = 20
 const FREELANCE_JOBS_PAGE_SIZE = 20

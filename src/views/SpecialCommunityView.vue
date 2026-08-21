@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ClipboardList, Newspaper, PenLine, SmilePlus } from 'lucide-vue-next'
+import { Newspaper, PenLine, Plus, SmilePlus } from 'lucide-vue-next'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import AppRightRail from '@/components/AppRightRail.vue'
+import AppSidebar from '@/components/AppSidebar.vue'
+import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
-import { communitiesService, type CommunityRecord } from '@/services/communities'
+import { communitiesService, type CommunityMemberRecord, type CommunityRecord } from '@/services/communities'
 import { postsService, type PostRecord } from '@/services/posts'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
@@ -20,14 +23,22 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const community = ref<CommunityRecord | null>(null)
+const members = ref<CommunityMemberRecord[]>([])
 const posts = ref<Array<{ record: PostRecord; feedPost: FeedPost }>>([])
 const isLoading = ref(false)
+const isJoining = ref(false)
 const errorMessage = ref('')
 
 const pageKind = computed(() => String(route.meta.specialCommunity ?? 'jokes'))
 const targetCommunityName = computed(() => pageKind.value === 'headlines' ? 'Headlines' : 'Jokes')
 const isHeadlinesPage = computed(() => pageKind.value === 'headlines')
 const selectedHeadlineId = computed(() => String(route.query.headline ?? ''))
+const sortOrder = computed(() => route.query.sort === 'popular' ? 'popular' : 'latest')
+const getMemberUserId = (member: CommunityMemberRecord) =>
+  member.userId || member.user_id || member.user?.id || ''
+const isFollowing = computed(() =>
+  Boolean(authStore.userId && members.value.some((member) => getMemberUserId(member) === authStore.userId)),
+)
 
 const sortedPosts = computed(() => {
   return [...posts.value].sort((first, second) => {
@@ -89,6 +100,7 @@ const loadPage = async () => {
   isLoading.value = true
   errorMessage.value = ''
   community.value = null
+  members.value = []
   posts.value = []
 
   try {
@@ -104,8 +116,22 @@ const loadPage = async () => {
 
     community.value = matchedCommunity
 
+    try {
+      const membersResponse = await communitiesService.listCommunityMembers(
+        matchedCommunity.id,
+        authStore.authToken,
+      )
+      members.value = membersResponse.data ?? []
+    } catch {
+      members.value = []
+    }
+
     const postsResponse = await postsService.listPosts(
-      { per_page: 20, sort: '-createdAt', communityId: matchedCommunity.id },
+      {
+        per_page: 20,
+        sort: sortOrder.value === 'popular' ? '-score' : '-createdAt',
+        communityId: matchedCommunity.id,
+      },
       authStore.authToken,
     )
     const communityPosts = (postsResponse.data ?? []).filter(
@@ -118,6 +144,44 @@ const loadPage = async () => {
       : `Unable to load ${targetCommunityName.value}.`
   } finally {
     isLoading.value = false
+  }
+}
+
+const toggleMembership = async () => {
+  if (!community.value || isJoining.value) {
+    return
+  }
+
+  if (!authStore.authToken || !authStore.userId) {
+    toast.error('Sign in required', {
+      description: 'Please sign in again before following this community.',
+    })
+    return
+  }
+
+  isJoining.value = true
+
+  try {
+    if (isFollowing.value) {
+      await communitiesService.leaveCommunity(community.value.id, authStore.authToken)
+      members.value = members.value.filter((member) => getMemberUserId(member) !== authStore.userId)
+    } else {
+      const response = await communitiesService.joinCommunity(community.value.id, authStore.authToken)
+      members.value = [
+        {
+          ...response.data,
+          userId: response.data.userId || response.data.user_id || authStore.userId,
+          communityId: response.data.communityId || response.data.community_id || community.value.id,
+        },
+        ...members.value,
+      ]
+    }
+  } catch (error) {
+    toast.error('Community follow failed', {
+      description: error instanceof ApiError ? error.message : 'Unable to update community follow state.',
+    })
+  } finally {
+    isJoining.value = false
   }
 }
 
@@ -148,7 +212,7 @@ const handlePostCreated = () => {
 }
 
 watch(
-  () => route.meta.specialCommunity,
+  () => route.fullPath,
   () => {
     void loadPage()
   },
@@ -166,11 +230,11 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="space-y-6">
-    <div class="flex flex-wrap items-center gap-2 px-1 text-sm text-[var(--text-secondary)]">
+    <!-- <div class="flex flex-wrap items-center gap-2 px-1 text-sm text-[var(--text-secondary)]">
       <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
       <span>/</span>
       <span class="font-medium text-[var(--accent-strong)]">{{ targetCommunityName }}</span>
-    </div>
+    </div> -->
 
     <section class="relative overflow-hidden rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 shadow-[var(--shadow-elevated)] sm:p-8">
       <div class="pointer-events-none absolute right-8 top-0 hidden h-full w-48 opacity-60 lg:block">
@@ -209,13 +273,16 @@ onBeforeUnmount(() => {
             <PenLine class="h-4 w-4" />
             Page Post
           </button>
-          <RouterLink
-            to="/community-regulations"
-            class="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[0.75rem] bg-[var(--surface-secondary)] px-4 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]"
+          <button
+            type="button"
+            :disabled="!community || isJoining"
+            class="inline-flex h-11 items-center justify-center gap-2 whitespace-nowrap rounded-[0.75rem] px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+            :class="isFollowing ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]' : 'bg-[var(--surface-secondary)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)]'"
+            @click="toggleMembership"
           >
-            <ClipboardList class="h-4 w-4" />
-            View Regulations
-          </RouterLink>
+            <Plus v-if="!isFollowing" class="h-4 w-4" />
+            {{ isJoining ? 'Updating...' : isFollowing ? 'Unfollow' : 'Follow' }}
+          </button>
         </div>
       </div>
     </section>
@@ -223,10 +290,14 @@ onBeforeUnmount(() => {
     <div
       :class="
         isHeadlinesPage
-          ? 'grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]'
-          : 'space-y-5'
+          ? 'grid gap-5 lg:grid-cols-[18rem_minmax(0,1fr)_17.5rem]'
+          : 'grid gap-4 lg:grid-cols-[17.5rem_minmax(0,1fr)_17.5rem] xl:gap-5'
       "
     >
+      <aside v-if="!isHeadlinesPage" class="hidden lg:block">
+        <AppSidebar />
+      </aside>
+
       <aside
         v-if="isHeadlinesPage"
         class="rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)] lg:sticky lg:top-28 lg:self-start"
@@ -301,6 +372,10 @@ onBeforeUnmount(() => {
           </p>
         </div>
       </section>
+
+      <aside class="hidden lg:block">
+        <AppRightRail :hide-trending-questions="true" />
+      </aside>
     </div>
   </section>
 </template>

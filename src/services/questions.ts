@@ -31,7 +31,11 @@ export type QuestionAnswerRecord = {
   commentsCount?: number | string
   is_saved?: boolean
   is_liked?: boolean
-  is_follow?: boolean
+  is_follow?: boolean | number | string | null
+  isFollow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
+  is_following?: boolean | number | string | null
+  isFollowing?: boolean | number | string | null
   media?: PostMediaRecord[] | null
   media_assets?: PostMediaRecord[] | null
 }
@@ -75,17 +79,32 @@ export type QuestionRecord = {
   score?: number | string
   is_saved?: boolean
   is_liked?: boolean
+  is_follow?: boolean | number | string | null
+  isFollow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
+  is_following?: boolean | number | string | null
+  isFollowing?: boolean | number | string | null
   user?: {
     id?: string
     username?: string | null
     name?: string | null
     email?: string | null
+    is_follow?: boolean | number | string | null
+    isFollow?: boolean | number | string | null
+    isfollow?: boolean | number | string | Record<string, unknown> | null
+    is_following?: boolean | number | string | null
+    isFollowing?: boolean | number | string | null
   } | null
   asker?: {
     id?: string
     username?: string | null
     name?: string | null
     email?: string | null
+    is_follow?: boolean | number | string | null
+    isFollow?: boolean | number | string | null
+    isfollow?: boolean | number | string | Record<string, unknown> | null
+    is_following?: boolean | number | string | null
+    isFollowing?: boolean | number | string | null
   } | null
   community?: {
     id?: string

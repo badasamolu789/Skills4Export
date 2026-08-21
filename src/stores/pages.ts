@@ -5,6 +5,7 @@ import { getDisplayErrorMessage } from '@/lib/errors'
 import { extractUserIdFromToken } from '@/services/auth'
 import { pagesService, type CreatePageRequest, type PageRecord } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
+import { readFollowState } from '@/utils/followState'
 import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 
 export type PageCategory = 'student' | 'business'
@@ -237,7 +238,7 @@ export const mapPageRecordToManagedPage = (page: PageRecord): ManagedPage => {
     createdAt: page.createdAt,
     updatedAt: page.updatedAt,
     ownerId: getPageOwnerId(page),
-    isFollowing: Boolean(page.is_follow ?? page.isFollow),
+    isFollowing: readFollowState(page) ?? false,
   }
 }
 

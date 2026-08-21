@@ -125,13 +125,17 @@
       const STORAGE_KEY = 'Skills4Export-theme'
       const mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)')
 
+      function resolveAsset(filename) {
+        return `./assets/${filename}`
+      }
+
       function applyTheme(mode) {
         document.documentElement.dataset.theme = mode
         document.documentElement.style.colorScheme = mode
         const logo = document.getElementById('landing-logo')
-        if (logo) logo.setAttribute('src', mode === 'dark' ? './assets/logo_dark.webp' : './assets/logo_light.webp')
+        if (logo) logo.setAttribute('src', mode === 'dark' ? resolveAsset('logo_dark.webp') : resolveAsset('logo_light.webp'))
         const previewImage = document.getElementById('landing-preview-image')
-        if (previewImage) previewImage.setAttribute('src', mode === 'dark' ? './assets/combine_img(dark_screen).webp' : './assets/combine_img(white_screen).webp')
+        if (previewImage) previewImage.setAttribute('src', mode === 'dark' ? resolveAsset('combine_img(dark_screen).webp') : resolveAsset('combine_img(white_screen).webp'))
         const btn = document.getElementById('theme-toggle')
         const icon = document.getElementById('theme-toggle-icon')
         if (btn && icon) {

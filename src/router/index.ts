@@ -266,6 +266,8 @@ const router = createRouter({
         layout: 'app',
         requiresAuth: true,
         specialCommunity: 'jokes',
+        hideSidebar: true,
+        hideRightRail: true,
         hideRightRailQuestions: true,
       },
     },
@@ -278,7 +280,7 @@ const router = createRouter({
         requiresAuth: true,
         specialCommunity: 'headlines',
         hideSidebar: true,
-        showRightRail: true,
+        hideRightRail: true,
         hideRightRailQuestions: true,
       },
     },
@@ -289,6 +291,8 @@ const router = createRouter({
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        hideRightRail: true,
       },
     },
     {

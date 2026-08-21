@@ -75,7 +75,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const pagesStore = usePagesStore()
 
-const activeTab = ref<PageTab>('about')
+const activeTab = ref<PageTab>('posts')
 const pagePosts = ref<PagePost[]>([])
 const recommendedJobs = ref<JobRecord[]>([])
 const isLoadingPosts = ref(false)
@@ -1104,8 +1104,18 @@ const submitPagePost = async () => {
   const content = pagePostContent.value.trim()
   const plainContent = getPlainTextFromHtml(content)
 
-  if (!title || !plainContent) {
-    toast.error('Add a title and content before posting.')
+  if (!title) {
+    toast.error('Add a title before posting.')
+    return
+  }
+
+  if (!plainContent) {
+    toast.error('Add some content before posting.')
+    return
+  }
+
+  if (!pagePostFile.value) {
+    toast.error('Upload an image or video before posting.')
     return
   }
 
@@ -1189,7 +1199,7 @@ onBeforeUnmount(() => {
 watch(
   () => route.params.slug,
   () => {
-    activeTab.value = 'about'
+    activeTab.value = 'posts'
     void loadPageDetailData()
   },
 )
@@ -1198,7 +1208,7 @@ watch(
   () => page.value?.id,
   () => {
     if (activeTab.value && !tabs.value.some((tab) => tab.value === activeTab.value)) {
-      activeTab.value = 'about'
+      activeTab.value = 'posts'
     }
 
     void loadPagePosts()
@@ -1223,13 +1233,14 @@ watch(pagePostFile, (file, previousFile) => {
 
 <template>
   <section v-if="page" class="page-detail-shell">
-    <nav class="page-breadcrumb" aria-label="Breadcrumb">
+    <!-- Breadcrumbs are temporarily hidden on this page. -->
+    <!-- <nav class="page-breadcrumb" aria-label="Breadcrumb">
       <RouterLink to="/feed">Home</RouterLink>
       <span>/</span>
       <RouterLink to="/pages/create">Pages</RouterLink>
       <span>/</span>
       <span>{{ page.name }}</span>
-    </nav>
+    </nav> -->
 
     <div class="page-detail-hero">
       <div class="flex flex-col gap-6">
@@ -1891,22 +1902,24 @@ watch(pagePostFile, (file, previousFile) => {
         <input
           v-model="pagePostTitle"
           type="text"
+          required
           placeholder="Please choose an appropriate title for the post."
           class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
         />
       </label>
 
       <label class="block">
-        <span class="text-sm font-semibold text-[var(--text-primary)]">Content</span>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Content<span class="text-[var(--danger)]">*</span></span>
         <RichTextEditor
           v-model="pagePostContent"
           class="mt-2"
+          required
           placeholder="Write the post content here..."
         />
       </label>
 
       <label class="block">
-        <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video</span>
+        <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span class="text-[var(--danger)]">*</span></span>
         <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
           Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB.
         </span>
@@ -1974,7 +1987,7 @@ watch(pagePostFile, (file, previousFile) => {
             </span>
           </span>
         </span>
-        <input ref="pagePostFileInput" type="file" accept="image/*,video/*" class="sr-only" @change="handlePagePostFileChange" />
+        <input ref="pagePostFileInput" type="file" accept="image/*,video/*" class="sr-only" required @change="handlePagePostFileChange" />
       </label>
 
       <button
@@ -1987,7 +2000,7 @@ watch(pagePostFile, (file, previousFile) => {
         <ArrowRight class="h-4 w-4" />
       </button>
       <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-        <input v-model="agreedToPagePostTerms" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
+        <input v-model="agreedToPagePostTerms" type="checkbox" required class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
         <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
       </label>
     </div>

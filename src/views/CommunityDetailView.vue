@@ -3,6 +3,8 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import AppRightRail from '@/components/AppRightRail.vue'
+import AppSidebar from '@/components/AppSidebar.vue'
 import type { FeedPost } from '@/data/feedPosts'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import { ClipboardList, Plus } from 'lucide-vue-next'
@@ -279,11 +281,11 @@ watch(
   </section>
 
   <section v-else-if="community" class="space-y-6">
-    <div class="flex flex-wrap items-center gap-2 px-1 text-sm text-[var(--text-secondary)]">
+    <!-- <div class="flex flex-wrap items-center gap-2 px-1 text-sm text-[var(--text-secondary)]">
       <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
       <span>/</span>
       <RouterLink to="/communities" class="transition hover:text-[var(--accent-strong)]">Communities</RouterLink>
-    </div>
+    </div> -->
 
     <section class="relative overflow-hidden rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 shadow-[var(--shadow-elevated)] sm:p-8">
       <div class="pointer-events-none absolute right-8 top-0 hidden h-full w-48 opacity-60 lg:block">
@@ -339,39 +341,50 @@ watch(
       </div>
     </section>
 
-    <section class="space-y-4">
-      <div v-if="isLoadingCommunityFeed" class="space-y-3">
-        <article
-          v-for="item in 2"
-          :key="item"
-          class="animate-pulse rounded-3xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-soft)]"
-        >
-          <div class="h-4 w-32 rounded-full bg-[var(--surface-secondary)]" />
-          <div class="mt-4 h-6 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
-          <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-secondary)]" />
-          <div class="mt-2 h-4 w-4/5 rounded-full bg-[var(--surface-secondary)]" />
-        </article>
-      </div>
+    <div class="grid gap-4 lg:grid-cols-[17.5rem_minmax(0,1fr)_17.5rem] xl:gap-5">
+      <aside class="hidden lg:block">
+        <AppSidebar />
+      </aside>
 
-      <div v-else-if="communityFeedError" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
-        {{ communityFeedError }}
-      </div>
+      <section class="min-w-0 space-y-4">
+        <div v-if="isLoadingCommunityFeed" class="space-y-3">
+          <article
+            v-for="item in 2"
+            :key="item"
+            class="animate-pulse rounded-3xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-soft)]"
+          >
+            <div class="h-4 w-32 rounded-full bg-[var(--surface-secondary)]" />
+            <div class="mt-4 h-6 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
+            <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-secondary)]" />
+            <div class="mt-2 h-4 w-4/5 rounded-full bg-[var(--surface-secondary)]" />
+          </article>
+        </div>
 
-      <div v-else-if="sortedCommunityFeed.length" class="space-y-4">
-        <AppFeedPost
-          v-for="post in sortedCommunityFeed"
-          :key="post.apiId || post.slug"
-          :post="post"
-        />
-      </div>
+        <div v-else-if="communityFeedError" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+          {{ communityFeedError }}
+        </div>
 
-      <div v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
-        <p class="text-sm font-semibold text-[var(--text-primary)]">No community posts yet.</p>
-        <p class="mt-1 text-sm text-[var(--text-secondary)]">
-          Select this community when posting or asking a question to start the feed.
-        </p>
-      </div>
-    </section>
+        <div v-else-if="sortedCommunityFeed.length" class="space-y-4">
+          <AppFeedPost
+            v-for="post in sortedCommunityFeed"
+            :key="post.apiId || post.slug"
+            :post="post"
+            hide-community-context
+          />
+        </div>
+
+        <div v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
+          <p class="text-sm font-semibold text-[var(--text-primary)]">No community posts yet.</p>
+          <p class="mt-1 text-sm text-[var(--text-secondary)]">
+            Select this community when posting or asking a question to start the feed.
+          </p>
+        </div>
+      </section>
+
+      <aside class="hidden lg:block">
+        <AppRightRail :hide-trending-questions="true" />
+      </aside>
+    </div>
   </section>
 
   <section v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">

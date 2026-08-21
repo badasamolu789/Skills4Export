@@ -19,6 +19,7 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { getOptionalCount } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
+import { readFollowState } from '@/utils/followState'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 
 const route = useRoute()
@@ -393,6 +394,11 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
 
   const media = getAnswerEmbeddedMedia(answer)
 
+  const isFollowingAuthor = readFollowState(answer)
+  if (!getAnswerPageId(answer) && userId && isFollowingAuthor !== undefined) {
+    socialActionsStore.setUserFollowingState(userId, isFollowingAuthor)
+  }
+
   return {
     id: answer.id,
     authorUserId: userId,
@@ -414,7 +420,7 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
     ),
     isScored: false,
     isSaved: Boolean(answer.is_saved),
-    isFollowing: Boolean(answer.is_follow),
+    isFollowing: isFollowingAuthor ?? (userId ? socialActionsStore.isFollowingUser(userId) : false),
     comments: getOptionalCount(answer.comments_count, answer.comment_count, answer.commentsCount),
     isCommentsOpen: false,
     commentInput: '',
@@ -531,7 +537,9 @@ const loadQuestion = async (id: string, options: { background?: boolean } = {}) 
         comments: Math.max(answer.comments, previous.comments),
         isSaved: answer.isSaved || previous.isSaved,
         isScored: answer.isScored || previous.isScored,
-        isFollowing: answer.isFollowing || previous.isFollowing,
+        isFollowing: answer.pageId
+          ? answer.isFollowing
+          : isAnswerFollowing(answer),
       }
     })
   } catch (error) {
@@ -681,6 +689,19 @@ const toggleAnswerScore = async (answer: AnswerItem) => {
   }
 }
 
+const setAnswerAuthorFollowingState = (targetUserId: string, isFollowing: boolean) => {
+  answerItems.value.forEach((item) => {
+    if (!item.pageId && item.authorUserId === targetUserId) {
+      item.isFollowing = isFollowing
+    }
+  })
+}
+
+const isAnswerFollowing = (answer: AnswerItem) =>
+  !answer.pageId && answer.authorUserId && socialActionsStore.followingUserIds[answer.authorUserId] !== undefined
+    ? socialActionsStore.isFollowingUser(answer.authorUserId)
+    : answer.isFollowing
+
 const toggleAnswerFollow = (answer: AnswerItem) => {
   void (async () => {
     if (answer.authorUserId && answer.authorUserId === authStore.userId) {
@@ -704,7 +725,14 @@ const toggleAnswerFollow = (answer: AnswerItem) => {
       return
     }
 
-    const nextValue = !answer.isFollowing
+    if (activeAnswerActionId.value) {
+      return
+    }
+
+    const nextValue = answer.pageId
+      ? !answer.isFollowing
+      : !socialActionsStore.isFollowingUser(answer.authorUserId)
+    activeAnswerActionId.value = answer.id
 
     try {
       if (answer.pageId) {
@@ -717,10 +745,16 @@ const toggleAnswerFollow = (answer: AnswerItem) => {
         await socialActionsStore.toggleUserFollow(answer.authorUserId)
       }
 
-      answer.isFollowing = nextValue
+      if (answer.authorUserId && !answer.pageId) {
+        setAnswerAuthorFollowingState(answer.authorUserId, socialActionsStore.isFollowingUser(answer.authorUserId))
+      } else {
+        answer.isFollowing = nextValue
+      }
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
       toast.error('Follow failed', { description: message })
+    } finally {
+      activeAnswerActionId.value = ''
     }
   })()
 }
@@ -926,7 +960,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section v-if="isLoadingQuestion && !question" class="space-y-4" aria-label="Loading question">
+  <section v-if="isLoadingQuestion && !question" class="mx-auto w-full max-w-[44rem] space-y-4" aria-label="Loading question">
     <article class="animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
       <div class="h-7 w-4/5 rounded-full bg-[var(--surface-muted)]"></div>
       <div class="mt-3 h-4 w-2/3 rounded-full bg-[var(--surface-muted)]"></div>
@@ -934,14 +968,14 @@ onBeforeUnmount(() => {
     </article>
   </section>
 
-  <section v-else-if="question" class="space-y-4">
+  <section v-else-if="question" class="mx-auto w-full max-w-[44rem] space-y-4">
     <article class="overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
       <div class="space-y-4 border-b border-[color:var(--border-soft)] p-4 sm:p-5">
-        <div class="flex flex-wrap items-center gap-2 text-[0.82rem] text-[var(--text-secondary)]">
+        <!-- <div class="flex flex-wrap items-center gap-2 text-[0.82rem] text-[var(--text-secondary)]">
           <RouterLink to="/answers" class="transition hover:text-[var(--accent-strong)]">Questions</RouterLink>
           <span>/</span>
           <span class="font-medium text-[var(--accent-strong)]">Details</span>
-        </div>
+        </div> -->
 
         <h1 class="text-[1.45rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.9rem]">
           {{ question.title }}
@@ -1053,11 +1087,12 @@ onBeforeUnmount(() => {
                   <button
                     v-if="answer.authorUserId !== authStore.userId && (answer.pageId || answer.authorUserId)"
                     type="button"
+                    :disabled="activeAnswerActionId === answer.id"
                     class="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
                     @click="toggleAnswerFollow(answer)"
                   >
                     <Check class="h-3.5 w-3.5" />
-                    {{ answer.isFollowing ? 'Unfollow' : 'Follow' }}
+                    {{ isAnswerFollowing(answer) ? 'Unfollow' : 'Follow' }}
                   </button>
                 </div>
               </div>
@@ -1197,7 +1232,7 @@ onBeforeUnmount(() => {
     </article>
   </section>
 
-  <section v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center">
+  <section v-else class="mx-auto w-full max-w-[44rem] rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center">
     <h1 class="text-xl font-semibold text-[var(--text-primary)]">Question not found</h1>
     <p class="mt-3 text-sm leading-7 text-[var(--text-secondary)]">
       {{ questionError || 'The question you are looking for is not available.' }}

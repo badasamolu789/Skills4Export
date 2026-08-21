@@ -9,6 +9,11 @@ export type CompactFeedAuthor = {
   avatarUrl?: string | null
   avatar_url?: string | null
   skills?: unknown[]
+  is_follow?: boolean | number | string | null
+  isFollow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
+  is_following?: boolean | number | string | null
+  isFollowing?: boolean | number | string | null
 }
 
 export type CompactFeedMedia = {
@@ -26,6 +31,9 @@ export type CompactFeedMedia = {
 export type CompactFeedViewerState = {
   isFollowing?: boolean
   is_following?: boolean
+  isFollow?: boolean | number | string | null
+  is_follow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
   isScored?: boolean
   is_scored?: boolean
   isSaved?: boolean
@@ -64,6 +72,11 @@ export type CompactFeedRecord = {
   isLiked?: boolean | number | string | null
   is_saved?: boolean | number | string | null
   isSaved?: boolean | number | string | null
+  is_follow?: boolean | number | string | null
+  isFollow?: boolean | number | string | null
+  isfollow?: boolean | number | string | Record<string, unknown> | null
+  is_following?: boolean | number | string | null
+  isFollowing?: boolean | number | string | null
   author?: CompactFeedAuthor | null
   user?: CompactFeedAuthor | null
   page?: {
@@ -78,6 +91,7 @@ export type CompactFeedRecord = {
     logo_url?: string | null
     is_follow?: boolean | number | string | null
     isFollow?: boolean | number | string | null
+    isfollow?: boolean | number | string | Record<string, unknown> | null
   } | null
   community?: {
     id?: string | null

@@ -52,10 +52,18 @@ const emit = defineEmits<{
   (event: 'close'): void
 }>()
 
-const trendingLinks = [
-  { label: 'Latest', to: '/feed' },
-  { label: 'Popular', to: '/feed' },
-]
+const route = useRoute()
+const trendingLinks = computed(() =>
+  route.name === 'jokes-community'
+    ? [
+        { label: 'Latest', to: '/jokes?sort=latest' },
+        { label: 'Popular', to: '/jokes?sort=popular' },
+      ]
+    : [
+        { label: 'Latest', to: '/feed' },
+        { label: 'Popular', to: '/feed' },
+      ],
+)
 
 const menuGroups: SidebarMenuGroup[] = [
   {
@@ -93,7 +101,6 @@ const footerLinks = [
 const pagesStore = usePagesStore()
 const authStore = useAuthStore()
 const freelancersStore = useFreelancersStore()
-const route = useRoute()
 const sidebarCommunities = ref<CommunityRecord[]>([])
 const isLoadingSidebarCommunities = ref(false)
 const isJobsRoute = computed(() => route.path.startsWith('/jobs'))
@@ -104,6 +111,9 @@ const activeFreelancerTab = computed(() =>
 )
 const shouldShowDefaultSidebar = computed(
   () => !isJobsRoute.value && !isAnswerRoute.value && !isFreelancersRoute.value,
+)
+const showPageSections = computed(() =>
+  shouldShowDefaultSidebar.value && route.name !== 'jokes-community' && route.name !== 'headlines-community',
 )
 const homeSidebarLink = { label: 'Home', icon: House, to: '/feed' }
 const jobSidebarLinks: SidebarLink[] = [
@@ -135,7 +145,7 @@ const freelancerCategoryLinks = computed<SidebarLink[]>(() => {
     }))
 })
 const freelancerSidebarLinks = computed<SidebarLink[]>(() => [
-  { label: 'Home', icon: House, to: '/feed' },
+  // { label: 'Home', icon: House, to: '/feed' },
   ...freelancerCategoryLinks.value,
 ])
 const isLoadingFreelancerSidebar = computed(
@@ -440,7 +450,7 @@ watch(isFreelancersRoute, (isActive) => {
 
           <section v-else-if="isFreelancersRoute" class="space-y-2">
             <p class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
-              Categories
+              Job Categories
             </p>
             <div class="space-y-1.5">
               <RouterLink
@@ -558,7 +568,7 @@ watch(isFreelancersRoute, (isActive) => {
             </div>
           </section>
 
-          <section v-if="shouldShowDefaultSidebar" class="space-y-2 border-t border-[color:var(--border-soft)] pt-4">
+          <section v-if="showPageSections" class="space-y-2 border-t border-[color:var(--border-soft)] pt-4">
             <RouterLink
               :to="createPageLink.to"
               :class="getTopLevelLinkClasses(isGroupActive(createPageLink))"
@@ -576,7 +586,7 @@ watch(isFreelancersRoute, (isActive) => {
             </RouterLink>
           </section>
 
-          <section v-if="shouldShowDefaultSidebar" class="space-y-2 border-t border-[color:var(--border-soft)] pt-4">
+          <section v-if="showPageSections" class="space-y-2 border-t border-[color:var(--border-soft)] pt-4">
             <div class="flex items-center gap-2">
               <LayoutGrid class="h-3.5 w-3.5 text-[var(--accent-strong)]" />
               <p class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">

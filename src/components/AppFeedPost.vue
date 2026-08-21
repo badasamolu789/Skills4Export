@@ -37,6 +37,7 @@ import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
   id: number | string
   parentId?: string | null
+  authorUserId?: string
   author: string
   authorTo: string
   avatarSrc: string | null
@@ -57,6 +58,8 @@ const props = defineProps<{
   post: FeedPost
   expanded?: boolean
   allowEdit?: boolean
+  hideCommunityContext?: boolean
+  followQuestionAuthor?: boolean
 }>()
 
 const authStore = useAuthStore()
@@ -71,6 +74,7 @@ const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
 const isAnswerModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
+const isTogglingFollow = ref(false)
 const failedAuthorAvatarSrc = ref('')
 const failedSharedAuthorAvatarSrc = ref('')
 const postMenuRoot = ref<HTMLElement | null>(null)
@@ -349,7 +353,11 @@ watch(sharedOriginalPost, () => {
   failedSharedAuthorAvatarSrc.value = ''
 })
 const usesGlobalUserFollow = computed(() =>
-  Boolean(authorUserId.value && !props.post.pageId && !(props.post.type === 'question' && props.post.communityId)),
+  Boolean(
+    authorUserId.value &&
+      !props.post.pageId &&
+      (props.post.type !== 'question' || props.followQuestionAuthor || !props.post.communityId),
+  ),
 )
 const isFollowing = computed(() =>
   usesGlobalUserFollow.value
@@ -548,10 +556,12 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
 
 const mapComment = async (comment: PostCommentRecord): Promise<PostComment> => {
   const author = await resolveCommentAuthor(comment)
+  const commentAuthorUserId = comment.user_id || comment.userId || ''
 
   return {
     id: comment.id,
     parentId: comment.parent_comment_id,
+    authorUserId: commentAuthorUserId,
     author: author.name,
     authorTo: author.to,
     avatarSrc: author.avatarSrc,
@@ -568,7 +578,7 @@ const mapComment = async (comment: PostCommentRecord): Promise<PostComment> => {
       comment.likesCount,
     ),
     isScored: false,
-    isFollowing: false,
+    isFollowing: socialActionsStore.isFollowingUser(commentAuthorUserId),
     isReplying: false,
     areRepliesOpen: false,
     replyInput: '',
@@ -598,6 +608,21 @@ const buildCommentTree = async (comments: PostCommentRecord[]) => {
 
   return roots
 }
+
+const setCommentAuthorFollowingState = (targetUserId: string, isFollowing: boolean, comments = commentList.value) => {
+  comments.forEach((comment) => {
+    if (comment.authorUserId === targetUserId) {
+      comment.isFollowing = isFollowing
+    }
+
+    setCommentAuthorFollowingState(targetUserId, isFollowing, comment.replies)
+  })
+}
+
+const isCommentFollowing = (comment: PostComment) =>
+  comment.authorUserId && socialActionsStore.followingUserIds[comment.authorUserId] !== undefined
+    ? socialActionsStore.isFollowingUser(comment.authorUserId)
+    : comment.isFollowing
 
 const loadComments = async () => {
   if (!apiPostId.value || isLoadingComments.value || hasLoadedComments.value) {
@@ -662,6 +687,10 @@ const syncFollowState = () => {
 
   if (props.post.type === 'question' && props.post.communityId) {
     localFollowing.value = props.post.isFollowing ?? hasStoredCommunityFollow(props.post.communityId)
+  }
+
+  if (usesGlobalUserFollow.value && authorUserId.value && props.post.isFollowing !== undefined) {
+    socialActionsStore.setUserFollowingState(authorUserId.value, localFollowing.value)
   }
 }
 
@@ -779,6 +808,10 @@ const submitPostEdit = async () => {
 }
 
 const toggleFollow = async () => {
+  if (isTogglingFollow.value) {
+    return
+  }
+
   if (isOwnPost.value) {
     toast.info(`This is your ${contentLabel.value.toLowerCase()}`, {
       description: 'You cannot follow yourself from your own content.',
@@ -794,9 +827,10 @@ const toggleFollow = async () => {
   }
 
   const nextValue = !isFollowing.value
+  isTogglingFollow.value = true
 
   try {
-    if (props.post.type === 'question' && props.post.communityId) {
+    if (props.post.type === 'question' && props.post.communityId && !props.followQuestionAuthor) {
       if (nextValue) {
         await communitiesService.joinCommunity(props.post.communityId, authStore.authToken)
       } else {
@@ -818,6 +852,8 @@ const toggleFollow = async () => {
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
     toast.error('Follow failed', { description: message })
+  } finally {
+    isTogglingFollow.value = false
   }
 }
 
@@ -946,6 +982,7 @@ const submitComment = async () => {
       commentList.value.unshift({
         id: comment.id,
         parentId: null,
+        authorUserId: authStore.userId || undefined,
         author: currentUserCommentProfile().name,
         authorTo: currentUserCommentProfile().to,
         avatarSrc: currentUserCommentProfile().avatarSrc,
@@ -1350,7 +1387,38 @@ const toggleCommentScore = async (comment: PostCommentThreadItem) => {
 }
 
 const toggleCommentFollow = (comment: PostComment) => {
-  comment.isFollowing = !comment.isFollowing
+  void (async () => {
+    const targetUserId = comment.authorUserId || getPublicProfileIdFromRoute(comment.authorTo)
+
+    if (!targetUserId) {
+      toast.error('Follow unavailable', {
+        description: 'This comment does not include a user to follow.',
+      })
+      return
+    }
+
+    if (targetUserId === authStore.userId) {
+      toast.info('This is your comment', {
+        description: 'You cannot follow your own account.',
+      })
+      return
+    }
+
+    if (!authStore.authToken || !authStore.userId) {
+      toast.error('Sign in required', {
+        description: 'Please sign in again before following.',
+      })
+      return
+    }
+
+    try {
+      await socialActionsStore.toggleUserFollow(targetUserId)
+      setCommentAuthorFollowingState(targetUserId, socialActionsStore.isFollowingUser(targetUserId))
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
+      toast.error('Follow failed', { description: message })
+    }
+  })()
 }
 
 const openCommentReportModal = (comment: PostComment) => {
@@ -1509,6 +1577,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         <button
           v-if="showFollowAction"
           type="button"
+          :disabled="isTogglingFollow"
           class="s4e-feed-action inline-flex h-6 items-center rounded-[0.58rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
           :class="
             isFollowing
@@ -1519,11 +1588,12 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
         >
           {{ followLabel }}
         </button>
-        <span
+        <RouterLink
+          :to="detailPath"
           class="s4e-feed-action inline-flex h-6 items-center rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-[var(--text-secondary)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
         >
           {{ displayedAnswers }} Answers
-        </span>
+        </RouterLink>
       </div>
     </template>
 
@@ -1611,6 +1681,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   <button
                     v-if="showFollowAction"
                     type="button"
+                    :disabled="isTogglingFollow"
                     class="s4e-feed-action inline-flex h-6 shrink-0 items-center rounded-[0.65rem] border px-1.5 text-[0.68rem] font-medium leading-none transition sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
                     :class="
                       isFollowing
@@ -1629,19 +1700,19 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     <span class="truncate">re-shared {{ post.time }}</span>
                   </span>
                   <span v-else class="truncate">{{ post.time }}</span>
-                  <span v-if="feedPostContextDetail" class="hidden truncate text-[0.78rem] text-[var(--text-tertiary)] sm:inline">
+                  <span v-if="feedPostContextDetail && !props.hideCommunityContext" class="hidden truncate text-[0.78rem] text-[var(--text-tertiary)] sm:inline">
                     {{ feedPostContextDetail }}
                   </span>
                 </div>
 
                 <div class="ml-auto flex items-center gap-2 self-start">
-                  <RouterLink
+                  <!-- <RouterLink
                     v-if="post.type === 'community'"
                     :to="detailPath"
                     class="s4e-feed-action inline-flex h-6 shrink-0 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
                   >
                     View post
-                  </RouterLink>
+                  </RouterLink> -->
                 </div>
               </div>
             </div>
@@ -1968,14 +2039,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                           type="button"
                           class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.76rem] font-medium transition"
                           :class="
-                            comment.isFollowing
+                            isCommentFollowing(comment)
                               ? activeActionClass
                               : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'
                           "
                           @click="toggleCommentFollow(comment)"
                         >
-                          <Check v-if="comment.isFollowing" class="h-3 w-3" />
-                          {{ comment.isFollowing ? 'Unfollow' : 'Follow' }}
+                          <Check v-if="isCommentFollowing(comment)" class="h-3 w-3" />
+                          {{ isCommentFollowing(comment) ? 'Unfollow' : 'Follow' }}
                         </button>
                         <button
                           type="button"

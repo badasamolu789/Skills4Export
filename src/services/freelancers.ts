@@ -20,6 +20,11 @@ export type FreelancerRecord = {
   } | null
   passportMediaId?: string | null
   status: 'draft' | 'pending_review' | 'available' | 'certified' | 'suspended' | string
+  verified?: boolean | number | null
+  isVerified?: boolean | number | null
+  verificationStatus?: 'Verified' | 'verified' | 'pending' | 'rejected' | string | null
+  verifiedBy?: string | null
+  verifiedByName?: string | null
   availability: 'available_now' | 'open' | 'busy' | 'unavailable' | string
   remoteOnly: boolean
   hourlyRateMin?: number | null

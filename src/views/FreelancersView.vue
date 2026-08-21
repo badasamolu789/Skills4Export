@@ -164,6 +164,30 @@ const formatStatusLabel = (value?: string | null) => {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+const isTruthyFlag = (value: unknown) =>
+  value === true ||
+  value === 1 ||
+  (typeof value === 'string' && ['true', '1', 'yes', 'verified'].includes(value.trim().toLowerCase()))
+
+const isFreelancerVerified = (freelancer: FreelancerRecord) => {
+  const verificationStatus = freelancer.verificationStatus?.trim().toLowerCase()
+  const status = freelancer.status?.trim().toLowerCase()
+
+  return (
+    isTruthyFlag(freelancer.verified) ||
+    isTruthyFlag(freelancer.isVerified) ||
+    verificationStatus === 'verified' ||
+    status === 'verified' ||
+    status === 'certified'
+  )
+}
+
+const getFreelancerVerificationLabel = (freelancer: FreelancerRecord) =>
+  isFreelancerVerified(freelancer) ? 'Verified' : ''
+
+const getFreelancerVerifiedByLabel = (freelancer: FreelancerRecord) =>
+  freelancer.verifiedByName || freelancer.verifiedBy || ''
+
 const formatFee = (job: FreelanceJobRecord) => {
   if (job.feeLabel) {
     return job.feeLabel
@@ -821,7 +845,7 @@ const clearPassportUpload = () => {
           Freelancers
         </h1>
         <p class="mt-3 max-w-2xl text-[0.98rem] leading-8 text-[var(--text-secondary)]">
-          A pool of self-employed individuals who offer specialized services, operating in fields like writing, design, IT, marketing, and many more.
+          A pool of self-employed individuals and businesses that offer specialized services: operating in fields like writing, design, IT, marketing, and many more.
         </p>
       </div>
 
@@ -1003,13 +1027,18 @@ const clearPassportUpload = () => {
                   <span class="font-semibold text-[var(--text-primary)]">Location</span>
                   <span>-</span>
                   <span>{{ formatLocationWithCountry(freelancer.location) || 'Location not listed' }}</span>
-                  <span class="text-[var(--text-tertiary)]">|</span>
-                  <span class="inline-flex items-center gap-1">
-                    <span class="font-semibold text-[var(--text-primary)]">Status</span>
-                    <span>-</span>
-                    <span class="font-semibold text-[var(--danger)]">{{ formatStatusLabel(freelancer.status) }}</span>
-                    <BadgeCheck v-if="freelancer.status === 'certified'" class="h-3.5 w-3.5 text-[var(--accent-strong)]" />
-                  </span>
+                  <template v-if="getFreelancerVerificationLabel(freelancer)">
+                    <span class="text-[var(--text-tertiary)]">|</span>
+                    <span class="inline-flex items-center gap-1">
+                      <span class="font-semibold text-[var(--text-primary)]">Status</span>
+                      <span>-</span>
+                      <span class="font-semibold text-[var(--accent-strong)]">{{ getFreelancerVerificationLabel(freelancer) }}</span>
+                      <BadgeCheck class="h-3.5 w-3.5 text-[var(--accent-strong)]" />
+                    </span>
+                    <span v-if="getFreelancerVerifiedByLabel(freelancer)" class="text-[var(--text-tertiary)]">
+                      Verified by {{ getFreelancerVerifiedByLabel(freelancer) }}
+                    </span>
+                  </template>
                 </p>
                 <p class="mt-5 line-clamp-3 text-[1rem] leading-8 text-[var(--text-secondary)] sm:text-[1.05rem]">
                   {{ getPlainCardText(freelancer.bio) || 'No bio has been added yet.' }}
@@ -1291,16 +1320,16 @@ const clearPassportUpload = () => {
       <div class="space-y-4">
         <div class="space-y-4">
           <label class="block">
-            <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Your Name</span>
-            <input v-model="freelancerForm.name" placeholder="Take from user profile" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
+            <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Name/Business Name, (enter your individual name or Business name)</span>
+            <input v-model="freelancerForm.name" placeholder="Your name or Business Name" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
           </label>
           <label class="block">
-            <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Title</span>
-            <input v-model="freelancerForm.title" placeholder="Take from user profile" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
+            <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Job Title/Nature of Business</span>
+            <input v-model="freelancerForm.title" placeholder="Job Title/Nature of Business e.g Interior Decoration" class="mt-1 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]" />
           </label>
           <label class="block">
-            <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Skills</span>
-            <SkillPillInput v-model="freelancerForm.skills" placeholder="Take from user profile, else, Java, Project Mgt.." />
+            <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Skills/Team Skills Set</span>
+            <SkillPillInput v-model="freelancerForm.skills" placeholder="Skills/Team Skills Set" />
           </label>
           <label class="block">
             <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">Location</span>
@@ -1326,7 +1355,7 @@ const clearPassportUpload = () => {
             </div>
             <div class="min-w-0 space-y-3">
               <div>
-                <p class="text-sm font-semibold text-[var(--text-primary)]">Passport photo</p>
+                <p class="text-sm font-semibold text-[var(--text-primary)]">Passport photo/Business logo</p>
                 <p class="mt-1 text-[0.78rem] leading-5 text-[var(--text-secondary)]">Maximum file size: 10 MB.</p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
@@ -1354,7 +1383,7 @@ const clearPassportUpload = () => {
 
         <label class="mt-6 block">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">
-            About - Describe your academic achievements, skills, experiences
+            About - Describe your academic achievements/business achievements, skills/Team sills, experiences/business experiences
           </span>
           <textarea v-model="freelancerForm.bio" rows="3" class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>

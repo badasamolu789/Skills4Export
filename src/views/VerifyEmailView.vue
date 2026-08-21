@@ -9,6 +9,7 @@ import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
+import { isStrongPassword } from '@/utils/formValidation'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -77,12 +78,41 @@ const verifyOtp = async () => {
       email: authStore.signUpDraft.email,
       otpCode: otp.value,
     })
+  } catch (error) {
+    const message = getErrorMessage(error, 'Could not verify that code. Try again.')
+
+    setApiFieldErrors(error)
+
+    toast.error('Verification failed', {
+      id: loadingToastId,
+      description: message,
+    })
+    isSubmitting.value = false
+    return
+  }
+
+  try {
+    if (!isStrongPassword(authStore.signUpDraft.password)) {
+      throw new Error('Password must be at least 8 characters and include uppercase, lowercase, and a number.')
+    }
 
     await authService.setRegistrationPassword({
       email: authStore.signUpDraft.email,
       password: authStore.signUpDraft.password,
     })
+  } catch (error) {
+    const message = getErrorMessage(error, 'Could not set your account password. Please update it and try again.')
 
+    toast.error('Password setup failed', {
+      id: loadingToastId,
+      description: message,
+    })
+    router.push('/auth/signup')
+    isSubmitting.value = false
+    return
+  }
+
+  try {
     const response = await authService.completeRegistration({
       email: authStore.signUpDraft.email,
       name: authStore.signUpDraft.name,
@@ -127,11 +157,11 @@ const verifyOtp = async () => {
 
     router.replace('/feed')
   } catch (error) {
-    const message = getErrorMessage(error, 'Could not verify that code. Try again.')
+    const message = getErrorMessage(error, 'Could not finish your registration. Try again.')
 
     setApiFieldErrors(error)
 
-    toast.error('Verification failed', {
+    toast.error('Registration failed', {
       id: loadingToastId,
       description: message,
     })

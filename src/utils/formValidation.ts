@@ -55,6 +55,16 @@ export const isValidWebsiteUrl = (value: string) => {
   }
 }
 
+export const isStrongPassword = (value: string) => {
+  const password = String(value)
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password)
+  )
+}
+
 export type ValidationRule<FieldName extends string> = {
   field: FieldName
   value: unknown

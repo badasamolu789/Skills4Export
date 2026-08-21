@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowRight,
   Bell,
@@ -97,6 +97,7 @@ const activeComposer = ref<null | 'ask' | 'post'>(null)
 const composerCommunityOverrideId = ref('')
 const isComposerCommunityLocked = ref(false)
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const notificationsStore = useNotificationsStore()
 const socialActionsStore = useSocialActionsStore()
@@ -147,6 +148,7 @@ const postFileRecommendation = computed(() => {
 
   return 'Best: 1080 x 1350 portrait. Also supports square 1080 x 1080 and landscape 1200 x 627.'
 })
+const isJokesView = computed(() => route.name === 'jokes-community')
 const communityOptions = computed(() =>
   communities.value
     .filter((community) => community.id && community.name)
@@ -527,12 +529,24 @@ const submitPost = async () => {
   const content = postContent.value.trim()
   const plainContent = getPlainTextFromHtml(content)
 
-  if (!title || !plainContent) {
-    toast.error('Add a title and content before posting.')
+  if (isJokesView.value && !title && !plainContent && !postFile.value) {
+    toast.error('Add a joke before posting.', {
+      description: 'Add a title, some content, or an image/video.',
+    })
     return
   }
 
-  if (!postFile.value) {
+  if (!isJokesView.value && !title) {
+    toast.error('Add a title before posting.')
+    return
+  }
+
+  if (!isJokesView.value && !plainContent) {
+    toast.error('Add some content before posting.')
+    return
+  }
+
+  if (!isJokesView.value && !postFile.value) {
     toast.error('Upload an image or video before posting.')
     return
   }
@@ -1141,12 +1155,12 @@ onMounted(() => {
     <ResponsiveOverlay
       :model-value="activeComposer === 'post'"
       label="Post"
-      title="Create Post"
+      :title="isJokesView ? 'Post a Joke' : 'Create Post'"
       max-width-class="sm:max-w-4xl"
       @update:model-value="(value) => { if (!value) closeComposer() }"
     >
       <div class="space-y-5">
-        <label class="block">
+        <label v-if="!isJokesView" class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">{{ isComposerCommunityLocked ? 'Community' : 'Everyone or a Community' }}<span class="text-[var(--danger)]">*</span></span>
           <select
             v-model="postAudienceId"
@@ -1169,17 +1183,18 @@ onMounted(() => {
           />
         </label>
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Post Title<span class="text-[var(--danger)]">*</span></span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Post Title<span v-if="!isJokesView" class="text-[var(--danger)]">*</span></span>
           <input
             v-model="postTitle"
             type="text"
-            placeholder="Please choose an appropriate title for the post."
+            :required="!isJokesView"
+            :placeholder="isJokesView ? 'Please choose an appropriate title for the post (Optional).' : 'Please choose an appropriate title for the post.'"
             class="mt-2 h-12 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
           />
         </label>
         <!-- Direct media URL input removed; posts now use file uploads only. -->
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Content<span class="text-[var(--danger)]">*</span></span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Content<span v-if="!isJokesView" class="text-[var(--danger)]">*</span></span>
           <div class="post-content-editor mt-2">
             <div class="flex flex-wrap gap-2 rounded-t-[0.75rem] border border-b-0 border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-2.5">
               <button
@@ -1218,7 +1233,7 @@ onMounted(() => {
             <textarea
               ref="postContentInput"
               v-model="postContent"
-              required
+              :required="!isJokesView"
               rows="12"
               placeholder="Write the post content here..."
               class="min-h-[18rem] w-full resize-y rounded-b-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm leading-7 text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent-soft)]"
@@ -1226,7 +1241,7 @@ onMounted(() => {
           </div>
         </label>
         <label class="block">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span class="text-[var(--danger)]">*</span></span>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span v-if="!isJokesView" class="text-[var(--danger)]">*</span></span>
           <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
             Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB.
           </span>
@@ -1287,7 +1302,7 @@ onMounted(() => {
               </span>
             </span>
           </span>
-          <input ref="postFileInput" type="file" accept="image/*,video/*" class="sr-only" required @change="handlePostFileChange" />
+          <input ref="postFileInput" type="file" accept="image/*,video/*" class="sr-only" :required="!isJokesView" @change="handlePostFileChange" />
         </label>
         <button
           type="button"
@@ -1295,11 +1310,11 @@ onMounted(() => {
           :disabled="isSubmittingPost"
           @click="submitPost"
         >
-          {{ isSubmittingPost ? 'Posting...' : 'Post' }}
+          {{ isSubmittingPost ? 'Posting...' : isJokesView ? 'Post a Joke' : 'Post' }}
           <ArrowRight class="h-4 w-4" />
         </button>
         <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-          <input v-model="agreedToPostTerms" type="checkbox" class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
+          <input v-model="agreedToPostTerms" type="checkbox" required class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
           <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
         </label>
       </div>

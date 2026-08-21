@@ -4,6 +4,7 @@ import type { PageRecord } from '@/services/pages'
 import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
 import { getDisplayName } from '@/utils/displayName'
+import { readFollowState } from '@/utils/followState'
 import { getProfileContextTag } from '@/utils/profileContextTag'
 
 const formatPostTime = (value: string) => {
@@ -311,8 +312,8 @@ export const mapApiPostToFeedPost = (
   }
   const authorTag = postPageId ? getPageTag(resolvedPage) : getAuthorTag(author)
   const isFollowingAuthor = postPageId
-    ? Boolean(resolvedPage?.is_follow ?? resolvedPage?.isFollow)
-    : Boolean(post.is_follow)
+    ? readFollowState(resolvedPage)
+    : readFollowState(post, post.user, author)
 
   const basePost = {
     type: getPostCommunityId(post) ? 'community' : 'personal',
@@ -343,7 +344,7 @@ export const mapApiPostToFeedPost = (
     comments: getOptionalCount(post.comments_count, post.comment_count, post.commentsCount),
     isSaved: Boolean(post.is_saved),
     isScored: Boolean(post.is_liked),
-    isFollowing: isFollowingAuthor,
+    ...(isFollowingAuthor !== undefined ? { isFollowing: isFollowingAuthor } : {}),
   }
 
   if (getPostCommunityId(post)) {

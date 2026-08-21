@@ -76,7 +76,14 @@ const isOwnPost = computed(() => Boolean(authStore.userId && postAuthorUserId.va
 const showFollowAction = computed(() => Boolean(!isOwnPost.value && (post.value?.pageId || postAuthorUserId.value)))
 const canScorePost = computed(() => Boolean(!isOwnPost.value))
 const isQuestionRoute = computed(() => route.path.startsWith('/questions/'))
-const isFollowing = ref(false)
+const localFollowing = ref(false)
+const usesGlobalUserFollow = computed(() => Boolean(postAuthorUserId.value && !post.value?.pageId))
+const isFollowing = computed(() =>
+  usesGlobalUserFollow.value && postAuthorUserId.value && socialActionsStore.followingUserIds[postAuthorUserId.value] !== undefined
+    ? socialActionsStore.isFollowingUser(postAuthorUserId.value)
+    : localFollowing.value,
+)
+const isTogglingFollow = ref(false)
 const isSaved = ref(false)
 const isScored = ref(false)
 const isSavingPost = ref(false)
@@ -106,6 +113,7 @@ const activeActionClass =
 type DetailComment = {
   id: string
   parentId: string | null
+  authorUserId?: string
   author: string
   authorTo: string
   avatarSrc: string | null
@@ -271,10 +279,12 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
 
 const mapDetailComment = async (comment: PostCommentRecord): Promise<DetailComment> => {
   const authorProfile = await resolveCommentAuthor(comment)
+  const commentAuthorUserId = comment.user_id || comment.userId || ''
 
   return {
     id: comment.id,
     parentId: comment.parent_comment_id,
+    authorUserId: commentAuthorUserId,
     author: authorProfile.name,
     authorTo: authorProfile.to,
     avatarSrc: authorProfile.avatarSrc,
@@ -291,7 +301,7 @@ const mapDetailComment = async (comment: PostCommentRecord): Promise<DetailComme
       comment.likesCount,
     ),
     isScored: false,
-    isFollowing: false,
+    isFollowing: socialActionsStore.isFollowingUser(commentAuthorUserId),
     isReplying: false,
     areRepliesOpen: false,
     replyInput: '',
@@ -325,6 +335,27 @@ const buildDetailCommentTree = async (comments: PostCommentRecord[]) => {
 
   return roots
 }
+
+const setDetailCommentAuthorFollowingState = (
+  targetUserId: string,
+  isFollowing: boolean,
+  comments = detailComments.value,
+) => {
+  comments.forEach((comment) => {
+    if (comment.authorUserId === targetUserId) {
+      comment.isFollowing = isFollowing
+    }
+
+    setDetailCommentAuthorFollowingState(targetUserId, isFollowing, comment.replies)
+  })
+}
+
+const isDetailCommentFollowing = (comment: DetailComment | PostCommentThreadItem) =>
+  'authorUserId' in comment &&
+  comment.authorUserId &&
+  socialActionsStore.followingUserIds[comment.authorUserId] !== undefined
+    ? socialActionsStore.isFollowingUser(comment.authorUserId)
+    : Boolean(comment.isFollowing)
 
 const loadApiQuestion = async (id: string) => {
   const response = await questionsService.getQuestion(id, authStore.authToken, true)
@@ -618,7 +649,10 @@ watch(
 watch(
   post,
   (nextPost) => {
-    isFollowing.value = nextPost?.isFollowing ?? false
+    localFollowing.value = nextPost?.isFollowing ?? false
+    if (nextPost && !nextPost.pageId && postAuthorUserId.value && nextPost.isFollowing !== undefined) {
+      socialActionsStore.setUserFollowingState(postAuthorUserId.value, nextPost.isFollowing ?? false)
+    }
     isSaved.value = nextPost?.isSaved ?? false
     isScored.value = nextPost?.isScored ?? false
     currentScore.value = nextPost && 'score' in nextPost ? nextPost.score || 0 : 0
@@ -644,6 +678,10 @@ onBeforeUnmount(() => {
 })
 
 const toggleFollow = async () => {
+  if (isTogglingFollow.value) {
+    return
+  }
+
   if (isOwnPost.value) {
     toast.info('This is your post', {
       description: 'You cannot follow your own account.',
@@ -659,6 +697,7 @@ const toggleFollow = async () => {
   }
 
   const nextValue = !isFollowing.value
+  isTogglingFollow.value = true
 
   try {
     if (post.value?.pageId) {
@@ -671,10 +710,12 @@ const toggleFollow = async () => {
       await socialActionsStore.toggleUserFollow(postAuthorUserId.value)
     }
 
-    isFollowing.value = nextValue
+    localFollowing.value = nextValue
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
     toast.error('Follow failed', { description: message })
+  } finally {
+    isTogglingFollow.value = false
   }
 }
 
@@ -893,6 +934,7 @@ const createCurrentUserDetailComment = (
   return {
     id,
     parentId,
+    authorUserId: authStore.userId || undefined,
     author: profile.name,
     authorTo: profile.to,
     avatarSrc: profile.avatarSrc,
@@ -948,7 +990,41 @@ const toggleAnswerScore = (answer: QuestionAnswerItem) => {
 }
 
 const toggleCommentFollow = (comment: DetailComment | PostCommentThreadItem) => {
-  comment.isFollowing = !comment.isFollowing
+  void (async () => {
+    const targetUserId =
+      'authorUserId' in comment && typeof comment.authorUserId === 'string'
+        ? comment.authorUserId
+        : getPublicProfileIdFromRoute(comment.authorTo || '')
+
+    if (!targetUserId) {
+      toast.error('Follow unavailable', {
+        description: 'This comment does not include a user to follow.',
+      })
+      return
+    }
+
+    if (targetUserId === authStore.userId) {
+      toast.info('This is your comment', {
+        description: 'You cannot follow your own account.',
+      })
+      return
+    }
+
+    if (!authStore.authToken || !authStore.userId) {
+      toast.error('Sign in required', {
+        description: 'Please sign in again before following.',
+      })
+      return
+    }
+
+    try {
+      await socialActionsStore.toggleUserFollow(targetUserId)
+      setDetailCommentAuthorFollowingState(targetUserId, socialActionsStore.isFollowingUser(targetUserId))
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'
+      toast.error('Follow failed', { description: message })
+    }
+  })()
 }
 
 const toggleCommentReply = (comment: DetailComment | PostCommentThreadItem) => {
@@ -1146,7 +1222,7 @@ const submitAnswer = async () => {
 <template>
   <section
     v-if="isLoadingPost"
-    class="space-y-4"
+    class="mx-auto w-full max-w-[44rem] lg:max-w-[46rem] space-y-4"
     aria-label="Loading post details"
   >
     <div class="flex animate-pulse flex-wrap items-center gap-2 px-1">
@@ -1219,7 +1295,7 @@ const submitAnswer = async () => {
     </article>
   </section>
 
-  <section v-if="post" class="space-y-4">
+  <section v-if="post" class="mx-auto w-full max-w-[44rem] lg:max-w-[46rem] space-y-4">
     <div
       v-if="postError"
       class="rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]"
@@ -1289,6 +1365,7 @@ const submitAnswer = async () => {
           <button
             v-if="showFollowAction"
             type="button"
+            :disabled="isTogglingFollow"
             class="inline-flex h-9 items-center gap-1.5 rounded-[0.8rem] border px-3 text-[0.82rem] font-semibold transition"
             :class="isFollowing ? 'border-[color:var(--accent)] bg-[var(--accent)] text-white' : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
             @click="toggleFollow"
@@ -1587,11 +1664,11 @@ const submitAnswer = async () => {
                     <button
                       type="button"
                       class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.76rem] font-medium transition"
-                      :class="comment.isFollowing ? activeActionClass : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
+                      :class="isDetailCommentFollowing(comment) ? activeActionClass : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
                       @click="toggleCommentFollow(comment)"
                     >
-                      <Check v-if="comment.isFollowing" class="h-3 w-3" />
-                      {{ comment.isFollowing ? 'Unfollow' : 'Follow' }}
+                      <Check v-if="isDetailCommentFollowing(comment)" class="h-3 w-3" />
+                      {{ isDetailCommentFollowing(comment) ? 'Unfollow' : 'Follow' }}
                     </button>
                     <button
                       type="button"

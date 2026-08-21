@@ -34,6 +34,11 @@ const notificationsStore = useNotificationsStore()
 const socialActionsStore = useSocialActionsStore()
 const route = useRoute()
 const router = useRouter()
+const visibleHeaderLinks = computed(() =>
+  route.name === 'jokes-community' || route.name === 'headlines-community'
+    ? headerLinks.filter((link) => !['Ask', 'Post', 'Answer'].includes(link.label))
+    : headerLinks,
+)
 const isMobileSidebarOpen = ref(false)
 const guestPromptTimer = ref<number | null>(null)
 
@@ -371,7 +376,7 @@ const handleMenuAction = async (action: 'logout') => {
       :logo-src="appLogoSrc"
       logo-alt="Skills4Export logo"
       platform-name="Skills4Export"
-      :links="headerLinks"
+      :links="visibleHeaderLinks"
       :is-authenticated="authStore.isAuthenticated"
       :user-name="profileName"
       :user-role="profileRole"
