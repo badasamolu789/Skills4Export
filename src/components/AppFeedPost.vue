@@ -24,7 +24,6 @@ import RichTextContent from '@/components/RichTextContent.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
-import { pagesService } from '@/services/pages'
 import { postsService, type PostCommentRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { mediaService } from '@/services/media'
@@ -33,6 +32,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
   id: number | string
@@ -359,12 +359,31 @@ const usesGlobalUserFollow = computed(() =>
       (props.post.type !== 'question' || props.followQuestionAuthor || !props.post.communityId),
   ),
 )
+const relationshipTarget = computed<RelationshipTarget | null>(() => {
+  const resolvedTarget = resolveFeedRelationshipTarget(props.post, {
+    followQuestionAuthor: props.followQuestionAuthor,
+  })
+
+  if (resolvedTarget) {
+    return resolvedTarget
+  }
+
+  return authorUserId.value ? { type: 'user', id: authorUserId.value } : null
+})
 const isFollowing = computed(() =>
-  usesGlobalUserFollow.value
-    ? socialActionsStore.followingUserIds[authorUserId.value] !== undefined
-      ? socialActionsStore.isFollowingUser(authorUserId.value)
+  relationshipTarget.value?.type === 'user'
+    ? socialActionsStore.followingUserIds[relationshipTarget.value.id] !== undefined
+      ? socialActionsStore.isFollowingUser(relationshipTarget.value.id)
       : localFollowing.value
-    : localFollowing.value,
+    : relationshipTarget.value?.type === 'page'
+      ? socialActionsStore.followingPageIds[relationshipTarget.value.id] !== undefined
+        ? socialActionsStore.isFollowingPage(relationshipTarget.value.id)
+        : localFollowing.value
+      : relationshipTarget.value?.type === 'community'
+        ? socialActionsStore.joinedCommunityIds[relationshipTarget.value.id] !== undefined
+          ? socialActionsStore.isCommunityJoined(relationshipTarget.value.id)
+          : localFollowing.value
+        : localFollowing.value,
 )
 const isScored = computed(() =>
   apiPostId.value
@@ -689,8 +708,16 @@ const syncFollowState = () => {
     localFollowing.value = props.post.isFollowing ?? hasStoredCommunityFollow(props.post.communityId)
   }
 
-  if (usesGlobalUserFollow.value && authorUserId.value && props.post.isFollowing !== undefined) {
-    socialActionsStore.setUserFollowingState(authorUserId.value, localFollowing.value)
+  if (relationshipTarget.value && props.post.isFollowing !== undefined) {
+    if (relationshipTarget.value.type === 'user') {
+      socialActionsStore.setUserFollowingState(relationshipTarget.value.id, localFollowing.value)
+    } else if (relationshipTarget.value.type === 'page') {
+      socialActionsStore.setPageFollowingState(relationshipTarget.value.id, localFollowing.value)
+    } else {
+      socialActionsStore.setCommunityJoinedState(relationshipTarget.value.id, localFollowing.value)
+    }
+  } else if (relationshipTarget.value?.type === 'community') {
+    socialActionsStore.setCommunityJoinedState(relationshipTarget.value.id, localFollowing.value)
   }
 }
 
@@ -830,22 +857,13 @@ const toggleFollow = async () => {
   isTogglingFollow.value = true
 
   try {
-    if (props.post.type === 'question' && props.post.communityId && !props.followQuestionAuthor) {
-      if (nextValue) {
-        await communitiesService.joinCommunity(props.post.communityId, authStore.authToken)
-      } else {
-        await communitiesService.leaveCommunity(props.post.communityId, authStore.authToken)
-      }
-
-      setStoredCommunityFollow(props.post.communityId, nextValue)
-    } else if (props.post.pageId) {
-      if (nextValue) {
-        await pagesService.followPage(props.post.pageId, authStore.authToken)
-      } else {
-        await pagesService.unfollowPage(props.post.pageId, authStore.authToken)
-      }
-    } else if (authorUserId.value) {
-      await socialActionsStore.toggleUserFollow(authorUserId.value)
+    if (relationshipTarget.value?.type === 'community') {
+      await socialActionsStore.toggleCommunityJoined(relationshipTarget.value.id)
+      setStoredCommunityFollow(relationshipTarget.value.id, nextValue)
+    } else if (relationshipTarget.value?.type === 'page') {
+      await socialActionsStore.togglePageFollow(relationshipTarget.value.id)
+    } else if (relationshipTarget.value?.type === 'user') {
+      await socialActionsStore.toggleUserFollow(relationshipTarget.value.id)
     }
 
     localFollowing.value = nextValue

@@ -357,7 +357,7 @@ watch(isFreelancersRoute, (isActive) => {
               <img loading="lazy" decoding="async"
                 :src="props.logoSrc"
                 :alt="props.logoAlt"
-                class="h-10 w-auto object-contain"
+                class="h-8 w-auto object-contain"
               />
             </RouterLink>
 

@@ -10,7 +10,6 @@ import type { QuestionPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
-import { pagesService } from '@/services/pages'
 import type { PostMediaRecord } from '@/services/posts'
 import { questionsService, type AnswerCommentRecord, type QuestionAnswerRecord } from '@/services/questions'
 import { usersService, type MyProfileData } from '@/services/users'
@@ -395,14 +394,17 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
   const media = getAnswerEmbeddedMedia(answer)
 
   const isFollowingAuthor = readFollowState(answer)
-  if (!getAnswerPageId(answer) && userId && isFollowingAuthor !== undefined) {
+  const pageId = getAnswerPageId(answer)
+  if (pageId && isFollowingAuthor !== undefined) {
+    socialActionsStore.setPageFollowingState(pageId, isFollowingAuthor)
+  } else if (userId && isFollowingAuthor !== undefined) {
     socialActionsStore.setUserFollowingState(userId, isFollowingAuthor)
   }
 
   return {
     id: answer.id,
     authorUserId: userId,
-    pageId: getAnswerPageId(answer),
+    pageId,
     authorName: author.name,
     authorTo: author.to,
     avatarSrc: author.avatarSrc,
@@ -420,7 +422,9 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
     ),
     isScored: false,
     isSaved: Boolean(answer.is_saved),
-    isFollowing: isFollowingAuthor ?? (userId ? socialActionsStore.isFollowingUser(userId) : false),
+    isFollowing: pageId
+      ? isFollowingAuthor ?? socialActionsStore.isFollowingPage(pageId)
+      : isFollowingAuthor ?? (userId ? socialActionsStore.isFollowingUser(userId) : false),
     comments: getOptionalCount(answer.comments_count, answer.comment_count, answer.commentsCount),
     isCommentsOpen: false,
     commentInput: '',
@@ -537,9 +541,7 @@ const loadQuestion = async (id: string, options: { background?: boolean } = {}) 
         comments: Math.max(answer.comments, previous.comments),
         isSaved: answer.isSaved || previous.isSaved,
         isScored: answer.isScored || previous.isScored,
-        isFollowing: answer.pageId
-          ? answer.isFollowing
-          : isAnswerFollowing(answer),
+        isFollowing: isAnswerFollowing(answer),
       }
     })
   } catch (error) {
@@ -697,10 +699,20 @@ const setAnswerAuthorFollowingState = (targetUserId: string, isFollowing: boolea
   })
 }
 
+const setAnswerPageFollowingState = (pageId: string, isFollowing: boolean) => {
+  answerItems.value.forEach((item) => {
+    if (item.pageId === pageId) {
+      item.isFollowing = isFollowing
+    }
+  })
+}
+
 const isAnswerFollowing = (answer: AnswerItem) =>
-  !answer.pageId && answer.authorUserId && socialActionsStore.followingUserIds[answer.authorUserId] !== undefined
-    ? socialActionsStore.isFollowingUser(answer.authorUserId)
-    : answer.isFollowing
+  answer.pageId && socialActionsStore.followingPageIds[answer.pageId] !== undefined
+    ? socialActionsStore.isFollowingPage(answer.pageId)
+    : !answer.pageId && answer.authorUserId && socialActionsStore.followingUserIds[answer.authorUserId] !== undefined
+      ? socialActionsStore.isFollowingUser(answer.authorUserId)
+      : answer.isFollowing
 
 const toggleAnswerFollow = (answer: AnswerItem) => {
   void (async () => {
@@ -729,26 +741,19 @@ const toggleAnswerFollow = (answer: AnswerItem) => {
       return
     }
 
-    const nextValue = answer.pageId
-      ? !answer.isFollowing
-      : !socialActionsStore.isFollowingUser(answer.authorUserId)
     activeAnswerActionId.value = answer.id
 
     try {
       if (answer.pageId) {
-        if (nextValue) {
-          await pagesService.followPage(answer.pageId, authStore.authToken)
-        } else {
-          await pagesService.unfollowPage(answer.pageId, authStore.authToken)
-        }
+        await socialActionsStore.togglePageFollow(answer.pageId)
       } else if (answer.authorUserId) {
         await socialActionsStore.toggleUserFollow(answer.authorUserId)
       }
 
-      if (answer.authorUserId && !answer.pageId) {
+      if (answer.pageId) {
+        setAnswerPageFollowingState(answer.pageId, socialActionsStore.isFollowingPage(answer.pageId))
+      } else if (answer.authorUserId) {
         setAnswerAuthorFollowingState(answer.authorUserId, socialActionsStore.isFollowingUser(answer.authorUserId))
-      } else {
-        answer.isFollowing = nextValue
       }
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to update follow state.'

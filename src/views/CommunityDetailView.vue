@@ -18,6 +18,7 @@ import { postsService, type PostMediaRecord, type PostRecord } from '@/services/
 import { questionsService, type QuestionRecord } from '@/services/questions'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getPostCommunityId, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionCommunityId, getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
@@ -25,6 +26,7 @@ import { richTextToPlainText } from '@/utils/richText'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
 const community = ref<CommunityRecord | null>(null)
 const members = ref<CommunityMemberRecord[]>([])
@@ -88,7 +90,9 @@ const hasStoredCommunityFollow = computed(() => {
 const isMember = computed(() =>
   Boolean(authStore.userId) &&
   (
-    members.value.some((member) => getMemberUserId(member) === authStore.userId) ||
+    (community.value?.id && socialActionsStore.joinedCommunityIds[community.value.id] !== undefined
+      ? socialActionsStore.isCommunityJoined(community.value.id)
+      : members.value.some((member) => getMemberUserId(member) === authStore.userId)) ||
     hasStoredCommunityFollow.value
   ),
 )
@@ -208,6 +212,7 @@ const loadCommunity = async (id: string) => {
     ])
     community.value = communityResponse.data
     members.value = membersResponse.data ?? []
+    socialActionsStore.setCommunityJoinedState(communityResponse.data.id, isMember.value)
     await loadCommunityFeed(communityResponse.data.id)
   } catch (error) {
     communityError.value = error instanceof ApiError ? error.message : 'Unable to load this community.'
@@ -232,18 +237,19 @@ const toggleMembership = async () => {
 
   try {
     if (isMember.value) {
-      await communitiesService.leaveCommunity(community.value.id, authStore.authToken)
+      await socialActionsStore.leaveCommunity(community.value.id)
       members.value = members.value.filter((member) => getMemberUserId(member) !== authStore.userId)
       setStoredCommunityFollow(community.value.id, false)
       return
     }
 
-    const response = await communitiesService.joinCommunity(community.value.id, authStore.authToken)
+    await socialActionsStore.joinCommunity(community.value.id)
     members.value = [
       {
-        ...response.data,
-        userId: response.data.userId || response.data.user_id || authStore.userId,
-        communityId: response.data.communityId || response.data.community_id || community.value.id,
+        id: `${community.value.id}-${authStore.userId || 'current-user'}`,
+        userId: authStore.userId,
+        communityId: community.value.id,
+        role: 'member',
       },
       ...members.value.filter((member) => getMemberUserId(member) !== authStore.userId),
     ]

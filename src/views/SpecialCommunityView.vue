@@ -11,6 +11,7 @@ import { communitiesService, type CommunityMemberRecord, type CommunityRecord } 
 import { postsService, type PostRecord } from '@/services/posts'
 import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
+import { useSocialActionsStore } from '@/stores/socialActions'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getPostCommunityId, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { richTextToPlainText } from '@/utils/richText'
@@ -22,6 +23,7 @@ const POST_CREATED_EVENT = 'skills4export:post-created'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const socialActionsStore = useSocialActionsStore()
 const community = ref<CommunityRecord | null>(null)
 const members = ref<CommunityMemberRecord[]>([])
 const posts = ref<Array<{ record: PostRecord; feedPost: FeedPost }>>([])
@@ -37,7 +39,14 @@ const sortOrder = computed(() => route.query.sort === 'popular' ? 'popular' : 'l
 const getMemberUserId = (member: CommunityMemberRecord) =>
   member.userId || member.user_id || member.user?.id || ''
 const isFollowing = computed(() =>
-  Boolean(authStore.userId && members.value.some((member) => getMemberUserId(member) === authStore.userId)),
+  Boolean(
+    authStore.userId &&
+    (
+      community.value?.id && socialActionsStore.joinedCommunityIds[community.value.id] !== undefined
+        ? socialActionsStore.isCommunityJoined(community.value.id)
+        : members.value.some((member) => getMemberUserId(member) === authStore.userId)
+    ),
+  ),
 )
 
 const sortedPosts = computed(() => {
@@ -122,8 +131,13 @@ const loadPage = async () => {
         authStore.authToken,
       )
       members.value = membersResponse.data ?? []
+      socialActionsStore.setCommunityJoinedState(
+        matchedCommunity.id,
+        members.value.some((member) => getMemberUserId(member) === authStore.userId),
+      )
     } catch {
       members.value = []
+      socialActionsStore.setCommunityJoinedState(matchedCommunity.id, false)
     }
 
     const postsResponse = await postsService.listPosts(
@@ -163,15 +177,16 @@ const toggleMembership = async () => {
 
   try {
     if (isFollowing.value) {
-      await communitiesService.leaveCommunity(community.value.id, authStore.authToken)
+      await socialActionsStore.leaveCommunity(community.value.id)
       members.value = members.value.filter((member) => getMemberUserId(member) !== authStore.userId)
     } else {
-      const response = await communitiesService.joinCommunity(community.value.id, authStore.authToken)
+      await socialActionsStore.joinCommunity(community.value.id)
       members.value = [
         {
-          ...response.data,
-          userId: response.data.userId || response.data.user_id || authStore.userId,
-          communityId: response.data.communityId || response.data.community_id || community.value.id,
+          id: `${community.value.id}-${authStore.userId}`,
+          userId: authStore.userId,
+          communityId: community.value.id,
+          role: 'member',
         },
         ...members.value,
       ]

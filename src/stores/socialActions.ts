@@ -11,6 +11,8 @@ import type {
 import { socialActionsApi } from '@/services/socialActionsApi'
 import { useAuthStore } from '@/stores/auth'
 import { mapCompactFeedItemToFeedPost } from '@/utils/feedMapper'
+import { pagesService } from '@/services/pages'
+import { communitiesService } from '@/services/communities'
 
 const getFeedId = (item: FeedPost) => item.apiId || item.slug
 
@@ -24,6 +26,8 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
   const authStore = useAuthStore()
   const feed = ref<FeedPost[]>([])
   const followingUserIds = ref<Record<string, boolean>>({})
+  const followingPageIds = ref<Record<string, boolean>>({})
+  const joinedCommunityIds = ref<Record<string, boolean>>({})
   const scoredContentIds = ref<Record<string, boolean>>({})
   const commentsByPostId = ref<Record<string, PostCommentRecord[]>>({})
   const answersByQuestionId = ref<Record<string, QuestionAnswerRecord[]>>({})
@@ -44,24 +48,68 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     feed.value = feed.value.map((item) => getFeedId(item) === id ? updater(item) : item)
   }
 
+  const rememberFeedRelationshipState = (item: FeedPost) => {
+    if (item.isFollowing === undefined) {
+      return
+    }
+
+    if (item.pageId) {
+      followingPageIds.value = {
+        ...followingPageIds.value,
+        [item.pageId]: item.isFollowing,
+      }
+      return
+    }
+
+    if (item.type === 'question' && item.communityId) {
+      joinedCommunityIds.value = {
+        ...joinedCommunityIds.value,
+        [item.communityId]: item.isFollowing,
+      }
+      return
+    }
+
+    if (item.userId) {
+      followingUserIds.value = {
+        ...followingUserIds.value,
+        [item.userId]: item.isFollowing,
+      }
+    }
+  }
+
+  const applyCanonicalRelationshipState = (item: FeedPost) => {
+    if (item.pageId && followingPageIds.value[item.pageId] !== undefined) {
+      return { ...item, isFollowing: followingPageIds.value[item.pageId] } as FeedPost
+    }
+
+    if (
+      item.type === 'question' &&
+      item.communityId &&
+      joinedCommunityIds.value[item.communityId] !== undefined
+    ) {
+      return { ...item, isFollowing: joinedCommunityIds.value[item.communityId] } as FeedPost
+    }
+
+    if (item.userId && followingUserIds.value[item.userId] !== undefined) {
+      return { ...item, isFollowing: followingUserIds.value[item.userId] } as FeedPost
+    }
+
+    return item
+  }
+
   const setFeed = (items: FeedPost[]) => {
     feed.value = items.map((item) => {
       const id = getFeedId(item)
-      const authorId = item.userId || ''
-
-      if (authorId && item.isFollowing) {
-        followingUserIds.value[authorId] = true
-      }
+      rememberFeedRelationshipState(item)
 
       if (id && item.isScored) {
         scoredContentIds.value[id] = true
       }
 
+      const nextItem = applyCanonicalRelationshipState(item)
+
       return {
-        ...item,
-        ...(authorId && followingUserIds.value[authorId] !== undefined
-          ? { isFollowing: followingUserIds.value[authorId] }
-          : {}),
+        ...nextItem,
         ...(id && scoredContentIds.value[id] !== undefined
           ? { isScored: scoredContentIds.value[id] }
           : {}),
@@ -70,12 +118,14 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
   }
 
   const upsertFeedItem = (item: FeedPost, options: { prepend?: boolean } = {}) => {
+    rememberFeedRelationshipState(item)
+    const canonicalItem = applyCanonicalRelationshipState(item)
     const id = getFeedId(item)
     const existingIndex = feed.value.findIndex((entry) => getFeedId(entry) === id)
 
     if (existingIndex >= 0) {
       const existingItem = feed.value[existingIndex]
-      const nextItem = { ...existingItem, ...item } as FeedPost
+      const nextItem = applyCanonicalRelationshipState({ ...existingItem, ...canonicalItem } as FeedPost)
       const keys = new Set([
         ...Object.keys(existingItem),
         ...Object.keys(item),
@@ -99,12 +149,21 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     }
 
     feed.value = options.prepend === false
-      ? [...feed.value, item]
-      : [item, ...feed.value]
+      ? [...feed.value, canonicalItem]
+      : [canonicalItem, ...feed.value]
   }
 
   const isFollowingUser = (userId?: string | null) =>
     Boolean(userId && followingUserIds.value[userId])
+
+  const isFollowingPage = (pageId?: string | null) =>
+    Boolean(pageId && followingPageIds.value[pageId])
+
+  const isCommunityJoined = (communityId?: string | null) =>
+    Boolean(communityId && joinedCommunityIds.value[communityId])
+
+  const isUserRelationshipItem = (item: FeedPost, userId: string) =>
+    item.userId === userId && !item.pageId && !(item.type === 'question' && item.communityId)
 
   const setUserFollowingState = (userId: string, isFollowing: boolean) => {
     followingUserIds.value = {
@@ -112,7 +171,29 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
       [userId]: isFollowing,
     }
     feed.value = feed.value.map((item) =>
-      item.userId === userId ? { ...item, isFollowing } as FeedPost : item,
+      isUserRelationshipItem(item, userId) ? { ...item, isFollowing } as FeedPost : item,
+    )
+  }
+
+  const setPageFollowingState = (pageId: string, isFollowing: boolean) => {
+    followingPageIds.value = {
+      ...followingPageIds.value,
+      [pageId]: isFollowing,
+    }
+    feed.value = feed.value.map((item) =>
+      item.pageId === pageId ? { ...item, isFollowing } as FeedPost : item,
+    )
+  }
+
+  const setCommunityJoinedState = (communityId: string, isJoined: boolean) => {
+    joinedCommunityIds.value = {
+      ...joinedCommunityIds.value,
+      [communityId]: isJoined,
+    }
+    feed.value = feed.value.map((item) =>
+      item.type === 'question' && item.communityId === communityId
+        ? { ...item, isFollowing: isJoined } as FeedPost
+        : item,
     )
   }
 
@@ -173,7 +254,7 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     adjustProfileStats(userId, { followers: 1 })
     adjustProfileStats(authStore.userId, { following: 1 })
     feed.value = feed.value.map((item) =>
-      item.userId === userId ? { ...item, isFollowing: true } as FeedPost : item,
+      isUserRelationshipItem(item, userId) ? { ...item, isFollowing: true } as FeedPost : item,
     )
     setLoading(key, true)
 
@@ -184,7 +265,7 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
       adjustProfileStats(userId, { followers: -1 })
       adjustProfileStats(authStore.userId, { following: -1 })
       feed.value = feed.value.map((item) =>
-        item.userId === userId ? { ...item, isFollowing: false } as FeedPost : item,
+        isUserRelationshipItem(item, userId) ? { ...item, isFollowing: false } as FeedPost : item,
       )
       throw error
     } finally {
@@ -204,7 +285,7 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
       adjustProfileStats(authStore.userId, { following: -1 })
     }
     feed.value = feed.value.map((item) =>
-      item.userId === userId ? { ...item, isFollowing: false } as FeedPost : item,
+      isUserRelationshipItem(item, userId) ? { ...item, isFollowing: false } as FeedPost : item,
     )
     setLoading(key, true)
 
@@ -217,7 +298,7 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
         adjustProfileStats(authStore.userId, { following: 1 })
       }
       feed.value = feed.value.map((item) =>
-        item.userId === userId ? { ...item, isFollowing: true } as FeedPost : item,
+        isUserRelationshipItem(item, userId) ? { ...item, isFollowing: true } as FeedPost : item,
       )
       throw error
     } finally {
@@ -227,6 +308,88 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
 
   const toggleUserFollow = (userId: string) =>
     isFollowingUser(userId) ? unfollowUser(userId) : followUser(userId)
+
+  const followPage = async (pageId: string) => {
+    const key = `follow:page:${pageId}`
+    if (!authStore.authToken || isFollowingPage(pageId) || loadingActions.value[key]) {
+      return
+    }
+
+    setPageFollowingState(pageId, true)
+    setLoading(key, true)
+
+    try {
+      await pagesService.followPage(pageId, authStore.authToken)
+    } catch (error) {
+      setPageFollowingState(pageId, false)
+      throw error
+    } finally {
+      setLoading(key, false)
+    }
+  }
+
+  const unfollowPage = async (pageId: string) => {
+    const key = `follow:page:${pageId}`
+    if (!authStore.authToken || !isFollowingPage(pageId) || loadingActions.value[key]) {
+      return
+    }
+
+    setPageFollowingState(pageId, false)
+    setLoading(key, true)
+
+    try {
+      await pagesService.unfollowPage(pageId, authStore.authToken)
+    } catch (error) {
+      setPageFollowingState(pageId, true)
+      throw error
+    } finally {
+      setLoading(key, false)
+    }
+  }
+
+  const togglePageFollow = (pageId: string) =>
+    isFollowingPage(pageId) ? unfollowPage(pageId) : followPage(pageId)
+
+  const joinCommunity = async (communityId: string) => {
+    const key = `join:community:${communityId}`
+    if (!authStore.authToken || isCommunityJoined(communityId) || loadingActions.value[key]) {
+      return
+    }
+
+    setCommunityJoinedState(communityId, true)
+    setLoading(key, true)
+
+    try {
+      await communitiesService.joinCommunity(communityId, authStore.authToken)
+    } catch (error) {
+      setCommunityJoinedState(communityId, false)
+      throw error
+    } finally {
+      setLoading(key, false)
+    }
+  }
+
+  const leaveCommunity = async (communityId: string) => {
+    const key = `join:community:${communityId}`
+    if (!authStore.authToken || !isCommunityJoined(communityId) || loadingActions.value[key]) {
+      return
+    }
+
+    setCommunityJoinedState(communityId, false)
+    setLoading(key, true)
+
+    try {
+      await communitiesService.leaveCommunity(communityId, authStore.authToken)
+    } catch (error) {
+      setCommunityJoinedState(communityId, true)
+      throw error
+    } finally {
+      setLoading(key, false)
+    }
+  }
+
+  const toggleCommunityJoined = (communityId: string) =>
+    isCommunityJoined(communityId) ? leaveCommunity(communityId) : joinCommunity(communityId)
 
   const toggleContentScore = async (contentId: string, type: 'post' | 'question') => {
     if (!authStore.userId || !authStore.authToken || loadingActions.value[`score:${contentId}`]) {
@@ -339,6 +502,8 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
   const reset = () => {
     feed.value = []
     followingUserIds.value = {}
+    followingPageIds.value = {}
+    joinedCommunityIds.value = {}
     scoredContentIds.value = {}
     commentsByPostId.value = {}
     answersByQuestionId.value = {}
@@ -351,6 +516,8 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     posts,
     questions,
     followingUserIds,
+    followingPageIds,
+    joinedCommunityIds,
     scoredContentIds,
     commentsByPostId,
     answersByQuestionId,
@@ -359,7 +526,11 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     setFeed,
     upsertFeedItem,
     isFollowingUser,
+    isFollowingPage,
+    isCommunityJoined,
     setUserFollowingState,
+    setPageFollowingState,
+    setCommunityJoinedState,
     isContentScored,
     getCommentCount,
     getAnswerCount,
@@ -370,6 +541,12 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     followUser,
     unfollowUser,
     toggleUserFollow,
+    followPage,
+    unfollowPage,
+    togglePageFollow,
+    joinCommunity,
+    leaveCommunity,
+    toggleCommunityJoined,
     toggleContentScore,
     addComment,
     removeComment,

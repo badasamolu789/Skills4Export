@@ -713,7 +713,7 @@ onMounted(() => {
           <img loading="lazy" decoding="async"
             :src="logoSrc"
             :alt="logoAlt"
-            class="h-12 w-auto object-contain sm:h-14"
+            class="h-10 w-auto object-contain sm:h-12"
           />
         </RouterLink>
 
@@ -830,7 +830,7 @@ onMounted(() => {
           <img loading="lazy" decoding="async"
             :src="logoSrc"
             :alt="logoAlt"
-            class="h-12 w-auto object-contain sm:h-14"
+            class="h-10 w-auto object-contain sm:h-12"
           />
         </RouterLink>
 

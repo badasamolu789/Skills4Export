@@ -153,6 +153,11 @@ const page = computed(() =>
     ? pagesStore.getPublicPageByIdOrSlug(String(route.params.slug)) || pagesStore.getPageByIdOrSlug(String(route.params.slug))
     : pagesStore.getPageByIdOrSlug(String(route.params.slug)),
 )
+const pageIsFollowing = computed(() =>
+  page.value && socialActionsStore.followingPageIds[page.value.id] !== undefined
+    ? socialActionsStore.isFollowingPage(page.value.id)
+    : Boolean(page.value?.isFollowing),
+)
 const isPageOwner = computed(() => Boolean(
   page.value && authStore.userId && page.value.ownerId === authStore.userId,
 ))
@@ -319,7 +324,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
       media,
       score: getOptionalCount(item.record.score, item.record.reactions_count, item.record.reaction_count),
       comments: getOptionalCount(item.record.comments_count, item.record.comment_count, item.record.commentsCount),
-      isFollowing: Boolean(page.value?.isFollowing),
+      isFollowing: pageIsFollowing.value,
       isSaved: Boolean(item.record.is_saved),
       isScored: Boolean(item.record.is_liked),
     }
@@ -875,14 +880,8 @@ const toggleFollowerUser = async (follower: PageFollowerRecord) => {
   isTogglingFollowerUser.value[follower.userId] = true
 
   try {
-    if (follower.isFollowing) {
-      await usersService.unfollowUser(follower.userId, authStore.authToken)
-    } else {
-      await usersService.followUser(follower.userId, { followerId: authStore.userId }, authStore.authToken)
-    }
-
-    const nextFollowing = !follower.isFollowing
-    socialActionsStore.setUserFollowingState(follower.userId, nextFollowing)
+    await socialActionsStore.toggleUserFollow(follower.userId)
+    const nextFollowing = socialActionsStore.isFollowingUser(follower.userId)
     pageFollowers.value = pageFollowers.value.map((item) =>
       item.userId === follower.userId
         ? { ...item, isFollowing: nextFollowing }
@@ -974,7 +973,10 @@ const loadPageForSlug = async () => {
 
   if (!loadedPage) {
     pageLoadError.value = pagesStore.pagesError || 'Unable to load this page.'
+    return
   }
+
+  socialActionsStore.setPageFollowingState(loadedPage.id, Boolean(loadedPage.isFollowing))
 }
 
 const togglePageFollow = async () => {
@@ -986,15 +988,10 @@ const togglePageFollow = async () => {
   }
 
   isUpdatingPageFollow.value = true
-  const nextFollowing = !page.value.isFollowing
 
   try {
-    if (nextFollowing) {
-      await pagesService.followPage(page.value.id, authStore.authToken)
-    } else {
-      await pagesService.unfollowPage(page.value.id, authStore.authToken)
-    }
-
+    await socialActionsStore.togglePageFollow(page.value.id)
+    const nextFollowing = socialActionsStore.isFollowingPage(page.value.id)
     pagesStore.setPageFollowing(page.value.id, nextFollowing)
   } catch (error) {
     toast.error('Unable to update page follow', {
@@ -1318,7 +1315,7 @@ watch(pagePostFile, (file, previousFile) => {
               class="inline-flex h-11 min-w-0 items-center justify-center rounded-[0.75rem] bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[var(--shadow-soft)] transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
               @click="togglePageFollow"
             >
-              {{ isUpdatingPageFollow ? 'Updating...' : page.isFollowing ? 'Unfollow' : 'Follow' }}
+              {{ isUpdatingPageFollow ? 'Updating...' : pageIsFollowing ? 'Unfollow' : 'Follow' }}
             </button>
           </div>
         </div>
