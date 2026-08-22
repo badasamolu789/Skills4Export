@@ -14,8 +14,8 @@ import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
-const QUESTIONS_PAGE_SIZE = 20
-const COMMUNITIES_PAGE_SIZE = 20
+const QUESTIONS_PAGE_SIZE = 10
+const COMMUNITIES_PAGE_SIZE = 10
 
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
@@ -83,7 +83,7 @@ const loadQuestions = async () => {
     const communitiesResponse = await loadPaginatedRecords(
       (params) => communitiesService.listCommunities(params, authStore.authToken),
       {},
-      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 3 },
+      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 1 },
     )
     const response = await questionsService.listQuestions(
       { per_page: QUESTIONS_PAGE_SIZE, sort: '-createdAt' },

@@ -805,7 +805,7 @@ const loadPageFollowers = async () => {
   pageFollowersError.value = ''
 
   try {
-    const response = await pagesService.listPageFollowers(page.value.id, { per_page: 20 }, authStore.authToken)
+    const response = await pagesService.listPageFollowers(page.value.id, { per_page: 10 }, authStore.authToken)
     const rawFollowers = Array.isArray(response.data) ? response.data : []
     const followers = await Promise.all(
       rawFollowers.map(async (item) => {
@@ -1017,7 +1017,7 @@ const loadPagePosts = async () => {
     const pageId = page.value.id
     const response = await postsService.listPagePosts(
       pageId,
-      { per_page: 20, sort: '-createdAt' },
+      { per_page: 10, sort: '-createdAt' },
       authStore.authToken,
     )
     const records = (response.data ?? []).filter((post) => {
@@ -1044,7 +1044,7 @@ const loadRecommendedJobs = async () => {
 
   try {
     const response = await jobsService.listJobs(
-      { per_page: 20, sort: '-createdAt' },
+      { per_page: 10, sort: '-createdAt' },
       authStore.authToken,
     )
     const jobs = response.data ?? []

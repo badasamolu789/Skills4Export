@@ -37,8 +37,9 @@ const mergeJobs = (...groups: JobRecord[][]) => {
 const isCompleteUuid = (value?: string | null) =>
   Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
 
-const JOBS_PAGE_SIZE = 12
-const MANAGE_JOBS_PAGE_SIZE = 20
+const JOBS_PAGE_SIZE = 10
+const MANAGE_JOBS_PAGE_SIZE = 10
+const JOBS_CACHE_TTL_MS = 2 * 60 * 1000
 
 export const useJobsStore = defineStore('jobs', () => {
   const authStore = useAuthStore()
@@ -55,6 +56,13 @@ export const useJobsStore = defineStore('jobs', () => {
   const hasMoreJobs = ref(false)
   const manageJobsError = ref('')
   const jobError = ref('')
+  let jobsRequest: Promise<void> | null = null
+  let manageJobsRequest: Promise<void> | null = null
+  let jobDetailRequest: Promise<void> | null = null
+  let jobsLoadedAt = 0
+  let manageJobsLoadedAt = 0
+
+  const isFresh = (loadedAt: number) => loadedAt > 0 && Date.now() - loadedAt < JOBS_CACHE_TTL_MS
 
   const findCachedJob = (idOrSlug: string) =>
     [...jobs.value, ...postedJobs.value].find((job) =>
@@ -104,23 +112,37 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
-  const loadJobs = async () => {
+  const loadJobs = async (options: { force?: boolean } = {}) => {
+    if (!options.force && jobs.value.length && isFresh(jobsLoadedAt)) {
+      return
+    }
+
+    if (jobsRequest) {
+      return jobsRequest
+    }
+
     isLoadingJobs.value = true
     jobsError.value = ''
     nextJobsPage.value = null
     hasMoreJobs.value = false
 
-    try {
-      const response = await loadJobsPage(1)
-      jobs.value = response.records
-      nextJobsPage.value = response.nextPage
-      hasMoreJobs.value = Boolean(response.nextPage)
-    } catch (error) {
-      jobsError.value = getDisplayErrorMessage(error, 'Unable to load jobs.')
-      jobs.value = []
-    } finally {
-      isLoadingJobs.value = false
-    }
+    jobsRequest = (async () => {
+      try {
+        const response = await loadJobsPage(1)
+        jobs.value = response.records
+        nextJobsPage.value = response.nextPage
+        hasMoreJobs.value = Boolean(response.nextPage)
+        jobsLoadedAt = Date.now()
+      } catch (error) {
+        jobsError.value = getDisplayErrorMessage(error, 'Unable to load jobs.')
+        jobs.value = []
+      } finally {
+        isLoadingJobs.value = false
+        jobsRequest = null
+      }
+    })()
+
+    return jobsRequest
   }
 
   const loadMoreJobs = async () => {
@@ -147,24 +169,41 @@ export const useJobsStore = defineStore('jobs', () => {
     const response = await jobsService.createJob(payload, authStore.authToken)
     if (isPublicJob(response.data)) {
       jobs.value = [response.data, ...jobs.value]
+      jobsLoadedAt = Date.now()
     }
     postedJobs.value = [response.data, ...postedJobs.value.filter((job) => job.id !== response.data.id)]
     return response.data
   }
 
   const loadJob = async (idOrSlug: string) => {
+    if (
+      currentJob.value &&
+      (currentJob.value.id === idOrSlug || currentJob.value.slug === idOrSlug)
+    ) {
+      return
+    }
+
+    if (jobDetailRequest) {
+      return jobDetailRequest
+    }
+
     isLoadingJob.value = true
     jobError.value = ''
     currentJob.value = null
 
-    try {
-      const response = await jobsService.getJob(idOrSlug, authStore.authToken)
-      currentJob.value = mergeWithCachedJobIdentity(response.data, idOrSlug)
-    } catch (error) {
-      jobError.value = getDisplayErrorMessage(error, 'Unable to load this job.')
-    } finally {
-      isLoadingJob.value = false
-    }
+    jobDetailRequest = (async () => {
+      try {
+        const response = await jobsService.getJob(idOrSlug, authStore.authToken)
+        currentJob.value = mergeWithCachedJobIdentity(response.data, idOrSlug)
+      } catch (error) {
+        jobError.value = getDisplayErrorMessage(error, 'Unable to load this job.')
+      } finally {
+        isLoadingJob.value = false
+        jobDetailRequest = null
+      }
+    })()
+
+    return jobDetailRequest
   }
 
   const applyToCurrentJob = async (payload: ApplyToJobRequest) => {
@@ -230,31 +269,49 @@ export const useJobsStore = defineStore('jobs', () => {
     }
   }
 
-  const loadManageJobs = async () => {
+  const loadManageJobs = async (options: { force?: boolean } = {}) => {
+    if (
+      !options.force &&
+      (postedJobs.value.length || appliedJobs.value.length) &&
+      isFresh(manageJobsLoadedAt)
+    ) {
+      return
+    }
+
+    if (manageJobsRequest) {
+      return manageJobsRequest
+    }
+
     isLoadingManageJobs.value = true
     manageJobsError.value = ''
 
-    try {
-      const postedResponse = await loadPaginatedRecords(
-        (params) => jobsService.listMyPostedJobs(params, authStore.authToken),
-        {},
-        { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 3 },
-      )
-      const appliedResponse = await loadPaginatedRecords(
-        (params) => jobsService.listMyJobApplications(params, authStore.authToken),
-        {},
-        { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 3 },
-      )
+    manageJobsRequest = (async () => {
+      try {
+        const postedResponse = await loadPaginatedRecords(
+          (params) => jobsService.listMyPostedJobs(params, authStore.authToken),
+          {},
+          { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 1 },
+        )
+        const appliedResponse = await loadPaginatedRecords(
+          (params) => jobsService.listMyJobApplications(params, authStore.authToken),
+          {},
+          { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 1 },
+        )
 
-      postedJobs.value = postedResponse.data
-      appliedJobs.value = appliedResponse.data
-    } catch (error) {
-      manageJobsError.value = getDisplayErrorMessage(error, 'Unable to load your jobs.')
-      postedJobs.value = []
-      appliedJobs.value = []
-    } finally {
-      isLoadingManageJobs.value = false
-    }
+        postedJobs.value = postedResponse.data
+        appliedJobs.value = appliedResponse.data
+        manageJobsLoadedAt = Date.now()
+      } catch (error) {
+        manageJobsError.value = getDisplayErrorMessage(error, 'Unable to load your jobs.')
+        postedJobs.value = []
+        appliedJobs.value = []
+      } finally {
+        isLoadingManageJobs.value = false
+        manageJobsRequest = null
+      }
+    })()
+
+    return manageJobsRequest
   }
 
   return {

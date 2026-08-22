@@ -824,7 +824,7 @@ const loadShareCommunities = async () => {
   isLoadingShareCommunities.value = true
 
   try {
-    const response = await communitiesService.listCommunities({ per_page: 20, limit: 20 }, authStore.authToken)
+    const response = await communitiesService.listCommunities({ per_page: 10, limit: 10 }, authStore.authToken)
     shareCommunities.value = (response.data ?? []).filter((community) => !isPrivateCommunity(community))
     hasLoadedShareCommunities.value = true
   } catch (error) {

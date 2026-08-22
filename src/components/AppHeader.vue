@@ -376,7 +376,7 @@ const loadCommunities = async () => {
   isLoadingCommunities.value = true
 
   try {
-    const response = await communitiesService.listCommunities({ per_page: 20, limit: 20 }, authStore.authToken)
+    const response = await communitiesService.listCommunities({ per_page: 10, limit: 10 }, authStore.authToken)
     communities.value = response.data ?? []
     hasLoadedCommunities.value = true
   } catch (error) {
@@ -690,7 +690,6 @@ onBeforeUnmount(() => {
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   window.addEventListener(OPEN_COMPOSER_EVENT, handleOpenComposerEvent)
-  void loadCommunities()
 })
 </script>
 

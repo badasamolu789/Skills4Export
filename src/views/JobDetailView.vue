@@ -253,7 +253,7 @@ const loadAdverts = async () => {
   try {
     const response = await advertsService.listAdverts(
       {
-        per_page: 20,
+        per_page: 10,
         sort: '-createdAt',
       },
     )

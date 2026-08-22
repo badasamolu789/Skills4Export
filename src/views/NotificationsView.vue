@@ -16,7 +16,7 @@ const refreshNotifications = async (background = false) => {
   await notificationsStore.loadNotifications({
     token: authStore.authToken,
     page: 1,
-    perPage: 30,
+    perPage: 10,
     background,
   })
 }

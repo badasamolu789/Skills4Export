@@ -240,9 +240,9 @@ const loadActivities = async () => {
     }
 
     const [postsResponse, questionsResponse, savedPostsResponse] = await Promise.all([
-      postsService.listPosts({ per_page: 20, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: 20, sort: '-createdAt' }, authStore.authToken),
-      postsService.listSavedPosts({ per_page: 20, sort: '-createdAt' }, authStore.authToken),
+      postsService.listPosts({ per_page: 10, sort: '-createdAt' }, authStore.authToken),
+      questionsService.listQuestions({ per_page: 10, sort: '-createdAt' }, authStore.authToken),
+      postsService.listSavedPosts({ per_page: 10, sort: '-createdAt' }, authStore.authToken),
     ])
 
     const allPosts = postsResponse.data ?? []
@@ -502,20 +502,21 @@ onMounted(() => {
       {{ loadError }}
     </div>
 
-    <div v-if="isLoading" class="space-y-4">
-      <article
-        v-for="item in 4"
-        :key="item"
-        class="animate-pulse rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
-      >
-        <div class="h-4 w-32 rounded-full bg-[var(--surface-muted)]" />
-        <div class="mt-4 h-5 w-3/4 rounded-full bg-[var(--surface-muted)]" />
-        <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-muted)]" />
-        <div class="mt-2 h-4 w-2/3 rounded-full bg-[var(--surface-muted)]" />
-      </article>
-    </div>
+    <div class="mx-auto w-full max-w-[44rem] lg:max-w-[46rem]">
+      <div v-if="isLoading" class="space-y-4">
+        <article
+          v-for="item in 4"
+          :key="item"
+          class="animate-pulse rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
+        >
+          <div class="h-4 w-32 rounded-full bg-[var(--surface-muted)]" />
+          <div class="mt-4 h-5 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+          <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-muted)]" />
+          <div class="mt-2 h-4 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+        </article>
+      </div>
 
-    <div v-else class="space-y-4">
+      <div v-else class="space-y-4">
       <template v-if="activeTab === 'posts' && userPostFeedItems.length">
         <AppFeedPost
           v-for="post in userPostFeedItems"
@@ -679,12 +680,13 @@ onMounted(() => {
         </div>
       </template>
 
-      <div
-        v-else
-        class="rounded-[0.9rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center"
-      >
-        <p class="text-sm font-semibold text-[var(--text-primary)]">{{ activeEmptyMessage }}</p>
-        <p class="mt-1 text-sm text-[var(--text-secondary)]">Your activity will appear here as you use Skills4Export.</p>
+        <div
+          v-else
+          class="rounded-[0.9rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center"
+        >
+          <p class="text-sm font-semibold text-[var(--text-primary)]">{{ activeEmptyMessage }}</p>
+          <p class="mt-1 text-sm text-[var(--text-secondary)]">Your activity will appear here as you use Skills4Export.</p>
+        </div>
       </div>
     </div>
   </section>

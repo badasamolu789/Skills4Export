@@ -65,6 +65,10 @@ const userMenu = computed(() => [
 
 const { resolvedTheme } = useTheme()
 const appLogoSrc = computed(() => resolvedTheme.value === 'dark' ? '/logo_dark.webp' : '/logo_light.webp')
+let deferredAuthSyncTimer: number | null = null
+let deferredNotificationSyncTimer: number | null = null
+let currentUserProfileHydratedAt = 0
+const CURRENT_USER_PROFILE_TTL_MS = 2 * 60 * 1000
 
 const toasterTheme = computed(() => resolvedTheme.value)
 const toasterOptions = {
@@ -199,6 +203,20 @@ const clearGuestPromptTimer = () => {
   }
 }
 
+const clearDeferredAuthSyncTimer = () => {
+  if (deferredAuthSyncTimer !== null) {
+    window.clearTimeout(deferredAuthSyncTimer)
+    deferredAuthSyncTimer = null
+  }
+}
+
+const clearDeferredNotificationSyncTimer = () => {
+  if (deferredNotificationSyncTimer !== null) {
+    window.clearTimeout(deferredNotificationSyncTimer)
+    deferredNotificationSyncTimer = null
+  }
+}
+
 const isLandingGuestSession = () =>
   typeof window !== 'undefined' &&
   window.sessionStorage.getItem('skills4export-landing-guest') === 'true'
@@ -261,6 +279,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   clearGuestPromptTimer()
+  clearDeferredAuthSyncTimer()
+  clearDeferredNotificationSyncTimer()
   window.removeEventListener('offline', handleOffline)
   window.removeEventListener('online', handleOnline)
   window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired)
@@ -269,6 +289,14 @@ onBeforeUnmount(() => {
 
 const hydrateCurrentUserProfile = async () => {
   if (!authStore.authToken || isLoadingCurrentUserProfile.value) {
+    return
+  }
+
+  if (
+    authStore.userProfile &&
+    currentUserProfileHydratedAt > 0 &&
+    Date.now() - currentUserProfileHydratedAt < CURRENT_USER_PROFILE_TTL_MS
+  ) {
     return
   }
 
@@ -301,6 +329,8 @@ const hydrateCurrentUserProfile = async () => {
     if (currentWorkplace) {
       authStore.signUpDraft.workplace = currentWorkplace
     }
+
+    currentUserProfileHydratedAt = Date.now()
   } catch {
     return
   } finally {
@@ -311,10 +341,21 @@ const hydrateCurrentUserProfile = async () => {
 watch(
   () => authStore.authToken,
   (token) => {
+    clearDeferredAuthSyncTimer()
+    clearDeferredNotificationSyncTimer()
+
     if (authStore.isAuthenticated && token) {
-      void hydrateCurrentUserProfile()
-      notificationsStore.startBackgroundSync(token)
+      deferredAuthSyncTimer = window.setTimeout(() => {
+        deferredAuthSyncTimer = null
+        void hydrateCurrentUserProfile()
+      }, 900)
+
+      deferredNotificationSyncTimer = window.setTimeout(() => {
+        deferredNotificationSyncTimer = null
+        notificationsStore.startBackgroundSync(token)
+      }, 1800)
     } else {
+      currentUserProfileHydratedAt = 0
       notificationsStore.reset()
     }
   },

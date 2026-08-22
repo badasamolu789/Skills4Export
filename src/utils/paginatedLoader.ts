@@ -1,6 +1,6 @@
 import type { PaginatorPayload } from '@/services/posts'
 
-export const DEFAULT_PAGE_SIZE = 20
+export const DEFAULT_PAGE_SIZE = 10
 
 export const hasNextPage = <T>(response: PaginatorPayload<T>) =>
   Boolean(response.next_page_url) || response.current_page < response.last_page

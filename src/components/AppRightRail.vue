@@ -144,7 +144,7 @@ const loadAdverts = async () => {
   try {
     const response = await advertsService.listAdverts(
       {
-        per_page: 20,
+        per_page: 10,
         sort: '-createdAt',
       },
     )
@@ -157,10 +157,18 @@ const loadAdverts = async () => {
 }
 
 onMounted(() => {
-  void loadTrendingQuestions()
+  if (!props.hideTrendingQuestions) {
+    void loadTrendingQuestions()
+  }
+
   if (!props.hideAdverts) {
     void loadAdverts()
   }
+
+  if (props.hideTrendingQuestions) {
+    return
+  }
+
   realtimeTimer = window.setInterval(() => {
     if (!isLoadingQuestions.value) {
       void loadTrendingQuestions({ background: true })

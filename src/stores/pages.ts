@@ -12,7 +12,8 @@ export type PageCategory = 'student' | 'business'
 
 const OWNED_PAGE_REFERENCES_KEY = 'skills4export-owned-page-references'
 const PAGE_CATEGORY_REFERENCES_KEY = 'skills4export-page-category-references'
-const PAGES_PAGE_SIZE = 20
+const PAGES_PAGE_SIZE = 10
+const PAGES_CACHE_TTL_MS = 2 * 60 * 1000
 const PAGE_METADATA_KEYS = [
   'slogan',
   'contactEmail',
@@ -250,6 +251,9 @@ export const usePagesStore = defineStore('pages', () => {
   const pagesError = ref('')
   const loadedForUserId = ref('')
   const pagePersistenceWarning = ref('')
+  let pagesRequest: Promise<void> | null = null
+  let pageRequests = new Map<string, Promise<ManagedPage | null>>()
+  let pagesLoadedAt = 0
 
   const pageCount = computed(() => pages.value.length)
   const currentUserId = computed(() => authStore.userId || extractUserIdFromToken(authStore.authToken) || '')
@@ -265,6 +269,9 @@ export const usePagesStore = defineStore('pages', () => {
     pagesError.value = ''
     loadedForUserId.value = ''
     publicPages.value = []
+    pagesLoadedAt = 0
+    pagesRequest = null
+    pageRequests = new Map()
   }
 
   const getOwnedPageReferences = () => {
@@ -321,6 +328,7 @@ export const usePagesStore = defineStore('pages', () => {
 
     pages.value = [...apiPages, ...locallyOwnedPages]
     loadedForUserId.value = currentUserId.value
+    pagesLoadedAt = Date.now()
   }
 
   const addPageFromApi = (record: PageRecord, options: { trustAsOwned?: boolean } = {}) => {
@@ -364,35 +372,49 @@ export const usePagesStore = defineStore('pages', () => {
     publicPages.value = publicPages.value.map(update)
   }
 
-  const loadPages = async () => {
+  const loadPages = async (options: { force?: boolean } = {}) => {
     if (!authStore.authToken || !currentUserId.value) {
       clearPages()
       return
     }
 
-    if (isLoadingPages.value) {
+    const hasFreshPages =
+      loadedForUserId.value === currentUserId.value &&
+      pagesLoadedAt > 0 &&
+      Date.now() - pagesLoadedAt < PAGES_CACHE_TTL_MS
+
+    if (!options.force && hasFreshPages) {
       return
+    }
+
+    if (pagesRequest) {
+      return pagesRequest
     }
 
     isLoadingPages.value = true
     pagesError.value = ''
 
-    try {
-      const response = await loadPaginatedRecords(
-        (params) => pagesService.listMyPages(params, authStore.authToken),
-        {},
-        { perPage: PAGES_PAGE_SIZE, maxPages: 3 },
-      )
-      setPagesFromApi(response.data)
-    } catch (error) {
-      pagesError.value = getDisplayErrorMessage(error, 'Unable to load pages.')
+    pagesRequest = (async () => {
+      try {
+        const response = await loadPaginatedRecords(
+          (params) => pagesService.listMyPages(params, authStore.authToken),
+          {},
+          { perPage: PAGES_PAGE_SIZE, maxPages: 1 },
+        )
+        setPagesFromApi(response.data)
+      } catch (error) {
+        pagesError.value = getDisplayErrorMessage(error, 'Unable to load pages.')
 
-      if (!pages.value.length) {
-        pages.value = []
+        if (!pages.value.length) {
+          pages.value = []
+        }
+      } finally {
+        isLoadingPages.value = false
+        pagesRequest = null
       }
-    } finally {
-      isLoadingPages.value = false
-    }
+    })()
+
+    return pagesRequest
   }
 
   const loadPage = async (idOrSlug: string) => {
@@ -403,63 +425,97 @@ export const usePagesStore = defineStore('pages', () => {
 
     const cachedPage = getPageByIdOrSlug(idOrSlug)
 
+    if (cachedPage && loadedForUserId.value === currentUserId.value) {
+      return cachedPage
+    }
+
+    const requestKey = `owned:${currentUserId.value}:${idOrSlug}`
+    const existingRequest = pageRequests.get(requestKey)
+
+    if (existingRequest) {
+      return existingRequest
+    }
+
     isLoadingPages.value = true
     pagesError.value = ''
 
-    try {
-      const record = cachedPage || (isUuid(idOrSlug)
-        ? null
-        : await pagesService.findPageBySlug(idOrSlug, authStore.authToken))
-      if (!isUuid(idOrSlug) && !record) {
-        pagesError.value = 'Unable to find this page in your pages.'
+    const request = (async () => {
+      try {
+        const record = cachedPage || (isUuid(idOrSlug)
+          ? null
+          : await pagesService.findPageBySlug(idOrSlug, authStore.authToken))
+        if (!isUuid(idOrSlug) && !record) {
+          pagesError.value = 'Unable to find this page in your pages.'
+          return null
+        }
+        const pageId = record?.id || idOrSlug
+        const response = await pagesService.getPage(pageId, authStore.authToken)
+        return addPageFromApi(response.data, { trustAsOwned: true })
+      } catch (error) {
+        await loadPages()
+        const page = getPageByIdOrSlug(idOrSlug)
+
+        if (page) {
+          return page
+        }
+
+        pagesError.value = getDisplayErrorMessage(error, 'Unable to load page.')
         return null
+      } finally {
+        isLoadingPages.value = false
+        pageRequests.delete(requestKey)
       }
-      const pageId = record?.id || idOrSlug
-      const response = await pagesService.getPage(pageId, authStore.authToken)
-      return addPageFromApi(response.data, { trustAsOwned: true })
-    } catch (error) {
-      await loadPages()
-      const page = getPageByIdOrSlug(idOrSlug)
+    })()
 
-      if (page) {
-        return page
-      }
-
-      pagesError.value = getDisplayErrorMessage(error, 'Unable to load page.')
-      return null
-    } finally {
-      isLoadingPages.value = false
-    }
+    pageRequests.set(requestKey, request)
+    return request
   }
 
   const loadPublicPage = async (idOrSlug: string) => {
     const cachedPage = getPublicPageByIdOrSlug(idOrSlug) || getPageByIdOrSlug(idOrSlug)
 
+    if (cachedPage) {
+      return cachedPage
+    }
+
+    const requestKey = `public:${idOrSlug}`
+    const existingRequest = pageRequests.get(requestKey)
+
+    if (existingRequest) {
+      return existingRequest
+    }
+
     isLoadingPages.value = true
     pagesError.value = ''
 
-    try {
-      const record = cachedPage || (isUuid(idOrSlug)
-        ? null
-        : await pagesService.findPageBySlug(idOrSlug, authStore.authToken))
-      if (!isUuid(idOrSlug) && !record) {
-        pagesError.value = 'Unable to find this page.'
+    const request = (async () => {
+      try {
+        const record = cachedPage || (isUuid(idOrSlug)
+          ? null
+          : await pagesService.findPageBySlug(idOrSlug, authStore.authToken))
+        if (!isUuid(idOrSlug) && !record) {
+          pagesError.value = 'Unable to find this page.'
+          return null
+        }
+        const pageId = record?.id || idOrSlug
+        const response = await pagesService.getPage(pageId, authStore.authToken)
+        const publicPage = mapPageRecordToManagedPage(response.data)
+        publicPages.value = [
+          publicPage,
+          ...publicPages.value.filter((item) => item.id !== publicPage.id),
+        ]
+        return publicPage
+      } catch (error) {
+        pagesError.value = getDisplayErrorMessage(error, 'Unable to load page.')
         return null
+      } finally {
+        isLoadingPages.value = false
+        pageRequests.delete(requestKey)
       }
-      const pageId = record?.id || idOrSlug
-      const response = await pagesService.getPage(pageId, authStore.authToken)
-      const publicPage = mapPageRecordToManagedPage(response.data)
-      publicPages.value = [
-        publicPage,
-        ...publicPages.value.filter((item) => item.id !== publicPage.id),
-      ]
-      return publicPage
-    } catch (error) {
-      pagesError.value = getDisplayErrorMessage(error, 'Unable to load page.')
-      return null
-    } finally {
-      isLoadingPages.value = false
-    }
+    })()
+
+    pageRequests.set(requestKey, request)
+    return request
   }
 
   const setPageFollowing = (idOrSlug: string, following: boolean) => {

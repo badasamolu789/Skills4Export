@@ -357,23 +357,22 @@ const loadFeed = async (options: {
   feedError.value = ''
 
   try {
-    const advertsResponse = requestedPage === 1
-      ? await advertsService.listAdverts(
-          {
-            per_page: 20,
+    const [advertsResponse, compactFeedResponse] = await Promise.all([
+      requestedPage === 1
+        ? advertsService.listAdverts({
+            per_page: 10,
             sort: '-createdAt',
-          },
-        )
-      : null
-
-    const compactFeedResponse = await feedsService.listCompactFeed(
-      {
-        mode: activeFeedMode.value,
-        page: requestedPage,
-        per_page: FEED_PAGE_SIZE,
-      },
-      authStore.authToken,
-    )
+          })
+        : Promise.resolve(null),
+      feedsService.listCompactFeed(
+        {
+          mode: activeFeedMode.value,
+          page: requestedPage,
+          per_page: FEED_PAGE_SIZE,
+        },
+        authStore.authToken,
+      ),
+    ])
 
     if (requestVersion !== feedRequestVersion) {
       return

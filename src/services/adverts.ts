@@ -1,4 +1,5 @@
 import { api } from '@/lib/api'
+import { createCachedRequest } from '@/utils/requestCache'
 
 export type AdvertStatus =
   | 'pending_review'
@@ -81,6 +82,8 @@ const ADVERT_ROUTES = {
   adverts: '/adverts',
 } as const
 
+const advertListRequests = createCachedRequest<AdvertListResponse>(60 * 1000)
+
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
   const searchParams = new URLSearchParams()
 
@@ -97,6 +100,9 @@ const withQuery = (path: string, params: Record<string, unknown> = {}) => {
 
 export const advertsService = {
   listAdverts(params: AdvertListParams = {}) {
-    return api.get<AdvertListResponse>(withQuery(ADVERT_ROUTES.adverts, params))
+    return advertListRequests.run(
+      `adverts:${JSON.stringify(params)}`,
+      () => api.get<AdvertListResponse>(withQuery(ADVERT_ROUTES.adverts, params)),
+    )
   },
 }

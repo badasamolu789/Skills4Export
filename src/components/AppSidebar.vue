@@ -212,7 +212,7 @@ const loadSidebarCommunities = async () => {
 
   try {
     const response = await communitiesService.listCommunities(
-      { per_page: 20, limit: 20 },
+      { per_page: 10, limit: 10 },
       authStore.authToken,
     )
     sidebarCommunities.value = response.data

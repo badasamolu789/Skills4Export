@@ -8,7 +8,7 @@ import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { richTextToPlainText } from '@/utils/richText'
 
-const COMMUNITIES_PAGE_SIZE = 20
+const COMMUNITIES_PAGE_SIZE = 10
 
 const authStore = useAuthStore()
 const searchQuery = ref('')
@@ -38,7 +38,7 @@ const loadCommunities = async () => {
     const response = await loadPaginatedRecords(
       (params) => communitiesService.listCommunities(params, authStore.authToken),
       {},
-      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 3 },
+      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 1 },
     )
     communities.value = response.data.filter(
       (community) =>

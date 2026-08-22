@@ -67,8 +67,9 @@ const freelancerTermsAgreed = ref(false)
 const passportFileName = ref('')
 const passportFile = ref<File | null>(null)
 const passportPreviewUrl = ref('')
-const visibleFreelancerCount = ref(2)
-const visibleJobCount = ref(1)
+const INITIAL_VISIBLE_ITEMS = 10
+const visibleFreelancerCount = ref(INITIAL_VISIBLE_ITEMS)
+const visibleJobCount = ref(INITIAL_VISIBLE_ITEMS)
 const revealSentinel = ref<HTMLElement | null>(null)
 const isApplyingToFreelanceJob = ref(false)
 const isFreelanceJobDetailOpen = ref(false)
@@ -413,28 +414,64 @@ const visibleFreelancers = computed(() =>
 )
 const visibleJobs = computed(() => filteredJobs.value.slice(0, visibleJobCount.value))
 const hasMoreFreelancers = computed(
-  () => visibleFreelancerCount.value < filteredFreelancers.value.length,
+  () =>
+    visibleFreelancerCount.value < filteredFreelancers.value.length ||
+    freelancersStore.hasMoreFreelancerPages,
 )
-const hasMoreJobs = computed(() => visibleJobCount.value < filteredJobs.value.length)
+const hasMoreJobs = computed(
+  () =>
+    visibleJobCount.value < filteredJobs.value.length ||
+    freelancersStore.hasMoreFreelanceJobPages,
+)
 const hasMoreActiveItems = computed(() =>
   activeTab.value === 'freelancers' ? hasMoreFreelancers.value : hasMoreJobs.value,
 )
+const isLoadingMoreActiveItems = computed(() =>
+  activeTab.value === 'freelancers'
+    ? freelancersStore.isLoadingMoreFreelancers
+    : freelancersStore.isLoadingMoreFreelanceJobs,
+)
 
-const revealNextItems = () => {
-  if (activeTab.value === 'freelancers') {
-    visibleFreelancerCount.value = Math.min(
-      visibleFreelancerCount.value + 2,
-      filteredFreelancers.value.length,
-    )
+const revealNextItems = async () => {
+  if (isLoadingMoreActiveItems.value) {
     return
   }
 
-  visibleJobCount.value = Math.min(visibleJobCount.value + 1, filteredJobs.value.length)
+  if (activeTab.value === 'freelancers') {
+    if (visibleFreelancerCount.value < filteredFreelancers.value.length) {
+      visibleFreelancerCount.value = Math.min(
+        visibleFreelancerCount.value + 1,
+        filteredFreelancers.value.length,
+      )
+      return
+    }
+
+    await freelancersStore.loadMoreFreelancers()
+
+    if (visibleFreelancerCount.value < filteredFreelancers.value.length) {
+      visibleFreelancerCount.value = Math.min(
+        visibleFreelancerCount.value + 1,
+        filteredFreelancers.value.length,
+      )
+    }
+    return
+  }
+
+  if (visibleJobCount.value < filteredJobs.value.length) {
+    visibleJobCount.value = Math.min(visibleJobCount.value + 1, filteredJobs.value.length)
+    return
+  }
+
+  await freelancersStore.loadMoreFreelanceJobs()
+
+  if (visibleJobCount.value < filteredJobs.value.length) {
+    visibleJobCount.value = Math.min(visibleJobCount.value + 1, filteredJobs.value.length)
+  }
 }
 
 const resetRevealCounts = () => {
-  visibleFreelancerCount.value = 2
-  visibleJobCount.value = 1
+  visibleFreelancerCount.value = INITIAL_VISIBLE_ITEMS
+  visibleJobCount.value = INITIAL_VISIBLE_ITEMS
 }
 
 const setupRevealObserver = () => {
@@ -447,8 +484,12 @@ const setupRevealObserver = () => {
 
   revealObserver = new IntersectionObserver(
     (entries) => {
-      if (entries.some((entry) => entry.isIntersecting) && hasMoreActiveItems.value) {
-        revealNextItems()
+      if (
+        entries.some((entry) => entry.isIntersecting) &&
+        hasMoreActiveItems.value &&
+        !isLoadingMoreActiveItems.value
+      ) {
+        void revealNextItems()
       }
     },
     { threshold: 0.4 },

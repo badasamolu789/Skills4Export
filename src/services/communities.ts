@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import type { ApiSuccessResponse, PaginatorPayload } from '@/services/posts'
+import { createCachedRequest } from '@/utils/requestCache'
 
 export type CommunityRecord = {
   id: string
@@ -108,18 +109,29 @@ const COMMUNITY_ROUTES = {
   communityMembers: (id: string) => `/communities/${id}/members`,
 } as const
 
+const communityListRequests = createCachedRequest<PaginatorPayload<CommunityRecord>>(2 * 60 * 1000)
+const communityCategoriesRequests = createCachedRequest<ApiSuccessResponse<CommunityCategoryRecord[]>>(5 * 60 * 1000)
+const getCacheKey = (scope: string, params: Record<string, unknown> = {}, token?: string | null) =>
+  `${scope}:${token ? 'auth' : 'guest'}:${JSON.stringify(params)}`
+
 export const communitiesService = {
   listCommunityCategories(token?: string | null) {
-    return api.get<ApiSuccessResponse<CommunityCategoryRecord[]>>(
-      COMMUNITY_ROUTES.communityCategories,
-      { token },
+    return communityCategoriesRequests.run(
+      getCacheKey('categories', {}, token),
+      () => api.get<ApiSuccessResponse<CommunityCategoryRecord[]>>(
+        COMMUNITY_ROUTES.communityCategories,
+        { token },
+      ),
     )
   },
 
   listCommunities(params: CommunityListParams = {}, token?: string | null) {
-    return api.get<PaginatorPayload<CommunityRecord>>(
-      withQuery(COMMUNITY_ROUTES.communities, params),
-      { token },
+    return communityListRequests.run(
+      getCacheKey('communities', params, token),
+      () => api.get<PaginatorPayload<CommunityRecord>>(
+        withQuery(COMMUNITY_ROUTES.communities, params),
+        { token },
+      ),
     )
   },
 

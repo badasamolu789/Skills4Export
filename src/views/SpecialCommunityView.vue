@@ -105,7 +105,7 @@ const loadPage = async () => {
 
   try {
     const communitiesResponse = await communitiesService.listCommunities(
-      { per_page: 20, limit: 20 },
+      { per_page: 10, limit: 10 },
       authStore.authToken,
     )
     const matchedCommunity = findSpecialCommunity(communitiesResponse.data ?? [])
@@ -128,7 +128,7 @@ const loadPage = async () => {
 
     const postsResponse = await postsService.listPosts(
       {
-        per_page: 20,
+        per_page: 10,
         sort: sortOrder.value === 'popular' ? '-score' : '-createdAt',
         communityId: matchedCommunity.id,
       },

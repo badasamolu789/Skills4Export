@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import type { ApiSuccessResponse, PaginatorPayload, PostMediaRecord, ToggleReactionResponse } from '@/services/posts'
+import { createCachedRequest } from '@/utils/requestCache'
 
 export type QuestionAnswerRecord = {
   id: string
@@ -187,6 +188,10 @@ const QUESTION_ROUTES = {
   answerShares: (answerId: string) => `/answers/${answerId}/shares`,
 } as const
 
+const questionListRequests = createCachedRequest<PaginatorPayload<QuestionRecord>>(60 * 1000)
+const getQuestionListCacheKey = (params: Record<string, unknown>, token?: string | null) =>
+  `questions:${token ? 'auth' : 'guest'}:${JSON.stringify(params)}`
+
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
   const query = new URLSearchParams()
 
@@ -249,9 +254,14 @@ export const questionsService = {
   },
 
   listQuestions(params: ListQuestionsParams = {}, token?: string | null) {
-    return api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, normalizeFeedQueryParams(params)), {
-      token,
-    })
+    const normalizedParams = normalizeFeedQueryParams(params)
+
+    return questionListRequests.run(
+      getQuestionListCacheKey(normalizedParams, token),
+      () => api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, normalizedParams), {
+        token,
+      }),
+    )
   },
 
   getQuestion(id: string, token?: string | null, includeAnswers = true) {

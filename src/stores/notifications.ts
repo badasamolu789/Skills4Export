@@ -7,6 +7,8 @@ import {
 } from '@/services/notifications'
 
 const SYNC_INTERVAL_MS = 30000
+const NOTIFICATION_LIST_TTL_MS = 30000
+const UNREAD_COUNT_TTL_MS = 15000
 
 export const useNotificationsStore = defineStore('notifications', () => {
   const notifications = ref<NotificationItem[]>([])
@@ -22,6 +24,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
   let syncTimer: number | null = null
   let eventSource: EventSource | null = null
   let hasCompletedInitialSync = false
+  let unreadCountRequest: Promise<void> | null = null
+  let notificationsRequest: Promise<void> | null = null
+  let notificationsLoadedAt = 0
+  let unreadCountLoadedAt = 0
 
   const hasUnread = computed(() => unreadCount.value > 0)
   const hasMore = computed(() => currentPage.value < lastPage.value)
@@ -86,14 +92,30 @@ export const useNotificationsStore = defineStore('notifications', () => {
     return Notification.requestPermission()
   }
 
-  const syncUnreadCount = async (token?: string | null) => {
+  const syncUnreadCount = async (token?: string | null, options: { force?: boolean } = {}) => {
     if (!token) {
       unreadCount.value = 0
       return
     }
 
-    const response = await notificationsService.getUnreadCount(token)
-    unreadCount.value = Number(response.count ?? response.data?.count ?? unreadCount.value ?? 0)
+    if (!options.force && unreadCountLoadedAt > 0 && Date.now() - unreadCountLoadedAt < UNREAD_COUNT_TTL_MS) {
+      return
+    }
+
+    if (unreadCountRequest) {
+      return unreadCountRequest
+    }
+
+    unreadCountRequest = notificationsService.getUnreadCount(token)
+      .then((response) => {
+        unreadCount.value = Number(response.count ?? response.data?.count ?? unreadCount.value ?? 0)
+        unreadCountLoadedAt = Date.now()
+      })
+      .finally(() => {
+        unreadCountRequest = null
+      })
+
+    return unreadCountRequest
   }
 
   const handleRealtimePayload = (payload: unknown) => {
@@ -145,6 +167,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     perPage?: number
     append?: boolean
     background?: boolean
+    force?: boolean
   }) => {
     const token = options?.token
 
@@ -157,6 +180,22 @@ export const useNotificationsStore = defineStore('notifications', () => {
     const page = options?.page ?? 1
     const append = Boolean(options?.append)
     const background = Boolean(options?.background)
+    const canUseFreshCache =
+      !options?.force &&
+      !append &&
+      page === 1 &&
+      notifications.value.length > 0 &&
+      notificationsLoadedAt > 0 &&
+      Date.now() - notificationsLoadedAt < NOTIFICATION_LIST_TTL_MS
+
+    if (canUseFreshCache) {
+      await syncUnreadCount(token)
+      return
+    }
+
+    if (!append && notificationsRequest) {
+      return notificationsRequest
+    }
 
     if (background) {
       isRefreshing.value = true
@@ -166,46 +205,58 @@ export const useNotificationsStore = defineStore('notifications', () => {
 
     error.value = ''
 
-    try {
-      const response = await notificationsService.listNotifications(
-        {
-          page,
-          per_page: options?.perPage ?? 20,
-          sort: '-createdAt',
-        },
-        token,
-      )
-      const previousUnread = unreadCount.value
-      const rawItems = response.data ?? []
-      const nextItems = rawItems.map(normalizeNotification)
+    const request = (async () => {
+      try {
+        const response = await notificationsService.listNotifications(
+          {
+            page,
+            per_page: options?.perPage ?? 10,
+            sort: '-createdAt',
+          },
+          token,
+        )
+        const previousUnread = unreadCount.value
+        const rawItems = response.data ?? []
+        const nextItems = rawItems.map(normalizeNotification)
 
-      mergeNotifications(nextItems, append)
-      currentPage.value = Number(response.current_page ?? page)
-      lastPage.value = Number(response.last_page ?? page)
-      total.value = Number(response.total ?? notifications.value.length)
-      unreadCount.value = nextItems.filter((item) => item.unread).length +
-        (append ? Math.max(0, unreadCount.value - notifications.value.filter((item) => item.unread).length) : 0)
+        mergeNotifications(nextItems, append)
+        currentPage.value = Number(response.current_page ?? page)
+        lastPage.value = Number(response.last_page ?? page)
+        total.value = Number(response.total ?? notifications.value.length)
+        unreadCount.value = nextItems.filter((item) => item.unread).length +
+          (append ? Math.max(0, unreadCount.value - notifications.value.filter((item) => item.unread).length) : 0)
 
-      await syncUnreadCount(token)
-      if (hasCompletedInitialSync && unreadCount.value > previousUnread) {
-        const newestUnread = nextItems.find((item) => item.unread)
-        if (newestUnread) {
-          showBrowserNotification(newestUnread)
+        await syncUnreadCount(token)
+        if (hasCompletedInitialSync && unreadCount.value > previousUnread) {
+          const newestUnread = nextItems.find((item) => item.unread)
+          if (newestUnread) {
+            showBrowserNotification(newestUnread)
+          }
+        }
+
+        hasCompletedInitialSync = true
+        lastSyncedAt.value = new Date().toISOString()
+        notificationsLoadedAt = Date.now()
+      } catch (loadError) {
+        error.value = loadError instanceof Error ? loadError.message : 'Unable to load notifications.'
+      } finally {
+        isLoading.value = false
+        isRefreshing.value = false
+        if (!append) {
+          notificationsRequest = null
         }
       }
+    })()
 
-      hasCompletedInitialSync = true
-      lastSyncedAt.value = new Date().toISOString()
-    } catch (loadError) {
-      error.value = loadError instanceof Error ? loadError.message : 'Unable to load notifications.'
-    } finally {
-      isLoading.value = false
-      isRefreshing.value = false
+    if (!append) {
+      notificationsRequest = request
     }
+
+    return request
   }
 
   const refresh = async (token?: string | null, background = true) => {
-    await loadNotifications({ token, page: 1, perPage: 20, background })
+    await loadNotifications({ token, page: 1, perPage: 10, background })
   }
 
   const loadMore = async (token?: string | null) => {
@@ -216,7 +267,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     await loadNotifications({
       token,
       page: currentPage.value + 1,
-      perPage: 20,
+      perPage: 10,
       append: true,
     })
   }
@@ -342,11 +393,11 @@ export const useNotificationsStore = defineStore('notifications', () => {
       return
     }
 
-    void refresh(token, true)
+    void syncUnreadCount(token).catch(() => undefined)
     startRealtimeStream(token)
     syncTimer = window.setInterval(() => {
-      void refresh(token, true)
-    }, isRealtimeConnected.value ? SYNC_INTERVAL_MS * 4 : SYNC_INTERVAL_MS)
+      void syncUnreadCount(token).catch(() => undefined)
+    }, SYNC_INTERVAL_MS)
   }
 
   const stopBackgroundSync = () => {
@@ -371,6 +422,10 @@ export const useNotificationsStore = defineStore('notifications', () => {
     error.value = ''
     lastSyncedAt.value = ''
     hasCompletedInitialSync = false
+    notificationsLoadedAt = 0
+    unreadCountLoadedAt = 0
+    notificationsRequest = null
+    unreadCountRequest = null
   }
 
   return {
