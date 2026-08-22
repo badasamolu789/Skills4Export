@@ -43,14 +43,11 @@ const questions = computed(() => {
 const loadQuestion = async (question: QuestionRecord) => {
   const userId = getQuestionUserId(question)
   const community = communitiesById.value.get(question.communityId || question.community_id || '')
-  const [authorData, answersResponse, followStatusResponse] = await Promise.all([
+  const [authorData, answersResponse] = await Promise.all([
     userId
       ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
       : Promise.resolve(null),
     questionsService.listAnswers(question.id, authStore.authToken),
-    userId && userId !== authStore.userId
-      ? usersService.getUserFollowStatus(userId, authStore.authToken)
-      : Promise.resolve(null),
   ])
 
   const mappedQuestion = mapApiQuestionToFeedPost(
@@ -64,14 +61,18 @@ const loadQuestion = async (question: QuestionRecord) => {
     community,
   )
 
-  const isFollowingAuthor = readFollowState(followStatusResponse?.data, mappedQuestion)
+  const isFollowingAuthor = readFollowState(mappedQuestion)
   if (userId && isFollowingAuthor !== undefined) {
-    socialActionsStore.setUserFollowingState(userId, isFollowingAuthor)
+    socialActionsStore.hydrateUserFollowingState(userId, isFollowingAuthor)
   }
 
   return {
     ...mappedQuestion,
-    ...(isFollowingAuthor !== undefined ? { isFollowing: isFollowingAuthor } : {}),
+    ...(userId && socialActionsStore.followingUserIds[userId] !== undefined
+      ? { isFollowing: socialActionsStore.isFollowingUser(userId) }
+      : isFollowingAuthor !== undefined
+        ? { isFollowing: isFollowingAuthor }
+        : {}),
   }
 }
 

@@ -817,7 +817,7 @@ const loadPageFollowers = async () => {
         const record = item && typeof item === 'object' ? item as Record<string, unknown> : {}
         const userId = readStringField(record, ['user_id', 'userId'])
         let user: UserRecord | null = null
-        let isFollowing = false
+        const explicitFollowing = readFollowState(record)
 
         if (userId) {
           try {
@@ -827,20 +827,16 @@ const loadPageFollowers = async () => {
             user = null
           }
 
-          if (authStore.userId && userId !== authStore.userId) {
-            try {
-              const statusResponse = await usersService.getUserFollowStatus(userId, authStore.authToken)
-              isFollowing = readFollowState(statusResponse.data) ?? false
-              socialActionsStore.setUserFollowingState(userId, isFollowing)
-            } catch {
-              isFollowing = false
-            }
+          if (authStore.userId && userId !== authStore.userId && explicitFollowing !== undefined) {
+            socialActionsStore.hydrateUserFollowingState(userId, explicitFollowing)
           }
         }
 
         return {
           ...normalizePageFollower(record, user),
-          isFollowing,
+          isFollowing: userId && socialActionsStore.followingUserIds[userId] !== undefined
+            ? socialActionsStore.isFollowingUser(userId)
+            : explicitFollowing ?? false,
         }
       }),
     )
@@ -976,7 +972,9 @@ const loadPageForSlug = async () => {
     return
   }
 
-  socialActionsStore.setPageFollowingState(loadedPage.id, Boolean(loadedPage.isFollowing))
+  if (loadedPage.hasFollowState) {
+    socialActionsStore.hydratePageFollowingState(loadedPage.id, loadedPage.isFollowing)
+  }
 }
 
 const togglePageFollow = async () => {

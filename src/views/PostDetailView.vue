@@ -679,11 +679,11 @@ watch(
     localFollowing.value = nextPost?.isFollowing ?? false
     if (nextPost && relationshipTarget.value && nextPost.isFollowing !== undefined) {
       if (relationshipTarget.value.type === 'user') {
-        socialActionsStore.setUserFollowingState(relationshipTarget.value.id, nextPost.isFollowing ?? false)
+        socialActionsStore.hydrateUserFollowingState(relationshipTarget.value.id, nextPost.isFollowing ?? false)
       } else if (relationshipTarget.value.type === 'page') {
-        socialActionsStore.setPageFollowingState(relationshipTarget.value.id, nextPost.isFollowing ?? false)
+        socialActionsStore.hydratePageFollowingState(relationshipTarget.value.id, nextPost.isFollowing ?? false)
       } else {
-        socialActionsStore.setCommunityJoinedState(relationshipTarget.value.id, nextPost.isFollowing ?? false)
+        socialActionsStore.hydrateCommunityJoinedState(relationshipTarget.value.id, nextPost.isFollowing ?? false)
       }
     }
     isSaved.value = nextPost?.isSaved ?? false

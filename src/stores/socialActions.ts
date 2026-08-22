@@ -54,26 +54,17 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     }
 
     if (item.pageId) {
-      followingPageIds.value = {
-        ...followingPageIds.value,
-        [item.pageId]: item.isFollowing,
-      }
+      hydratePageFollowingState(item.pageId, item.isFollowing)
       return
     }
 
     if (item.type === 'question' && item.communityId) {
-      joinedCommunityIds.value = {
-        ...joinedCommunityIds.value,
-        [item.communityId]: item.isFollowing,
-      }
+      hydrateCommunityJoinedState(item.communityId, item.isFollowing)
       return
     }
 
     if (item.userId) {
-      followingUserIds.value = {
-        ...followingUserIds.value,
-        [item.userId]: item.isFollowing,
-      }
+      hydrateUserFollowingState(item.userId, item.isFollowing)
     }
   }
 
@@ -195,6 +186,30 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
         ? { ...item, isFollowing: isJoined } as FeedPost
         : item,
     )
+  }
+
+  const hydrateUserFollowingState = (userId: string, isFollowing: boolean) => {
+    if (followingUserIds.value[userId] !== undefined) {
+      return
+    }
+
+    setUserFollowingState(userId, isFollowing)
+  }
+
+  const hydratePageFollowingState = (pageId: string, isFollowing: boolean) => {
+    if (followingPageIds.value[pageId] !== undefined) {
+      return
+    }
+
+    setPageFollowingState(pageId, isFollowing)
+  }
+
+  const hydrateCommunityJoinedState = (communityId: string, isJoined: boolean) => {
+    if (joinedCommunityIds.value[communityId] !== undefined) {
+      return
+    }
+
+    setCommunityJoinedState(communityId, isJoined)
   }
 
   const isContentScored = (contentId?: string | null) =>
@@ -531,6 +546,9 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     setUserFollowingState,
     setPageFollowingState,
     setCommunityJoinedState,
+    hydrateUserFollowingState,
+    hydratePageFollowingState,
+    hydrateCommunityJoinedState,
     isContentScored,
     getCommentCount,
     getAnswerCount,

@@ -33,7 +33,9 @@ type FeedRenderItem =
 const INITIAL_POST_COUNT = 4
 const LOAD_BATCH_SIZE = 3
 const FEED_PAGE_SIZE = 10
+const MAX_RESTORED_POST_COUNT = FEED_PAGE_SIZE
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000
+const FEED_CACHE_VERSION = 2
 const POST_CREATED_EVENT = 'skills4export:post-created'
 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
@@ -171,10 +173,23 @@ const sortFeedItems = (items: FeedPost[]) => {
 }
 
 const getFeedCacheKey = () =>
-  `skills4export:feed:${authStore.userId || 'anonymous'}:${activeFeedMode.value}`
+  `skills4export:feed:v${FEED_CACHE_VERSION}:${authStore.userId || 'anonymous'}:${activeFeedMode.value}`
 
 const getFeedViewStateKey = () =>
-  `skills4export:feed-view:${authStore.userId || 'anonymous'}:${activeFeedMode.value}`
+  `skills4export:feed-view:v${FEED_CACHE_VERSION}:${authStore.userId || 'anonymous'}:${activeFeedMode.value}`
+
+const clearLegacyFeedCaches = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  Object.keys(window.sessionStorage)
+    .filter((key) =>
+      key.startsWith(`skills4export:feed:${authStore.userId || 'anonymous'}:`) ||
+      key.startsWith(`skills4export:feed-view:${authStore.userId || 'anonymous'}:`),
+    )
+    .forEach((key) => window.sessionStorage.removeItem(key))
+}
 
 const restoreFeedViewState = () => {
   if (typeof window === 'undefined') {
@@ -193,7 +208,10 @@ const restoreFeedViewState = () => {
     }
 
     if (typeof cached.visiblePostCount === 'number' && Number.isFinite(cached.visiblePostCount)) {
-      visiblePostCount.value = Math.max(INITIAL_POST_COUNT, Math.floor(cached.visiblePostCount))
+      visiblePostCount.value = Math.min(
+        MAX_RESTORED_POST_COUNT,
+        Math.max(INITIAL_POST_COUNT, Math.floor(cached.visiblePostCount)),
+      )
     }
 
     if (typeof cached.currentFeedPage === 'number' && Number.isFinite(cached.currentFeedPage)) {
@@ -237,7 +255,7 @@ const restoreCachedFeed = () => {
       cached.items.length > 0 &&
       Date.now() - cached.storedAt < FEED_CACHE_TTL_MS
     ) {
-      socialActionsStore.setFeed(cached.items)
+      socialActionsStore.setFeed(cached.items.slice(0, MAX_RESTORED_POST_COUNT))
       return true
     }
   } catch {
@@ -259,7 +277,7 @@ const cacheFeed = (items: FeedPost[]) => {
 
   window.sessionStorage.setItem(getFeedCacheKey(), JSON.stringify({
     storedAt: Date.now(),
-    items,
+    items: items.slice(0, FEED_PAGE_SIZE),
   }))
 }
 
@@ -417,6 +435,7 @@ const handlePostCreated = () => {
 }
 
 onMounted(() => {
+  clearLegacyFeedCaches()
   restoreFeedViewState()
   const restoredFeed = restoreCachedFeed()
   if (!restoredFeed) {
@@ -511,6 +530,7 @@ onBeforeUnmount(() => {
         <AppFeedPost
           v-if="item.type === 'post'"
           :post="item.post"
+          :sync-to-global-feed="false"
         />
         <FeedAdvertCard
           v-else

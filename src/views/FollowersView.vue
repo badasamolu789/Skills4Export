@@ -36,9 +36,12 @@ const syncFollowerStatus = async (targetUserId?: string) => {
 
   try {
     const response = await usersService.getUserFollowStatus(targetUserId, authStore.authToken)
-    const nextFollowing = readFollowState(response.data) ?? false
-    isFollowing.value[targetUserId] = nextFollowing
-    socialActionsStore.setUserFollowingState(targetUserId, nextFollowing)
+    const nextFollowing = readFollowState(response.data)
+
+    if (nextFollowing !== undefined) {
+      isFollowing.value[targetUserId] = nextFollowing
+      socialActionsStore.setUserFollowingState(targetUserId, nextFollowing)
+    }
   } catch {
     isFollowing.value[targetUserId] = socialActionsStore.isFollowingUser(targetUserId)
   }
@@ -96,7 +99,7 @@ const followUser = async (targetUserId: string) => {
 
   try {
     await socialActionsStore.followUser(targetUserId)
-    isFollowing.value[targetUserId] = true
+    isFollowing.value[targetUserId] = socialActionsStore.isFollowingUser(targetUserId)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error
@@ -114,7 +117,7 @@ const unfollowUser = async (targetUserId: string) => {
 
   try {
     await socialActionsStore.unfollowUser(targetUserId)
-    isFollowing.value[targetUserId] = false
+    isFollowing.value[targetUserId] = socialActionsStore.isFollowingUser(targetUserId)
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

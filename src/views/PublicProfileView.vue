@@ -194,7 +194,11 @@ const getFollowerAccount = (follower: UserFollower) => {
     avatar,
     initials: getAccountInitials(name),
     isCurrentUser: Boolean(id && id === authStore.userId),
-    isFollowing: id ? followStates.value[id] ?? explicitState ?? false : false,
+    isFollowing: id
+      ? socialActionsStore.followingUserIds[id] !== undefined
+        ? socialActionsStore.isFollowingUser(id)
+        : followStates.value[id] ?? explicitState ?? false
+      : false,
   }
 }
 const getSkillDisplayName = (skill: UserSkill | { name?: unknown; skill?: unknown; skillName?: unknown; skill_name?: unknown; title?: unknown; label?: unknown }) => {
@@ -280,24 +284,29 @@ const loadProfile = async () => {
     const nextFollowing = getFollowingUsers(profileData)
       .map(getFollowingAccount)
       .filter((account) => account.id)
-    const nextFollowingIds = new Set(nextFollowing.map((account) => account.id))
-
     followers.value = nextFollowers
     following.value = nextFollowing
 
     const nextFollowStates = { ...followStates.value }
     nextFollowing.forEach((account) => {
-      nextFollowStates[account.id] = true
-      socialActionsStore.setUserFollowingState(account.id, true)
+      if (socialActionsStore.followingUserIds[account.id] !== undefined) {
+        nextFollowStates[account.id] = socialActionsStore.isFollowingUser(account.id)
+      }
     })
     nextFollowers.forEach((follower) => {
       const account = getFollowerAccount(follower)
       if (account.id) {
         const followerRecord = follower as Record<string, unknown>
         const explicitState = getBooleanField(followerRecord, ['isFollowing', 'is_following', 'isFollow', 'is_follow', 'isfollow', 'followedByMe', 'followed_by_me'])
-        const isFollowing = explicitState ?? nextFollowingIds.has(account.id)
-        nextFollowStates[account.id] = isFollowing
-        socialActionsStore.setUserFollowingState(account.id, isFollowing)
+        const isFollowing = explicitState ?? socialActionsStore.followingUserIds[account.id]
+
+        if (isFollowing !== undefined) {
+          nextFollowStates[account.id] = isFollowing
+        }
+
+        if (explicitState !== undefined) {
+          socialActionsStore.hydrateUserFollowingState(account.id, explicitState)
+        }
       }
     })
     followStates.value = nextFollowStates
@@ -308,10 +317,16 @@ const loadProfile = async () => {
     })
 
     if (authStore.authToken && authStore.userId && authStore.userId !== userId.value) {
-      const followStatusResponse = await usersService.getUserFollowStatus(userId.value, authStore.authToken)
-      const isFollowingFromStatus = readFollowState(followStatusResponse.data) ?? false
+      try {
+        const followStatusResponse = await usersService.getUserFollowStatus(userId.value, authStore.authToken)
+        const isFollowingFromStatus = readFollowState(followStatusResponse.data)
 
-      socialActionsStore.setUserFollowingState(userId.value, isFollowingFromStatus)
+        if (isFollowingFromStatus !== undefined) {
+          socialActionsStore.setUserFollowingState(userId.value, isFollowingFromStatus)
+        }
+      } catch {
+        // Profile content can render even when the relationship endpoint is unavailable.
+      }
     } else {
       socialActionsStore.setUserFollowingState(userId.value, false)
     }
@@ -458,7 +473,7 @@ const toggleFollowFromModal = async (targetUserId: string) => {
   followToggles.value[targetUserId] = true
 
   try {
-    if (followStates.value[targetUserId]) {
+    if (socialActionsStore.isFollowingUser(targetUserId)) {
       await socialActionsStore.unfollowUser(targetUserId)
       followStates.value = {
         ...followStates.value,

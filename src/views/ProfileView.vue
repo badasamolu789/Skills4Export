@@ -836,7 +836,7 @@ const loadProfile = async () => {
 
     for (const account of nextFollowing) {
       nextFollowStates[account.id] = true
-      socialActionsStore.setUserFollowingState(account.id, true)
+      socialActionsStore.hydrateUserFollowingState(account.id, true)
     }
 
     for (const follower of nextFollowers) {
@@ -850,7 +850,7 @@ const loadProfile = async () => {
       if (followerId) {
         const isFollowing = explicitState ?? nextFollowingIds.has(followerId)
         nextFollowStates[followerId] = isFollowing
-        socialActionsStore.setUserFollowingState(followerId, isFollowing)
+        socialActionsStore.hydrateUserFollowingState(followerId, isFollowing)
       }
     }
 
@@ -905,7 +905,11 @@ const getFollowerAccount = (follower: UserFollower) => {
     avatar,
     initials: getAccountInitials(name),
     isCurrentUser: Boolean(id && id === authStore.userId),
-    isFollowing: id ? followStates.value[id] ?? explicitState ?? false : false,
+    isFollowing: id
+      ? socialActionsStore.followingUserIds[id] !== undefined
+        ? socialActionsStore.isFollowingUser(id)
+        : followStates.value[id] ?? explicitState ?? false
+      : false,
   }
 }
 
@@ -934,7 +938,7 @@ const toggleFollowFromModal = async (targetUserId: string) => {
   followToggles.value[targetUserId] = true
 
   try {
-    if (followStates.value[targetUserId]) {
+    if (socialActionsStore.isFollowingUser(targetUserId)) {
       await socialActionsStore.unfollowUser(targetUserId)
       followStates.value = {
         ...followStates.value,

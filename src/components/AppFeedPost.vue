@@ -60,6 +60,7 @@ const props = defineProps<{
   allowEdit?: boolean
   hideCommunityContext?: boolean
   followQuestionAuthor?: boolean
+  syncToGlobalFeed?: boolean
 }>()
 
 const authStore = useAuthStore()
@@ -710,14 +711,14 @@ const syncFollowState = () => {
 
   if (relationshipTarget.value && props.post.isFollowing !== undefined) {
     if (relationshipTarget.value.type === 'user') {
-      socialActionsStore.setUserFollowingState(relationshipTarget.value.id, localFollowing.value)
+      socialActionsStore.hydrateUserFollowingState(relationshipTarget.value.id, localFollowing.value)
     } else if (relationshipTarget.value.type === 'page') {
-      socialActionsStore.setPageFollowingState(relationshipTarget.value.id, localFollowing.value)
+      socialActionsStore.hydratePageFollowingState(relationshipTarget.value.id, localFollowing.value)
     } else {
-      socialActionsStore.setCommunityJoinedState(relationshipTarget.value.id, localFollowing.value)
+      socialActionsStore.hydrateCommunityJoinedState(relationshipTarget.value.id, localFollowing.value)
     }
   } else if (relationshipTarget.value?.type === 'community') {
-    socialActionsStore.setCommunityJoinedState(relationshipTarget.value.id, localFollowing.value)
+    socialActionsStore.hydrateCommunityJoinedState(relationshipTarget.value.id, localFollowing.value)
   }
 }
 
@@ -736,7 +737,9 @@ const handleDocumentPointerDown = (event: PointerEvent) => {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
-  socialActionsStore.upsertFeedItem(props.post, { prepend: false })
+  if (props.syncToGlobalFeed !== false) {
+    socialActionsStore.upsertFeedItem(props.post, { prepend: false })
+  }
   syncFollowState()
   syncEditForm()
   void loadSharedOriginalPost()
@@ -750,7 +753,9 @@ onBeforeUnmount(() => {
 watch(
   () => props.post,
   () => {
-    socialActionsStore.upsertFeedItem(props.post, { prepend: false })
+    if (props.syncToGlobalFeed !== false) {
+      socialActionsStore.upsertFeedItem(props.post, { prepend: false })
+    }
     syncPostCounters()
     syncFollowState()
     isSaved.value = props.post.isSaved ?? false

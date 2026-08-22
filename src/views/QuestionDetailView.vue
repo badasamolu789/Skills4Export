@@ -396,9 +396,9 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
   const isFollowingAuthor = readFollowState(answer)
   const pageId = getAnswerPageId(answer)
   if (pageId && isFollowingAuthor !== undefined) {
-    socialActionsStore.setPageFollowingState(pageId, isFollowingAuthor)
+    socialActionsStore.hydratePageFollowingState(pageId, isFollowingAuthor)
   } else if (userId && isFollowingAuthor !== undefined) {
-    socialActionsStore.setUserFollowingState(userId, isFollowingAuthor)
+    socialActionsStore.hydrateUserFollowingState(userId, isFollowingAuthor)
   }
 
   return {

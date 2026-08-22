@@ -45,6 +45,7 @@ export type ManagedPage = {
   updatedAt: string
   ownerId: string
   isFollowing: boolean
+  hasFollowState: boolean
 }
 
 const getPageOwnerId = (page: PageRecord) => {
@@ -222,6 +223,8 @@ export const mapPageRecordToManagedPage = (page: PageRecord): ManagedPage => {
     ? 'student'
     : rememberedCategory || 'business'
 
+  const followState = readFollowState(page)
+
   return {
     id: page.id,
     slug: page.slug,
@@ -239,7 +242,8 @@ export const mapPageRecordToManagedPage = (page: PageRecord): ManagedPage => {
     createdAt: page.createdAt,
     updatedAt: page.updatedAt,
     ownerId: getPageOwnerId(page),
-    isFollowing: readFollowState(page) ?? false,
+    isFollowing: followState ?? false,
+    hasFollowState: followState !== undefined,
   }
 }
 

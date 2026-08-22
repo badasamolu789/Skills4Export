@@ -212,7 +212,7 @@ const loadCommunity = async (id: string) => {
     ])
     community.value = communityResponse.data
     members.value = membersResponse.data ?? []
-    socialActionsStore.setCommunityJoinedState(communityResponse.data.id, isMember.value)
+    socialActionsStore.hydrateCommunityJoinedState(communityResponse.data.id, isMember.value)
     await loadCommunityFeed(communityResponse.data.id)
   } catch (error) {
     communityError.value = error instanceof ApiError ? error.message : 'Unable to load this community.'

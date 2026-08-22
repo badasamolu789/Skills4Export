@@ -131,13 +131,13 @@ const loadPage = async () => {
         authStore.authToken,
       )
       members.value = membersResponse.data ?? []
-      socialActionsStore.setCommunityJoinedState(
+      socialActionsStore.hydrateCommunityJoinedState(
         matchedCommunity.id,
         members.value.some((member) => getMemberUserId(member) === authStore.userId),
       )
     } catch {
       members.value = []
-      socialActionsStore.setCommunityJoinedState(matchedCommunity.id, false)
+      socialActionsStore.hydrateCommunityJoinedState(matchedCommunity.id, false)
     }
 
     const postsResponse = await postsService.listPosts(
