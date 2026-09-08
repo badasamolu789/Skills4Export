@@ -15,6 +15,7 @@ import {
 import { toast } from 'vue-sonner'
 import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import RichTextContent from '@/components/RichTextContent.vue'
 import RichTextEditor from '@/components/RichTextEditor.vue'
 import SkillPillInput from '@/components/SkillPillInput.vue'
 import {
@@ -1424,7 +1425,7 @@ const clearPassportUpload = () => {
 
         <label class="mt-6 block">
           <span class="text-[0.82rem] font-semibold text-[var(--text-primary)]">
-            About - Describe your academic achievements/business achievements, skills/Team sills, experiences/business experiences
+            About - Describe your academic achievements/business achievements, skills/Team skills experiences/business experiences
           </span>
           <textarea v-model="freelancerForm.bio" rows="3" class="mt-2 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 py-2 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
@@ -1592,10 +1593,10 @@ const clearPassportUpload = () => {
           </div>
           <div>
             <h3 class="text-base font-semibold text-[var(--text-primary)]">Qualifications</h3>
-            <div
+            <RichTextContent
               v-if="selectedFreelanceJob.qualifications"
-              class="prose-content mt-2 text-sm leading-7 text-[var(--text-secondary)]"
-              v-html="selectedFreelanceJob.qualifications"
+              :content="selectedFreelanceJob.qualifications"
+              class="mt-2 text-sm leading-7 text-[var(--text-secondary)]"
             />
             <p v-else class="mt-2 text-sm leading-7 text-[var(--text-secondary)]">No qualifications have been added yet.</p>
           </div>

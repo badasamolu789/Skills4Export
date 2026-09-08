@@ -35,6 +35,18 @@ type AnswerActivity = {
   score: number
 }
 
+type CommentActivityRecord = PostCommentRecord & {
+  post?: PostRecord | null
+  postTitle?: string | null
+  post_title?: string | null
+}
+
+type AnswerActivityRecord = QuestionAnswerRecord & {
+  question?: QuestionRecord | null
+  questionTitle?: string | null
+  question_title?: string | null
+}
+
 const tabs: Array<{ id: ActivityTab; label: string }> = [
   { id: 'posts', label: 'Posts' },
   { id: 'comments', label: 'Comments' },
@@ -71,7 +83,7 @@ const editModal = ref<{
 })
 const deleteModal = ref<{
   isOpen: boolean
-  type: 'comment' | 'question' | null
+  type: 'post' | 'comment' | 'question' | null
   id: string
   label: string
 }>({
@@ -103,7 +115,7 @@ const userQuestionFeedItems = computed<FeedPost[]>(() =>
 )
 
 const scoredPostFeedItems = computed<FeedPost[]>(() =>
-  scoredPosts.value.map((post) => mapApiPostToFeedPost(post, postMediaById.value.get(post.id) ?? [])),
+  scoredPosts.value.map((post) => mapApiPostToFeedPost({ ...post, is_liked: true }, postMediaById.value.get(post.id) ?? [])),
 )
 
 const savedFeedItems = computed<FeedPost[]>(() =>
@@ -213,6 +225,106 @@ const getSnippet = (value?: string | null, fallback = 'No content available.') =
 const sortedByDate = <T,>(items: T[], getDate: (item: T) => string) =>
   [...items].sort((first, second) => new Date(getDate(second)).getTime() - new Date(getDate(first)).getTime())
 
+const getFeedPostId = (post: FeedPost) => post.apiId || post.slug
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value))
+
+const isPostRecord = (value: unknown): value is PostRecord =>
+  isRecord(value) && typeof value.id === 'string' && ('title' in value || 'content' in value)
+
+const isQuestionRecord = (value: unknown): value is QuestionRecord =>
+  isRecord(value) && typeof value.id === 'string' && 'title' in value && ('body' in value || 'visibility' in value)
+
+const readPostActivityRecord = (value: unknown): PostRecord | null => {
+  if (isPostRecord(value)) {
+    return value
+  }
+
+  if (!isRecord(value)) {
+    return null
+  }
+
+  for (const key of ['post', 'data', 'target', 'item']) {
+    if (isPostRecord(value[key])) {
+      return value[key]
+    }
+  }
+
+  return null
+}
+
+const readQuestionActivityRecord = (value: unknown): QuestionRecord | null => {
+  if (isQuestionRecord(value)) {
+    return value
+  }
+
+  if (!isRecord(value)) {
+    return null
+  }
+
+  for (const key of ['question', 'data', 'target', 'item']) {
+    if (isQuestionRecord(value[key])) {
+      return value[key]
+    }
+  }
+
+  return null
+}
+
+const normalizePostActivityRecords = (items: PostRecord[]) =>
+  items.map((item) => readPostActivityRecord(item)).filter((item): item is PostRecord => Boolean(item))
+
+const updatePostInCollections = (postId: string, updater: (post: PostRecord) => PostRecord) => {
+  userPosts.value = userPosts.value.map((post) => post.id === postId ? updater(post) : post)
+  scoredPosts.value = scoredPosts.value.map((post) => post.id === postId ? updater(post) : post)
+  savedPosts.value = savedPosts.value.map((post) => post.id === postId ? updater(post) : post)
+  userComments.value = userComments.value.map((comment) => {
+    if (comment.postId !== postId) {
+      return comment
+    }
+
+    const updatedPost = updater(comment.post)
+
+    return {
+      ...comment,
+      post: updatedPost,
+      postTitle: updatedPost.title || comment.postTitle,
+    }
+  })
+}
+
+const removePostFromCollections = (postId: string) => {
+  userPosts.value = userPosts.value.filter((post) => post.id !== postId)
+  scoredPosts.value = scoredPosts.value.filter((post) => post.id !== postId)
+  savedPosts.value = savedPosts.value.filter((post) => post.id !== postId)
+  userComments.value = userComments.value.filter((comment) => comment.postId !== postId)
+  postMediaById.value.delete(postId)
+}
+
+const handleManagedPostUpdated = (updatedPost: PostRecord) => {
+  updatePostInCollections(updatedPost.id, (post) => ({
+    ...post,
+    ...updatedPost,
+    title: updatedPost.title || post.title,
+    content: updatedPost.content || post.content,
+  }))
+}
+
+const handleManagedPostScoreChanged = ({ post, isScored, score }: { post: FeedPost; isScored: boolean; score: number }) => {
+  const postId = getFeedPostId(post)
+
+  updatePostInCollections(postId, (record) => ({
+    ...record,
+    is_liked: isScored,
+    score,
+  }))
+
+  if (!isScored) {
+    scoredPosts.value = scoredPosts.value.filter((record) => record.id !== postId)
+  }
+}
+
 const hydratePostMedia = async (posts: PostRecord[]) => {
   const entries = await Promise.all(
     posts.map(async (post) => {
@@ -239,76 +351,124 @@ const loadActivities = async () => {
       throw new Error('Unable to identify the signed-in user.')
     }
 
-    const [postsResponse, questionsResponse, savedPostsResponse] = await Promise.all([
-      postsService.listPosts({ per_page: 10, sort: '-createdAt' }, authStore.authToken),
-      questionsService.listQuestions({ per_page: 10, sort: '-createdAt' }, authStore.authToken),
-      postsService.listSavedPosts({ per_page: 10, sort: '-createdAt' }, authStore.authToken),
+    const activityParams = { per_page: 50, sort: '-createdAt' }
+    const [
+      postsResponse,
+      commentsResponse,
+      scoredPostsResponse,
+      savedPostsResponse,
+      questionsResponse,
+      answersResponse,
+    ] = await Promise.all([
+      postsService.listUserPosts(activityParams, authStore.authToken),
+      postsService.listUserComments(activityParams, authStore.authToken),
+      postsService.listScoredPosts(activityParams, authStore.authToken),
+      postsService.listSavedPosts(activityParams, authStore.authToken),
+      questionsService.listUserQuestions(activityParams, authStore.authToken),
+      questionsService.listUserAnswers(activityParams, authStore.authToken),
     ])
 
-    const allPosts = postsResponse.data ?? []
-    const allQuestions = questionsResponse.data ?? []
-    const ownPosts = allPosts.filter((post) => getPostUserId(post) === userId)
-    const ownQuestions = allQuestions.filter((question) => getQuestionUserId(question) === userId)
-    const nextScoredPosts = allPosts.filter((post) => Boolean(post.is_liked))
-    const nextSavedPosts = savedPostsResponse.data ?? []
-    const nextSavedQuestions = allQuestions.filter((question) => question.is_saved)
+    const ownPosts = normalizePostActivityRecords(postsResponse.data ?? [])
+      .filter((post) => !getPostUserId(post) || getPostUserId(post) === userId)
+    const nextScoredPosts = normalizePostActivityRecords(scoredPostsResponse.data ?? [])
+      .map((post) => ({ ...post, is_liked: true }))
+    const nextSavedPosts = normalizePostActivityRecords(savedPostsResponse.data ?? [])
+    const ownQuestions = (questionsResponse.data ?? [])
+      .map((question) => readQuestionActivityRecord(question))
+      .filter((question): question is QuestionRecord => Boolean(question))
+      .filter((question) => !getQuestionUserId(question) || getQuestionUserId(question) === userId)
+    const rawComments = (commentsResponse.data ?? []) as CommentActivityRecord[]
+    const rawAnswers = (answersResponse.data ?? []) as AnswerActivityRecord[]
 
-    await hydratePostMedia([...ownPosts, ...nextScoredPosts, ...nextSavedPosts])
+    const postById = new Map(
+      [...ownPosts, ...nextScoredPosts, ...nextSavedPosts].map((post) => [post.id, post]),
+    )
+    const questionById = new Map(ownQuestions.map((question) => [question.id, question]))
 
-    const [commentResults, answerResults] = await Promise.all([
-      Promise.all(allPosts.map((post) => postsService.listComments(post.id, authStore.authToken))),
-      Promise.all(allQuestions.map((question) => questionsService.listAnswers(question.id, authStore.authToken))),
-    ])
+    const commentActivities = await Promise.all(
+      rawComments
+        .filter((comment) => !getCommentUserId(comment) || getCommentUserId(comment) === userId)
+        .map(async (comment) => {
+          const embeddedPost = readPostActivityRecord(comment.post)
+          const postId = getCommentPostId(comment) || embeddedPost?.id || ''
+          let post = embeddedPost || postById.get(postId) || null
 
-    const postTitleById = new Map(allPosts.map((post) => [post.id, post.title || 'Post']))
-    const postById = new Map(allPosts.map((post) => [post.id, post]))
-    const questionTitleById = new Map(allQuestions.map((question) => [question.id, question.title || 'Question']))
-    const questionById = new Map(allQuestions.map((question) => [question.id, question]))
+          if (!post && postId) {
+            try {
+              const response = await postsService.getPost(postId, authStore.authToken)
+              post = response.data
+              postById.set(post.id, post)
+            } catch {
+              post = null
+            }
+          }
+
+          if (!post) {
+            return null
+          }
+
+          return {
+            id: comment.id,
+            postId: post.id,
+            postTitle: comment.postTitle || comment.post_title || post.title || 'Post',
+            post,
+            content: comment.content,
+            createdAt: getCommentCreatedAt(comment),
+          } satisfies CommentActivity
+        }),
+    )
+
+    const answerActivities = await Promise.all(
+      rawAnswers
+        .filter((answer) => !getAnswerUserId(answer) || getAnswerUserId(answer) === userId)
+        .map(async (answer) => {
+          const embeddedQuestion = readQuestionActivityRecord(answer.question)
+          const questionId = getAnswerQuestionId(answer) || embeddedQuestion?.id || ''
+          let question = embeddedQuestion || questionById.get(questionId) || null
+
+          if (!question && questionId) {
+            try {
+              const response = await questionsService.getQuestion(questionId, authStore.authToken, false)
+              question = response.data
+              questionById.set(question.id, question)
+            } catch {
+              question = null
+            }
+          }
+
+          if (!question) {
+            return null
+          }
+
+          return {
+            id: answer.id,
+            questionId: question.id,
+            questionTitle: answer.questionTitle || answer.question_title || question.title || 'Question',
+            question,
+            content: getAnswerContent(answer),
+            createdAt: getAnswerCreatedAt(answer),
+            score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count, answer.reactionsCount),
+          } satisfies AnswerActivity
+        }),
+    )
+
+    const commentPosts = commentActivities
+      .map((comment) => comment?.post)
+      .filter((post): post is PostRecord => Boolean(post))
+
+    await hydratePostMedia([...ownPosts, ...nextScoredPosts, ...nextSavedPosts, ...commentPosts])
 
     userPosts.value = sortedByDate(ownPosts, getPostCreatedAt)
     scoredPosts.value = sortedByDate(nextScoredPosts, getPostCreatedAt)
     userQuestions.value = sortedByDate(ownQuestions, getQuestionCreatedAt)
     savedPosts.value = sortedByDate(nextSavedPosts, getPostCreatedAt)
-    savedQuestions.value = sortedByDate(nextSavedQuestions, getQuestionCreatedAt)
+    savedQuestions.value = []
     userComments.value = sortedByDate(
-      commentResults
-        .flatMap((response) => response?.data ?? [])
-        .filter((comment) => getCommentUserId(comment) === userId)
-        .filter((comment) => Boolean(postById.get(getCommentPostId(comment))))
-        .map((comment) => {
-          const postId = getCommentPostId(comment)
-          const post = postById.get(postId) as PostRecord
-
-          return {
-            id: comment.id,
-            postId,
-            postTitle: postTitleById.get(postId) || 'Post',
-            post,
-            content: comment.content,
-            createdAt: getCommentCreatedAt(comment),
-          }
-        }),
+      commentActivities.filter((comment): comment is CommentActivity => Boolean(comment)),
       (comment) => comment.createdAt,
     )
     userAnswers.value = sortedByDate(
-      answerResults
-        .flatMap((response) => response?.data ?? [])
-        .filter((answer) => getAnswerUserId(answer) === userId)
-        .filter((answer) => Boolean(questionById.get(getAnswerQuestionId(answer))))
-        .map((answer) => {
-          const questionId = getAnswerQuestionId(answer)
-          const question = questionById.get(questionId) as QuestionRecord
-
-          return {
-            id: answer.id,
-            questionId,
-            questionTitle: questionTitleById.get(questionId) || 'Question',
-            question,
-            content: getAnswerContent(answer),
-            createdAt: getAnswerCreatedAt(answer),
-            score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count, answer.reactionsCount),
-          }
-        }),
+      answerActivities.filter((answer): answer is AnswerActivity => Boolean(answer)),
       (answer) => answer.createdAt,
     )
   } catch (error) {
@@ -414,6 +574,15 @@ const openDeleteComment = (comment: CommentActivity) => {
   }
 }
 
+const openDeletePost = (post: FeedPost) => {
+  deleteModal.value = {
+    isOpen: true,
+    type: 'post',
+    id: getFeedPostId(post),
+    label: 'this post',
+  }
+}
+
 const openDeleteQuestion = (question: QuestionRecord) => {
   deleteModal.value = {
     isOpen: true,
@@ -444,7 +613,10 @@ const confirmDelete = async () => {
   isDeleting.value = true
 
   try {
-    if (deleteModal.value.type === 'comment') {
+    if (deleteModal.value.type === 'post') {
+      await postsService.deletePost(deleteModal.value.id, { userId: authStore.userId }, authStore.authToken)
+      removePostFromCollections(deleteModal.value.id)
+    } else if (deleteModal.value.type === 'comment') {
       await postsService.deleteComment(deleteModal.value.id, { userId: authStore.userId }, authStore.authToken)
       userComments.value = userComments.value.filter((comment) => comment.id !== deleteModal.value.id)
     } else {
@@ -523,6 +695,9 @@ onMounted(() => {
           :key="post.apiId || post.slug"
           :post="post"
           allow-edit
+          @post-updated="handleManagedPostUpdated"
+          @delete-requested="openDeletePost"
+          @score-changed="handleManagedPostScoreChanged"
         />
       </template>
 
@@ -534,6 +709,8 @@ onMounted(() => {
         >
           <AppFeedPost
             :post="mapApiPostToFeedPost(comment.post, postMediaById.get(comment.postId) ?? [])"
+            @post-updated="handleManagedPostUpdated"
+            @score-changed="handleManagedPostScoreChanged"
           />
           <section class="overflow-visible rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
             <header class="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
@@ -598,6 +775,7 @@ onMounted(() => {
           v-for="post in scoredPostFeedItems"
           :key="post.apiId || post.slug"
           :post="post"
+          @score-changed="handleManagedPostScoreChanged"
         />
       </template>
 
@@ -606,6 +784,8 @@ onMounted(() => {
           v-for="item in savedFeedItems"
           :key="`${item.type}-${item.apiId || item.slug}`"
           :post="item"
+          @post-updated="handleManagedPostUpdated"
+          @score-changed="handleManagedPostScoreChanged"
         />
       </template>
 

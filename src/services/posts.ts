@@ -284,6 +284,9 @@ const POST_ROUTES = {
   commentReport: (id: string) => `/comments/${id}/report`,
   postMediaById: (id: string) => `/posts/media/${id}`,
   pagePosts: (id: string) => `/page/${id}/post`,
+  userPosts: '/user/posts',
+  userComments: '/user/comments',
+  userPostScores: '/user/scores/posts',
 } as const
 
 const withQuery = (path: string, params: Record<string, unknown> = {}) => {
@@ -349,6 +352,18 @@ export const postsService = {
 
   listPosts(params: ListPostsParams = {}, token?: string | null) {
     return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.posts, normalizeFeedQueryParams(params)), { token })
+  },
+
+  listUserPosts(params: ListPostsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.userPosts, normalizeFeedQueryParams(params)), { token })
+  },
+
+  listUserComments(params: ListPostsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<PostCommentRecord>>(withQuery(POST_ROUTES.userComments, normalizeFeedQueryParams(params)), { token })
+  },
+
+  listScoredPosts(params: ListPostsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<PostRecord>>(withQuery(POST_ROUTES.userPostScores, normalizeFeedQueryParams(params)), { token })
   },
 
   listPagePosts(id: string, params: Omit<ListPostsParams, 'pageId'> = {}, token?: string | null) {

@@ -15,7 +15,7 @@ const footerLinks = [
   { label: 'Art&Character', href: '/communities', requiresAuth: true },
   { label: 'Jokes', href: '/jokes', requiresAuth: true },
   { label: 'Headlines', href: '/headlines', requiresAuth: true },
-  { label: 'Product Page', href: '/pages/create?type=business', requiresAuth: true },
+  // { label: 'Product Page', href: '/pages/create?type=business', requiresAuth: true },
   { label: 'Privacy Policy', href: '/privacy-policy' },
   { label: 'Terms', href: '/terms-and-conditions' },
   { label: 'About', href: './index.html' },

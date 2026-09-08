@@ -15,6 +15,7 @@ const JobDetailView = () => import('@/views/JobDetailView.vue')
 const JobFeedView = () => import('@/views/JobFeedView.vue')
 const JobsView = () => import('@/views/JobsView.vue')
 const CookiePolicyView = () => import('@/views/CookiePolicyView.vue')
+const ContestView = () => import('@/views/ContestView.vue')
 const LoginView = () => import('@/views/LoginView.vue')
 const MobileNotificationsView = () => import('@/views/MobileNotificationsView.vue')
 const NotificationsView = () => import('@/views/NotificationsView.vue')
@@ -112,11 +113,15 @@ const router = createRouter({
     },
     {
       path: '/contest',
+      alias: '/contests',
       name: 'contest',
-      component: HomeView,
+      component: ContestView,
       meta: {
         layout: 'app',
         requiresAuth: true,
+        hideSidebar: true,
+        hideRightRail: true,
+        hideRightRailQuestions: true,
       },
     },
     {

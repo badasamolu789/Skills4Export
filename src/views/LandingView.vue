@@ -37,7 +37,7 @@ const navLinks = [
 ]
 
 const footerLinks = [
-  { label: 'Product Page', to: { path: '/pages/create', query: { type: 'business' } }, requiresAuth: true },
+  // { label: 'Product Page', to: { path: '/pages/create', query: { type: 'business' } }, requiresAuth: true },
   { label: 'Privacy Policy', to: '/privacy-policy', requiresAuth: false },
   { label: 'Terms', to: '/terms-and-conditions', requiresAuth: false },
   { label: 'About', to: '', requiresAuth: false },

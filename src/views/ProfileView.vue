@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Award, BookOpen, Briefcase, ClipboardList, Edit2, ExternalLink, GraduationCap, Image as ImageIcon, MoreHorizontal, Rocket, Sparkles, Trash2, UploadCloud, UserCheck, UserPlus, X } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
@@ -732,7 +732,7 @@ const handleDelete = async (
 
 const profileDetailsForm = ref({
   displayName: '',
-  bio: '',
+  displayTitle: '',
   location: '',
   currentWorkplace: '',
   currentJobTitle: '',
@@ -981,6 +981,24 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
     data?.experiences?.[0] ||
     featuredExperience.value
 
+  const currentWorkplace = toInitialCaps(
+    currentExperience?.company ||
+      profileData?.currentWorkspace ||
+      profileData?.current_workspace ||
+      authStore.signUpDraft.workplace ||
+      '',
+    { keepSmallWords: true },
+  )
+  const currentJobTitle = toInitialCaps(
+    currentExperience?.title ||
+      profileData?.currentJobTitle ||
+      profileData?.current_job_title ||
+      authStore.signUpDraft.jobTitle ||
+      authStore.signUpDraft.courseOfStudy ||
+      '',
+    { keepSmallWords: true },
+  )
+
   profileDetailsForm.value = {
     displayName:
       toInitialCaps(getDisplayName(
@@ -989,27 +1007,21 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
         authStore.signUpDraft.name,
         profileData?.username,
       )),
-    bio: profileData?.bio || '',
+    displayTitle: [currentJobTitle, currentWorkplace].filter(Boolean).join(' at '),
     location: toInitialCaps(profileData?.location || authStore.signUpDraft.location || ''),
-    currentWorkplace: toInitialCaps(
-      currentExperience?.company ||
-        profileData?.currentWorkspace ||
-        profileData?.current_workspace ||
-        authStore.signUpDraft.workplace ||
-        '',
-      { keepSmallWords: true },
-    ),
-    currentJobTitle: toInitialCaps(
-      currentExperience?.title ||
-        profileData?.currentJobTitle ||
-        profileData?.current_job_title ||
-        authStore.signUpDraft.jobTitle ||
-        authStore.signUpDraft.courseOfStudy ||
-        '',
-      { keepSmallWords: true },
-    ),
+    currentWorkplace,
+    currentJobTitle,
   }
 }
+
+watch(
+  () => [profileDetailsForm.value.currentJobTitle, profileDetailsForm.value.currentWorkplace] as const,
+  ([currentJobTitle, currentWorkplace]) => {
+    const title = toInitialCaps(currentJobTitle, { keepSmallWords: true })
+    const workplace = toInitialCaps(currentWorkplace, { keepSmallWords: true })
+    profileDetailsForm.value.displayTitle = [title, workplace].filter(Boolean).join(' at ')
+  },
+)
 
 const openProfileDetailsModal = async () => {
   if (isLoadingProfileDetails.value) {
@@ -1109,7 +1121,7 @@ const saveProfileDetails = async () => {
 
   try {
     const displayName = toInitialCaps(profileDetailsForm.value.displayName)
-    const bio = profileDetailsForm.value.bio.trim()
+    const bio = authStore.userProfile?.bio || profileResponseData.value?.profile?.bio || profileResponseData.value?.bio || ''
     const location = toInitialCaps(profileDetailsForm.value.location)
     const currentWorkspace = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
     const currentJobTitle = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
@@ -2049,7 +2061,7 @@ const editModalTitle = computed(() => {
           </div>
         </section>
 
-        <!-- Uploads Section -->
+        <!-- Uploads Section hidden for now.
         <section id="uploads" class="order-6 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="text-xl font-semibold text-[var(--text-primary)]">Uploads</h2>
@@ -2106,6 +2118,7 @@ const editModalTitle = computed(() => {
             <p class="mt-1 text-sm text-[var(--text-secondary)]">Your uploaded images and videos will appear here.</p>
           </div>
         </section>
+        -->
       </div>
     </div>
   </section>
@@ -2201,7 +2214,8 @@ const editModalTitle = computed(() => {
       @submit.prevent="saveProfileDetails"
     >
       <div class="mx-auto mb-4 h-1 w-10 rounded-full bg-[var(--surface-muted)] sm:hidden" />
-      <div class="mb-4 flex justify-end">
+      <div class="mb-4 flex items-start justify-between gap-4">
+        <h2 class="text-lg font-semibold text-[var(--text-primary)]">Edit display name...</h2>
         <button
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
@@ -2223,6 +2237,17 @@ const editModalTitle = computed(() => {
         </label>
 
         <label class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Display Title</span>
+          <input
+            v-model="profileDetailsForm.displayTitle"
+            type="text"
+            readonly
+            placeholder="Add a current job title and workplace"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
           <select
             v-model="profileDetailsForm.location"
@@ -2233,16 +2258,6 @@ const editModalTitle = computed(() => {
               {{ location }}
             </option>
           </select>
-        </label>
-
-        <label class="block space-y-2">
-          <span class="text-sm font-semibold text-[var(--text-primary)]">About me</span>
-          <textarea
-            v-model="profileDetailsForm.bio"
-            rows="5"
-            class="w-full resize-y rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3 text-sm outline-none transition focus:border-[var(--accent)]"
-            placeholder="Tell people about your work, background, and interests."
-          />
         </label>
 
         <label class="block space-y-2">

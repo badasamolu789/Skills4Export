@@ -13,6 +13,7 @@ import {
   MessageSquare,
   Reply,
   Share2,
+  UserRound,
   Users,
   X,
 } from 'lucide-vue-next'
@@ -59,6 +60,14 @@ const primaryPostMedia = computed(() => {
     ? { url: post.value.imageSrc, isVideo: false }
     : null
 })
+const openImagePreview = (url: string, alt: string) => {
+  imagePreview.value = { url, alt }
+}
+
+const closeImagePreview = () => {
+  imagePreview.value = null
+}
+
 const apiPostId = computed(() => post.value?.apiId)
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
   const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
@@ -70,6 +79,15 @@ const postAuthorRoute = computed(() => {
   }
 
   return post.value.type === 'question' ? post.value.authorTo : post.value.author.to
+})
+const pagePostRoute = computed(() => {
+  if (!post.value || post.value.type === 'question' || !post.value.pageId) {
+    return ''
+  }
+
+  return postAuthorRoute.value.startsWith('/pages/')
+    ? postAuthorRoute.value
+    : `/pages/${post.value.pageId}/public`
 })
 const postAuthorUserId = computed(() => post.value?.userId || getPublicProfileIdFromRoute(postAuthorRoute.value))
 const isOwnPost = computed(() => Boolean(authStore.userId && postAuthorUserId.value === authStore.userId))
@@ -114,6 +132,7 @@ const isTogglingFollow = ref(false)
 const isSaved = ref(false)
 const isScored = ref(false)
 const isSavingPost = ref(false)
+const imagePreview = ref<{ url: string; alt: string } | null>(null)
 const isReactingToPost = ref(false)
 const isSubmittingAnswer = ref(false)
 const isLoadingComments = ref(false)
@@ -1387,6 +1406,15 @@ const submitAnswer = async () => {
               {{ post.title }}
             </h1>
           </div>
+
+          <RouterLink
+            v-if="pagePostRoute"
+            :to="pagePostRoute"
+            class="inline-flex h-10 shrink-0 items-center justify-center gap-2 self-start rounded-[0.8rem] border border-[color:var(--border-soft)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)] sm:ml-auto"
+          >
+            <UserRound class="h-4 w-4" />
+            View Page
+          </RouterLink>
         </div>
 
         <div v-if="post.type === 'question'" class="flex flex-wrap gap-2">
@@ -1592,14 +1620,20 @@ const submitAnswer = async () => {
             playsinline
             class="aspect-video max-h-[40rem] w-full rounded-[0.9rem] bg-black object-contain"
           />
-          <img
+          <button
             v-else-if="primaryPostMedia"
-            :src="primaryPostMedia.url"
-            :alt="post.imageAlt || post.title"
-            loading="lazy"
-            decoding="async"
-            class="aspect-[4/5] max-h-[40rem] w-full rounded-[0.9rem] bg-[var(--surface-secondary)] object-cover sm:aspect-[1.91/1]"
-          />
+            type="button"
+            class="block aspect-[4/5] max-h-[40rem] w-full overflow-hidden rounded-[0.9rem] bg-[var(--surface-secondary)] sm:aspect-[1.91/1]"
+            @click="openImagePreview(primaryPostMedia.url, post.imageAlt || post.title)"
+          >
+            <img
+              :src="primaryPostMedia.url"
+              :alt="post.imageAlt || post.title"
+              loading="lazy"
+              decoding="async"
+              class="h-full w-full object-contain"
+            />
+          </button>
         </template>
 
         <section
@@ -1918,6 +1952,28 @@ const submitAnswer = async () => {
 
   <Teleport to="body">
     <div
+      v-if="imagePreview"
+      class="fixed inset-0 z-[140] overflow-auto bg-[#0c0c1b]/85 p-4 sm:p-8"
+      @click.self="closeImagePreview"
+    >
+      <button
+        type="button"
+        class="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white transition hover:bg-black/60"
+        aria-label="Close image preview"
+        @click="closeImagePreview"
+      >
+        <X class="h-5 w-5" />
+      </button>
+      <img
+        :src="imagePreview.url"
+        :alt="imagePreview.alt"
+        class="mx-auto h-auto w-auto max-w-none"
+      />
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div
       v-if="isShareModalOpen && post"
       class="fixed inset-0 z-[120] flex items-end justify-center bg-[#0c0c1b]/50 px-0 pt-4 sm:items-center sm:px-4 sm:py-5"
       @click.self="closeShareModal"
@@ -1991,24 +2047,7 @@ const submitAnswer = async () => {
               />
             </div>
 
-            <div class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3">
-              <p class="text-base font-semibold leading-tight text-[var(--text-primary)]">
-                {{ post.title }}
-              </p>
-              <p class="mt-2 text-[0.86rem] leading-6 text-[var(--text-secondary)]">
-                {{ sharePreviewDescription }}
-              </p>
-              <div class="mt-2 flex items-center gap-2 text-[0.84rem] text-[var(--text-secondary)]">
-                <span class="font-semibold text-[var(--text-primary)]">{{ sharePreviewAuthor }}</span>
-                <span>{{ post.time }}</span>
-              </div>
-              <img loading="lazy" decoding="async"
-                v-if="sharePreviewImageSrc"
-                :src="sharePreviewImageSrc"
-                :alt="sharePreviewImageAlt"
-                class="mt-3 aspect-[4/5] w-full rounded-[0.8rem] bg-[var(--surface-primary)] object-cover sm:aspect-[1.91/1]"
-              />
-            </div>
+            <!-- Post preview intentionally hidden in the share modal for now. -->
           </div>
         </div>
 

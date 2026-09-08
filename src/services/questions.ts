@@ -186,6 +186,8 @@ const QUESTION_ROUTES = {
   answerSave: (answerId: string) => `/answer/${answerId}/save`,
   answerReport: (answerId: string) => `/answer/${answerId}/report`,
   answerShares: (answerId: string) => `/answers/${answerId}/shares`,
+  userQuestions: '/user/questions',
+  userAnswers: '/user/answers',
 } as const
 
 const questionListRequests = createCachedRequest<PaginatorPayload<QuestionRecord>>(60 * 1000)
@@ -261,6 +263,20 @@ export const questionsService = {
       () => api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, normalizedParams), {
         token,
       }),
+    )
+  },
+
+  listUserQuestions(params: ListQuestionsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<QuestionRecord>>(
+      withQuery(QUESTION_ROUTES.userQuestions, normalizeFeedQueryParams(params)),
+      { token },
+    )
+  },
+
+  listUserAnswers(params: ListQuestionsParams = {}, token?: string | null) {
+    return api.get<PaginatorPayload<QuestionAnswerRecord>>(
+      withQuery(QUESTION_ROUTES.userAnswers, normalizeFeedQueryParams(params)),
+      { token },
     )
   },
 

@@ -806,6 +806,46 @@ body :is([class~="fixed"][class~="inset-0"]) :is([class~="rounded-[1.35rem]"], [
   overflow-wrap: anywhere;
 }
 
+.rich-text-content > :first-child {
+  margin-top: 0;
+}
+
+.rich-text-content > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-text-content p {
+  margin: 0.45rem 0;
+}
+
+.rich-text-content blockquote {
+  margin: 0.75rem 0;
+  border-left: 3px solid var(--accent-soft);
+  padding-left: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.rich-text-content pre,
+.rich-text-content code {
+  border-radius: 0.4rem;
+  background: var(--surface-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.rich-text-content code {
+  padding: 0.12rem 0.28rem;
+}
+
+.rich-text-content pre {
+  overflow-x: auto;
+  padding: 0.8rem;
+}
+
+.rich-text-content pre code {
+  padding: 0;
+  background: transparent;
+}
+
 .rich-text-content a {
   color: var(--accent-strong);
   text-decoration: underline;

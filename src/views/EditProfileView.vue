@@ -1519,6 +1519,15 @@ const profileModalTitle = computed(() => {
   return activeProfileModal.value ? titles[activeProfileModal.value] : 'Profile update'
 })
 
+const profileModalActions: Array<{ label: string; modal: NonNullable<typeof activeProfileModal.value> }> = [
+  { label: 'ADD EDUCATION', modal: 'education' },
+  { label: 'ADD EXPERIENCE', modal: 'experience' },
+  { label: 'ADD SKILLS', modal: 'skills' },
+  { label: 'ADD PROJECT', modal: 'project' },
+  { label: 'ADD PROFESSIONAL CERTIFICATE', modal: 'certificate' },
+  // { label: 'UPLOADS', modal: 'uploads' },
+]
+
 const openProfileModal = (modal: NonNullable<typeof activeProfileModal.value>) => {
   activeProfileModal.value = modal
 }
@@ -1697,18 +1706,11 @@ const addExperienceFromModal = async () => {
 
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <button
-        v-for="item in [
-          { label: 'ADD EDUCATION', modal: 'education' },
-          { label: 'ADD EXPERIENCE', modal: 'experience' },
-          { label: 'ADD SKILLS', modal: 'skills' },
-          { label: 'ADD PROJECT', modal: 'project' },
-          { label: 'ADD PROFESSIONAL CERTIFICATE', modal: 'certificate' },
-          { label: 'UPLOADS', modal: 'uploads' },
-        ]"
+        v-for="item in profileModalActions"
         :key="item.label"
         type="button"
         class="rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-left text-[0.82rem] font-semibold text-[var(--accent-strong)] transition hover:border-[color:var(--accent-soft)] hover:bg-[var(--surface-secondary)]"
-        @click="openProfileModal(item.modal as NonNullable<typeof activeProfileModal>)"
+        @click="openProfileModal(item.modal)"
       >
         {{ item.label }}
       </button>

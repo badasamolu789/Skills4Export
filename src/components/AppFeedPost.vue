@@ -13,6 +13,8 @@ import {
   MoreHorizontal,
   Reply,
   Share2,
+  Trash2,
+  UserRound,
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
@@ -24,7 +26,7 @@ import RichTextContent from '@/components/RichTextContent.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
-import { postsService, type PostCommentRecord } from '@/services/posts'
+import { postsService, type PostCommentRecord, type PostRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { mediaService } from '@/services/media'
 import { usersService, type MyProfileData } from '@/services/users'
@@ -63,6 +65,12 @@ const props = defineProps<{
   syncToGlobalFeed?: boolean
 }>()
 
+const emit = defineEmits<{
+  (event: 'post-updated', post: PostRecord): void
+  (event: 'delete-requested', post: FeedPost): void
+  (event: 'score-changed', payload: { post: FeedPost; isScored: boolean; score: number }): void
+}>()
+
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
@@ -75,6 +83,7 @@ const isShareModalOpen = ref(false)
 const isReportModalOpen = ref(false)
 const isAnswerModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
+const imagePreview = ref<{ url: string; alt: string } | null>(null)
 const isTogglingFollow = ref(false)
 const failedAuthorAvatarSrc = ref('')
 const failedSharedAuthorAvatarSrc = ref('')
@@ -218,6 +227,14 @@ const sharedOriginalPrimaryMedia = computed(() => {
     ? { url: original.imageSrc, isVideo: false, alt: original.imageAlt || original.title }
     : null
 })
+const openImagePreview = (url: string, alt: string) => {
+  imagePreview.value = { url, alt }
+}
+
+const closeImagePreview = () => {
+  imagePreview.value = null
+}
+
 const sharedPostComment = computed(() => {
   if (!isSharedPost.value || props.post.type === 'question') {
     return ''
@@ -323,6 +340,15 @@ const getPublicProfileIdFromRoute = (routeTarget: string) => {
 const authorRoute = computed(() =>
   props.post.type === 'question' ? props.post.authorTo : props.post.author.to,
 )
+const pagePostRoute = computed(() => {
+  if (props.post.type === 'question' || !props.post.pageId) {
+    return ''
+  }
+
+  return authorRoute.value.startsWith('/pages/')
+    ? authorRoute.value
+    : `/pages/${props.post.pageId}/public`
+})
 
 const authorName = computed(() =>
   props.post.type === 'question' ? props.post.authorName : props.post.author.name,
@@ -353,6 +379,21 @@ watch(
 watch(sharedOriginalPost, () => {
   failedSharedAuthorAvatarSrc.value = ''
 })
+
+watch(
+  () => [apiPostId.value, props.post.isScored] as const,
+  ([id, isScored]) => {
+    if (!id || typeof isScored !== 'boolean' || socialActionsStore.scoredContentIds[id] !== undefined) {
+      return
+    }
+
+    socialActionsStore.scoredContentIds = {
+      ...socialActionsStore.scoredContentIds,
+      [id]: isScored,
+    }
+  },
+  { immediate: true },
+)
 const usesGlobalUserFollow = computed(() =>
   Boolean(
     authorUserId.value &&
@@ -792,6 +833,15 @@ const openEditModal = () => {
   isEditModalOpen.value = true
 }
 
+const requestPostDelete = () => {
+  if (!canEditPost.value) {
+    return
+  }
+
+  isPostMenuOpen.value = false
+  emit('delete-requested', props.post)
+}
+
 const closeEditModal = () => {
   if (isUpdatingPost.value) {
     return
@@ -830,6 +880,7 @@ const submitPostEdit = async () => {
       props.post.title = response.data.title || editPostTitle.value.trim() || props.post.title
     }
 
+    emit('post-updated', response.data)
     isEditModalOpen.value = false
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update this post.'
@@ -891,6 +942,11 @@ const toggleScore = async () => {
   if (!apiPostId.value) {
     localScored.value = !localScored.value
     localScore.value += localScored.value ? 1 : -1
+    emit('score-changed', {
+      post: props.post,
+      isScored: localScored.value,
+      score: localScore.value,
+    })
     return
   }
 
@@ -914,6 +970,11 @@ const toggleScore = async () => {
     )
     localScored.value = socialActionsStore.isContentScored(apiPostId.value)
     localScore.value = count ?? localScore.value
+    emit('score-changed', {
+      post: props.post,
+      isScored: localScored.value,
+      score: localScore.value,
+    })
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
     toast.error('Reaction failed', { description: message })
@@ -1670,14 +1731,32 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     v-if="isPostMenuOpen"
                     class="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[9rem] rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-2 shadow-[var(--shadow-elevated)]"
                   >
+                    <RouterLink
+                      v-if="pagePostRoute"
+                      :to="pagePostRoute"
+                      class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                      @click="closePostMenu"
+                    >
+                      <UserRound class="h-4 w-4" />
+                      View Page
+                    </RouterLink>
                     <button
                       v-if="canEditPost"
                       type="button"
-                      class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+                      class="mt-1 flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
                       @click="openEditModal"
                     >
                       <Edit2 class="h-4 w-4" />
                       Edit
+                    </button>
+                    <button
+                      v-if="canEditPost"
+                      type="button"
+                      class="mt-1 flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-red-500 transition hover:bg-red-50"
+                      @click="requestPostDelete"
+                    >
+                      <Trash2 class="h-4 w-4" />
+                      Delete
                     </button>
                     <button
                       type="button"
@@ -1729,13 +1808,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 </div>
 
                 <div class="ml-auto flex items-center gap-2 self-start">
-                  <!-- <RouterLink
-                    v-if="post.type === 'community'"
-                    :to="detailPath"
-                    class="s4e-feed-action inline-flex h-6 shrink-0 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:h-8.5 sm:rounded-[1rem] sm:px-3.5 sm:text-[0.84rem]"
+                  <RouterLink
+                    v-if="pagePostRoute"
+                    :to="pagePostRoute"
+                    class="s4e-feed-action hidden h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-[1rem] border border-[color:var(--border-soft)] px-3.5 text-[0.84rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)] sm:inline-flex"
                   >
-                    View post
-                  </RouterLink> -->
+                    <UserRound class="h-3.5 w-3.5" />
+                    View Page
+                  </RouterLink>
                 </div>
               </div>
             </div>
@@ -1789,77 +1869,85 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               </div>
             </div>
             <template v-else-if="sharedOriginalPost">
-              <div class="flex items-start gap-3 sm:gap-4">
-                <RouterLink
-                  :to="sharedOriginalAuthorRoute"
-                  class="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
-                  :aria-label="`View ${sharedOriginalAuthorName}'s profile`"
-                >
-                  <img loading="lazy" decoding="async"
-                    v-if="sharedOriginalAuthorAvatarSrc"
-                    :src="sharedOriginalAuthorAvatarSrc"
-                    :alt="sharedOriginalAuthorName"
-                    class="absolute inset-0 block h-full w-full object-cover"
-                    @error="failedSharedAuthorAvatarSrc = sharedOriginalAuthorAvatarSrc"
-                  />
-                  <span v-else>{{ sharedOriginalAuthorAvatarText }}</span>
-                </RouterLink>
-
-                <div class="min-w-0 flex-1">
-                  <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                    <RouterLink
-                      :to="sharedOriginalAuthorRoute"
-                      class="shrink-0 text-[1rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.08rem]"
-                    >
-                      {{ sharedOriginalAuthorName }}
-                    </RouterLink>
-                    <span
-                      v-if="sharedOriginalAuthorTag"
-                      class="min-w-0 truncate text-[0.82rem] font-semibold text-[var(--text-tertiary)] sm:text-[0.9rem]"
-                    >
-                      {{ sharedOriginalAuthorTag }}
-                    </span>
-                    <span class="shrink-0 text-[0.78rem] text-[var(--text-secondary)] sm:text-[0.85rem]">
-                      posted {{ sharedOriginalPost.time }}
-                    </span>
-                  </div>
-
+              <div class="space-y-3">
+                <div class="flex items-start gap-3 sm:gap-4">
                   <RouterLink
-                    :to="sharedOriginalDetailPath"
-                    class="mt-3 block text-[1.18rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.38rem]"
+                    :to="sharedOriginalAuthorRoute"
+                    class="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] text-xs font-semibold text-[var(--accent-strong)] sm:h-12 sm:w-12"
+                    :aria-label="`View ${sharedOriginalAuthorName}'s profile`"
                   >
-                    {{ sharedOriginalPost.title }}
+                    <img loading="lazy" decoding="async"
+                      v-if="sharedOriginalAuthorAvatarSrc"
+                      :src="sharedOriginalAuthorAvatarSrc"
+                      :alt="sharedOriginalAuthorName"
+                      class="absolute inset-0 block h-full w-full object-cover"
+                      @error="failedSharedAuthorAvatarSrc = sharedOriginalAuthorAvatarSrc"
+                    />
+                    <span v-else>{{ sharedOriginalAuthorAvatarText }}</span>
                   </RouterLink>
 
-                  <RichTextContent
-                    v-if="sharedOriginalPost.type !== 'question'"
-                    :content="sharedOriginalPost.description"
-                    clamp
-                    class="mt-2 text-[0.88rem] leading-6 text-[var(--text-primary)] sm:text-[1rem] sm:leading-7"
-                  />
-                  <RichTextContent
-                    v-else-if="sharedOriginalPost.body"
-                    :content="sharedOriginalPost.body"
-                    class="mt-2 text-[0.88rem] leading-6 text-[var(--text-primary)] sm:text-[1rem] sm:leading-7"
-                  />
+                  <div class="min-w-0 flex-1 pt-0.5">
+                    <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <RouterLink
+                        :to="sharedOriginalAuthorRoute"
+                        class="shrink-0 text-[1rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.08rem]"
+                      >
+                        {{ sharedOriginalAuthorName }}
+                      </RouterLink>
+                      <span
+                        v-if="sharedOriginalAuthorTag"
+                        class="min-w-0 truncate text-[0.82rem] font-semibold text-[var(--text-tertiary)] sm:text-[0.9rem]"
+                      >
+                        {{ sharedOriginalAuthorTag }}
+                      </span>
+                      <span class="shrink-0 text-[0.78rem] text-[var(--text-secondary)] sm:text-[0.85rem]">
+                        posted {{ sharedOriginalPost.time }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                  <video
-                    v-if="sharedOriginalPrimaryMedia?.isVideo"
-                    :src="sharedOriginalPrimaryMedia.url"
-                    controls
-                    preload="metadata"
-                    playsinline
-                    class="mt-4 aspect-video w-full rounded-[0.9rem] bg-black object-contain"
-                  />
+                <RouterLink
+                  :to="sharedOriginalDetailPath"
+                  class="block text-[1.05rem] font-semibold leading-tight text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.18rem] lg:text-[1.28rem]"
+                >
+                  {{ sharedOriginalPost.title }}
+                </RouterLink>
+
+                <RichTextContent
+                  v-if="sharedOriginalPost.type !== 'question'"
+                  :content="sharedOriginalPost.description"
+                  clamp
+                  class="text-[0.82rem] leading-6 text-[var(--text-primary)] sm:text-[0.9rem] sm:leading-7"
+                />
+                <RichTextContent
+                  v-else-if="sharedOriginalPost.body"
+                  :content="sharedOriginalPost.body"
+                  class="text-[0.82rem] leading-6 text-[var(--text-primary)] sm:text-[0.9rem] sm:leading-7"
+                />
+
+                <video
+                  v-if="sharedOriginalPrimaryMedia?.isVideo"
+                  :src="sharedOriginalPrimaryMedia.url"
+                  controls
+                  preload="metadata"
+                  playsinline
+                  class="aspect-video w-full rounded-[0.9rem] bg-black object-contain"
+                />
+                <button
+                  v-else-if="sharedOriginalPrimaryMedia"
+                  type="button"
+                  class="block aspect-[4/5] w-full overflow-hidden rounded-[0.9rem] bg-[var(--surface-secondary)] sm:aspect-[1.91/1]"
+                  @click="openImagePreview(sharedOriginalPrimaryMedia.url, sharedOriginalPrimaryMedia.alt)"
+                >
                   <img
-                    v-else-if="sharedOriginalPrimaryMedia"
                     :src="sharedOriginalPrimaryMedia.url"
                     :alt="sharedOriginalPrimaryMedia.alt"
                     loading="lazy"
                     decoding="async"
-                    class="mt-4 aspect-[4/5] w-full rounded-[0.9rem] bg-[var(--surface-secondary)] object-cover sm:aspect-[1.91/1]"
+                    class="h-full w-full object-contain"
                   />
-                </div>
+                </button>
               </div>
             </template>
             <p v-else class="text-sm text-[var(--text-secondary)]">The original shared post is not available.</p>
@@ -1873,14 +1961,20 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             playsinline
             class="-mx-3 mt-4 aspect-video w-[calc(100%+1.5rem)] max-w-none bg-black object-contain sm:-mx-4 sm:w-[calc(100%+2rem)]"
           />
-          <img
+          <button
             v-else-if="primaryMedia"
-            :src="primaryMedia.url"
-            :alt="post.imageAlt || post.title"
-            loading="lazy"
-            decoding="async"
-            class="-mx-3 mt-4 aspect-[4/5] w-[calc(100%+1.5rem)] max-w-none bg-[var(--surface-secondary)] object-cover sm:-mx-4 sm:aspect-[1.91/1] sm:w-[calc(100%+2rem)]"
-          />
+            type="button"
+            class="-mx-3 mt-4 block aspect-[4/5] w-[calc(100%+1.5rem)] max-w-none overflow-hidden bg-[var(--surface-secondary)] sm:-mx-4 sm:aspect-[1.91/1] sm:w-[calc(100%+2rem)]"
+            @click="openImagePreview(primaryMedia.url, post.imageAlt || post.title)"
+          >
+            <img
+              :src="primaryMedia.url"
+              :alt="post.imageAlt || post.title"
+              loading="lazy"
+              decoding="async"
+              class="h-full w-full object-contain"
+            />
+          </button>
 
           <div class="mt-2.5 flex flex-wrap gap-1 sm:mt-4 sm:gap-1.5">
             <button
@@ -1907,6 +2001,15 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             >
               <Edit2 class="h-3 w-3" />
               Edit
+            </button>
+            <button
+              v-if="canEditPost"
+              type="button"
+              class="s4e-feed-action inline-flex h-6 items-center gap-1 rounded-[0.58rem] border border-[color:var(--border-soft)] px-1.5 text-[0.68rem] font-medium leading-none text-red-500 transition hover:border-red-200 hover:bg-red-50 sm:h-8 sm:rounded-[0.8rem] sm:px-2.5 sm:text-[0.78rem]"
+              @click="requestPostDelete"
+            >
+              <Trash2 class="h-3 w-3" />
+              Delete
             </button>
             <button
               type="button"
@@ -2417,24 +2520,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
               />
             </div>
 
-            <div class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-3">
-              <p class="text-base font-semibold leading-tight text-[var(--text-primary)]">
-                {{ post.title }}
-              </p>
-              <p class="mt-2 text-[0.86rem] leading-6 text-[var(--text-secondary)]">
-                {{ sharePreviewDescription }}
-              </p>
-              <div class="mt-2 flex items-center gap-2 text-[0.84rem] text-[var(--text-secondary)]">
-                <span class="font-semibold text-[var(--text-primary)]">{{ sharePreviewAuthor }}</span>
-                <span>{{ post.time }}</span>
-              </div>
-              <img loading="lazy" decoding="async"
-                v-if="sharePreviewImageSrc"
-                :src="sharePreviewImageSrc"
-                :alt="sharePreviewImageAlt"
-                class="mt-3 aspect-[4/5] w-full rounded-[0.8rem] bg-[var(--surface-primary)] object-cover sm:aspect-[1.91/1]"
-              />
-            </div>
+            <!-- Post preview intentionally hidden in the share modal for now. -->
           </div>
         </div>
 
@@ -2534,6 +2620,28 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           </div>
         </div>
       </div>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div
+      v-if="imagePreview"
+      class="fixed inset-0 z-[140] overflow-auto bg-[#0c0c1b]/85 p-4 sm:p-8"
+      @click.self="closeImagePreview"
+    >
+      <button
+        type="button"
+        class="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white transition hover:bg-black/60"
+        aria-label="Close image preview"
+        @click="closeImagePreview"
+      >
+        <X class="h-5 w-5" />
+      </button>
+      <img
+        :src="imagePreview.url"
+        :alt="imagePreview.alt"
+        class="mx-auto h-auto w-auto max-w-none"
+      />
     </div>
   </Teleport>
 

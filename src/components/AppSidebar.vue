@@ -78,6 +78,12 @@ const menuGroups: SidebarMenuGroup[] = [
     to: '/communities',
   },
   {
+    label: 'Contest',
+    iconClass: 'las la-trophy',
+    to: '/contest',
+    target: '_blank',
+  },
+  {
     label: 'Freelancers',
     iconClass: 'las la-dove',
     to: '/freelancers',
@@ -106,11 +112,12 @@ const isLoadingSidebarCommunities = ref(false)
 const isJobsRoute = computed(() => route.path.startsWith('/jobs'))
 const isAnswerRoute = computed(() => route.path.startsWith('/answer'))
 const isFreelancersRoute = computed(() => route.path.startsWith('/freelancers'))
+const isContestRoute = computed(() => route.path.startsWith('/contest') || route.path.startsWith('/contests'))
 const activeFreelancerTab = computed(() =>
   getCurrentQueryValue('tab') === 'jobs' ? 'jobs' : 'freelancers',
 )
 const shouldShowDefaultSidebar = computed(
-  () => !isJobsRoute.value && !isAnswerRoute.value && !isFreelancersRoute.value,
+  () => !isJobsRoute.value && !isAnswerRoute.value && !isFreelancersRoute.value && !isContestRoute.value,
 )
 const showPageSections = computed(() =>
   shouldShowDefaultSidebar.value && route.name !== 'jokes-community' && route.name !== 'headlines-community',
@@ -123,6 +130,11 @@ const jobSidebarLinks: SidebarLink[] = [
 ]
 const questionSidebarLinks: SidebarLink[] = [
   { label: 'Questions', iconClass: 'las la-question-circle', to: '/answers' },
+]
+const contestSidebarLinks: SidebarLink[] = [
+  { label: 'Home', icon: House, to: '/feed' },
+  { label: 'Contests', iconClass: 'las la-trophy', to: '/contest' },
+  { label: 'Explore Communities', iconClass: 'las la-users', to: '/communities' },
 ]
 const freelancerCategoryLinks = computed<SidebarLink[]>(() => {
   const filterNames = Array.from(
@@ -479,6 +491,36 @@ watch(isFreelancersRoute, (isActive) => {
                   <span class="h-3.5 animate-pulse rounded-full bg-[var(--surface-muted)]" :class="item % 2 ? 'w-28' : 'w-36'" />
                 </div>
               </template>
+            </div>
+          </section>
+
+          <section v-else-if="isContestRoute" class="space-y-2">
+            <p class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[var(--text-tertiary)]">
+              Contest
+            </p>
+            <div class="space-y-1.5">
+              <RouterLink
+                v-for="item in contestSidebarLinks"
+                :key="item.label"
+                :to="item.to"
+                :class="getTopLevelLinkClasses(isRouteActive(item.to))"
+                class="flex items-center gap-2 rounded-lg px-3 py-2 text-[0.88rem] font-medium transition"
+                @click="handleNavigation"
+              >
+                <i
+                  v-if="'iconClass' in item && item.iconClass"
+                  :class="[item.iconClass, getTopLevelIconClasses(isRouteActive(item.to))]"
+                  class="text-[1.05rem] leading-none"
+                  aria-hidden="true"
+                />
+                <component
+                  :is="item.icon"
+                  v-else
+                  :class="getTopLevelIconClasses(isRouteActive(item.to))"
+                  class="h-4 w-4"
+                />
+                <span :class="getTopLevelLabelClasses(isRouteActive(item.to))">{{ item.label }}</span>
+              </RouterLink>
             </div>
           </section>
 
