@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowUp, ChevronDown, Edit2, MessageSquare, MoreHorizontal, PencilLine, Send, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AppFeedPost from '@/components/AppFeedPost.vue'
@@ -15,6 +16,15 @@ import { getQuestionCreatedAt, getQuestionUserId, mapApiQuestionToFeedPost } fro
 import { richTextToPlainText } from '@/utils/richText'
 
 type ActivityTab = 'posts' | 'comments' | 'scored' | 'saved' | 'answers' | 'questions'
+
+type ActivityTabState = {
+  page: number
+  total: number
+  hasMore: boolean
+  isLoaded: boolean
+  isLoading: boolean
+  error: string
+}
 
 type CommentActivity = {
   id: string
@@ -57,9 +67,9 @@ const tabs: Array<{ id: ActivityTab; label: string }> = [
 ]
 
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 const activeTab = ref<ActivityTab>('posts')
-const isLoading = ref(false)
-const loadError = ref('')
 const userPosts = ref<PostRecord[]>([])
 const userComments = ref<CommentActivity[]>([])
 const scoredPosts = ref<PostRecord[]>([])
@@ -96,15 +106,60 @@ const isSavingEdit = ref(false)
 const isDeleting = ref(false)
 const closedActivityPanels = ref(new Set<string>())
 const activeActionMenu = ref('')
+const ACTIVITY_PAGE_SIZE = 8
+
+const createTabState = (): ActivityTabState => ({
+  page: 0,
+  total: 0,
+  hasMore: true,
+  isLoaded: false,
+  isLoading: false,
+  error: '',
+})
+
+const tabState = reactive<Record<ActivityTab, ActivityTabState>>({
+  posts: createTabState(),
+  comments: createTabState(),
+  scored: createTabState(),
+  saved: createTabState(),
+  answers: createTabState(),
+  questions: createTabState(),
+})
 
 const activeCount = computed(() => ({
-  posts: userPosts.value.length,
-  comments: userComments.value.length,
-  scored: scoredPosts.value.length,
-  saved: savedPosts.value.length + savedQuestions.value.length,
-  answers: userAnswers.value.length,
-  questions: userQuestions.value.length,
+  posts: tabState.posts.isLoaded ? tabState.posts.total : userPosts.value.length,
+  comments: tabState.comments.isLoaded ? tabState.comments.total : userComments.value.length,
+  scored: tabState.scored.isLoaded ? tabState.scored.total : scoredPosts.value.length,
+  saved: tabState.saved.isLoaded ? tabState.saved.total : savedPosts.value.length + savedQuestions.value.length,
+  answers: tabState.answers.isLoaded ? tabState.answers.total : userAnswers.value.length,
+  questions: tabState.questions.isLoaded ? tabState.questions.total : userQuestions.value.length,
 }))
+
+const activeTabState = computed(() => tabState[activeTab.value])
+const isLoading = computed(() => activeTabState.value.isLoading && !activeTabState.value.isLoaded)
+const isLoadingMore = computed(() => activeTabState.value.isLoading && activeTabState.value.isLoaded)
+const loadError = computed(() => activeTabState.value.error)
+
+const getTabFromQuery = (value: unknown): ActivityTab | null => {
+  const tab = Array.isArray(value) ? value[0] : value
+
+  return tabs.some((item) => item.id === tab) ? tab as ActivityTab : null
+}
+
+const syncActiveTabFromRoute = () => {
+  activeTab.value = getTabFromQuery(route.query.tab) ?? 'posts'
+}
+
+const setActiveTab = (tab: ActivityTab) => {
+  activeTab.value = tab
+  void router.replace({
+    name: 'manage-activities',
+    query: {
+      ...route.query,
+      tab,
+    },
+  })
+}
 
 const userPostFeedItems = computed<FeedPost[]>(() =>
   userPosts.value.map((post) => mapApiPostToFeedPost(post, postMediaById.value.get(post.id) ?? [])),
@@ -202,6 +257,29 @@ const closeActionMenu = () => {
   activeActionMenu.value = ''
 }
 
+const loadActiveTabIfNeeded = () => {
+  if (!activeTabState.value.isLoaded) {
+    void loadActivities(activeTab.value)
+  }
+}
+
+const loadMoreActiveTab = () => {
+  if (!activeTabState.value.isLoaded || !activeTabState.value.hasMore || activeTabState.value.isLoading) {
+    return
+  }
+
+  void loadActivities(activeTab.value, { append: true })
+}
+
+const handleWindowScroll = () => {
+  const scrollOffset = window.innerHeight + window.scrollY
+  const documentHeight = document.documentElement.scrollHeight
+
+  if (documentHeight - scrollOffset < 560) {
+    loadMoreActiveTab()
+  }
+}
+
 const formatDate = (value: string) => {
   const date = new Date(value)
 
@@ -272,7 +350,7 @@ const readQuestionActivityRecord = (value: unknown): QuestionRecord | null => {
   return null
 }
 
-const normalizePostActivityRecords = (items: PostRecord[]) =>
+const normalizePostActivityRecords = (items: unknown[]) =>
   items.map((item) => readPostActivityRecord(item)).filter((item): item is PostRecord => Boolean(item))
 
 const updatePostInCollections = (postId: string, updater: (post: PostRecord) => PostRecord) => {
@@ -325,24 +403,202 @@ const handleManagedPostScoreChanged = ({ post, isScored, score }: { post: FeedPo
   }
 }
 
+const handleManagedSaveChanged = ({ post, isSaved }: { post: FeedPost; isSaved: boolean }) => {
+  if (isSaved) {
+    return
+  }
+
+  const itemId = getFeedPostId(post)
+
+  if (post.type === 'question') {
+    savedQuestions.value = savedQuestions.value.filter((question) => question.id !== itemId)
+    return
+  }
+
+  savedPosts.value = savedPosts.value.filter((record) => record.id !== itemId)
+}
+
 const hydratePostMedia = async (posts: PostRecord[]) => {
+  const postsNeedingMedia = posts.filter((post) => !postMediaById.value.has(post.id))
+
+  if (!postsNeedingMedia.length) {
+    return
+  }
+
   const entries = await Promise.all(
-    posts.map(async (post) => {
+    postsNeedingMedia.map(async (post) => {
       const response = await postsService.listPostMedia(post.id, authStore.authToken)
       return [post.id, response.data ?? []] as const
     }),
   )
 
-  postMediaById.value = new Map(entries)
+  postMediaById.value = new Map([...postMediaById.value, ...entries])
 }
 
-const loadActivities = async () => {
-  if (!authStore.authToken || isLoading.value) {
+const mergeById = <T extends { id: string }>(currentItems: T[], nextItems: T[], append: boolean) => {
+  if (!append) {
+    return nextItems
+  }
+
+  const merged = new Map(currentItems.map((item) => [item.id, item]))
+
+  nextItems.forEach((item) => {
+    merged.set(item.id, item)
+  })
+
+  return Array.from(merged.values())
+}
+
+const responseHasMore = (response: { current_page?: number; last_page?: number; next_page_url?: string | null }) =>
+  Boolean(response.next_page_url) || (
+    typeof response.current_page === 'number' &&
+    typeof response.last_page === 'number' &&
+    response.current_page < response.last_page
+  )
+
+const updateLoadedTabState = (tab: ActivityTab, page: number, total: number, hasMore: boolean) => {
+  const state = tabState[tab]
+  state.page = page
+  state.total = total
+  state.hasMore = hasMore
+  state.isLoaded = true
+}
+
+const buildActivityParams = (page: number) => ({
+  page,
+  per_page: ACTIVITY_PAGE_SIZE,
+  sort: '-createdAt',
+})
+
+const loadPostActivityTab = async (tab: 'posts' | 'scored' | 'saved', page: number, append: boolean, userId: string) => {
+  const response =
+    tab === 'posts'
+      ? await postsService.listUserPosts(buildActivityParams(page), authStore.authToken)
+      : tab === 'scored'
+        ? await postsService.listScoredPosts(buildActivityParams(page), authStore.authToken)
+        : await postsService.listSavedPosts(buildActivityParams(page), authStore.authToken)
+
+  const posts = normalizePostActivityRecords(response.data ?? [])
+    .filter((post) => tab !== 'posts' || !getPostUserId(post) || getPostUserId(post) === userId)
+    .map((post) => tab === 'scored' ? { ...post, is_liked: true } : post)
+
+  await hydratePostMedia(posts)
+
+  if (tab === 'posts') {
+    userPosts.value = sortedByDate(mergeById(userPosts.value, posts, append), getPostCreatedAt)
+  } else if (tab === 'scored') {
+    scoredPosts.value = sortedByDate(mergeById(scoredPosts.value, posts, append), getPostCreatedAt)
+  } else {
+    savedPosts.value = sortedByDate(mergeById(savedPosts.value, posts, append), getPostCreatedAt)
+    savedQuestions.value = append ? savedQuestions.value : []
+  }
+
+  updateLoadedTabState(tab, page, response.total ?? posts.length, responseHasMore(response))
+}
+
+const loadCommentActivityTab = async (page: number, append: boolean, userId: string) => {
+  const response = await postsService.listUserComments(buildActivityParams(page), authStore.authToken)
+  const rawComments = (response.data ?? []) as CommentActivityRecord[]
+  const commentActivities = await Promise.all(
+    rawComments
+      .filter((comment) => !getCommentUserId(comment) || getCommentUserId(comment) === userId)
+      .map(async (comment) => {
+        const embeddedPost = readPostActivityRecord(comment.post)
+        const postId = getCommentPostId(comment) || embeddedPost?.id || ''
+        let post = embeddedPost || null
+
+        if (!post && postId) {
+          try {
+            const postResponse = await postsService.getPost(postId, authStore.authToken)
+            post = postResponse.data
+          } catch {
+            post = null
+          }
+        }
+
+        if (!post) {
+          return null
+        }
+
+        return {
+          id: comment.id,
+          postId: post.id,
+          postTitle: comment.postTitle || comment.post_title || post.title || 'Post',
+          post,
+          content: comment.content,
+          createdAt: getCommentCreatedAt(comment),
+        } satisfies CommentActivity
+      }),
+  )
+  const comments = commentActivities.filter((comment): comment is CommentActivity => Boolean(comment))
+
+  await hydratePostMedia(comments.map((comment) => comment.post))
+  userComments.value = sortedByDate(mergeById(userComments.value, comments, append), (comment) => comment.createdAt)
+  updateLoadedTabState('comments', page, response.total ?? comments.length, responseHasMore(response))
+}
+
+const loadQuestionActivityTab = async (page: number, append: boolean, userId: string) => {
+  const response = await questionsService.listUserQuestions(buildActivityParams(page), authStore.authToken)
+  const questions = (response.data ?? [])
+    .map((question) => readQuestionActivityRecord(question))
+    .filter((question): question is QuestionRecord => Boolean(question))
+    .filter((question) => !getQuestionUserId(question) || getQuestionUserId(question) === userId)
+
+  userQuestions.value = sortedByDate(mergeById(userQuestions.value, questions, append), getQuestionCreatedAt)
+  updateLoadedTabState('questions', page, response.total ?? questions.length, responseHasMore(response))
+}
+
+const loadAnswerActivityTab = async (page: number, append: boolean, userId: string) => {
+  const response = await questionsService.listUserAnswers(buildActivityParams(page), authStore.authToken)
+  const rawAnswers = (response.data ?? []) as AnswerActivityRecord[]
+  const answerActivities = await Promise.all(
+    rawAnswers
+      .filter((answer) => !getAnswerUserId(answer) || getAnswerUserId(answer) === userId)
+      .map(async (answer) => {
+        const embeddedQuestion = readQuestionActivityRecord(answer.question)
+        const questionId = getAnswerQuestionId(answer) || embeddedQuestion?.id || ''
+        let question = embeddedQuestion || null
+
+        if (!question && questionId) {
+          try {
+            const questionResponse = await questionsService.getQuestion(questionId, authStore.authToken, false)
+            question = questionResponse.data
+          } catch {
+            question = null
+          }
+        }
+
+        if (!question) {
+          return null
+        }
+
+        return {
+          id: answer.id,
+          questionId: question.id,
+          questionTitle: answer.questionTitle || answer.question_title || question.title || 'Question',
+          question,
+          content: getAnswerContent(answer),
+          createdAt: getAnswerCreatedAt(answer),
+          score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count, answer.reactionsCount),
+        } satisfies AnswerActivity
+      }),
+  )
+  const answers = answerActivities.filter((answer): answer is AnswerActivity => Boolean(answer))
+
+  userAnswers.value = sortedByDate(mergeById(userAnswers.value, answers, append), (answer) => answer.createdAt)
+  updateLoadedTabState('answers', page, response.total ?? answers.length, responseHasMore(response))
+}
+
+const loadActivities = async (tab: ActivityTab = activeTab.value, options: { append?: boolean } = {}) => {
+  const state = tabState[tab]
+  const append = Boolean(options.append)
+
+  if (!authStore.authToken || state.isLoading || (append && !state.hasMore)) {
     return
   }
 
-  isLoading.value = true
-  loadError.value = ''
+  state.isLoading = true
+  state.error = ''
 
   try {
     const userId = await getCurrentUserId()
@@ -351,132 +607,23 @@ const loadActivities = async () => {
       throw new Error('Unable to identify the signed-in user.')
     }
 
-    const activityParams = { per_page: 50, sort: '-createdAt' }
-    const [
-      postsResponse,
-      commentsResponse,
-      scoredPostsResponse,
-      savedPostsResponse,
-      questionsResponse,
-      answersResponse,
-    ] = await Promise.all([
-      postsService.listUserPosts(activityParams, authStore.authToken),
-      postsService.listUserComments(activityParams, authStore.authToken),
-      postsService.listScoredPosts(activityParams, authStore.authToken),
-      postsService.listSavedPosts(activityParams, authStore.authToken),
-      questionsService.listUserQuestions(activityParams, authStore.authToken),
-      questionsService.listUserAnswers(activityParams, authStore.authToken),
-    ])
+    const page = append ? state.page + 1 : 1
 
-    const ownPosts = normalizePostActivityRecords(postsResponse.data ?? [])
-      .filter((post) => !getPostUserId(post) || getPostUserId(post) === userId)
-    const nextScoredPosts = normalizePostActivityRecords(scoredPostsResponse.data ?? [])
-      .map((post) => ({ ...post, is_liked: true }))
-    const nextSavedPosts = normalizePostActivityRecords(savedPostsResponse.data ?? [])
-    const ownQuestions = (questionsResponse.data ?? [])
-      .map((question) => readQuestionActivityRecord(question))
-      .filter((question): question is QuestionRecord => Boolean(question))
-      .filter((question) => !getQuestionUserId(question) || getQuestionUserId(question) === userId)
-    const rawComments = (commentsResponse.data ?? []) as CommentActivityRecord[]
-    const rawAnswers = (answersResponse.data ?? []) as AnswerActivityRecord[]
-
-    const postById = new Map(
-      [...ownPosts, ...nextScoredPosts, ...nextSavedPosts].map((post) => [post.id, post]),
-    )
-    const questionById = new Map(ownQuestions.map((question) => [question.id, question]))
-
-    const commentActivities = await Promise.all(
-      rawComments
-        .filter((comment) => !getCommentUserId(comment) || getCommentUserId(comment) === userId)
-        .map(async (comment) => {
-          const embeddedPost = readPostActivityRecord(comment.post)
-          const postId = getCommentPostId(comment) || embeddedPost?.id || ''
-          let post = embeddedPost || postById.get(postId) || null
-
-          if (!post && postId) {
-            try {
-              const response = await postsService.getPost(postId, authStore.authToken)
-              post = response.data
-              postById.set(post.id, post)
-            } catch {
-              post = null
-            }
-          }
-
-          if (!post) {
-            return null
-          }
-
-          return {
-            id: comment.id,
-            postId: post.id,
-            postTitle: comment.postTitle || comment.post_title || post.title || 'Post',
-            post,
-            content: comment.content,
-            createdAt: getCommentCreatedAt(comment),
-          } satisfies CommentActivity
-        }),
-    )
-
-    const answerActivities = await Promise.all(
-      rawAnswers
-        .filter((answer) => !getAnswerUserId(answer) || getAnswerUserId(answer) === userId)
-        .map(async (answer) => {
-          const embeddedQuestion = readQuestionActivityRecord(answer.question)
-          const questionId = getAnswerQuestionId(answer) || embeddedQuestion?.id || ''
-          let question = embeddedQuestion || questionById.get(questionId) || null
-
-          if (!question && questionId) {
-            try {
-              const response = await questionsService.getQuestion(questionId, authStore.authToken, false)
-              question = response.data
-              questionById.set(question.id, question)
-            } catch {
-              question = null
-            }
-          }
-
-          if (!question) {
-            return null
-          }
-
-          return {
-            id: answer.id,
-            questionId: question.id,
-            questionTitle: answer.questionTitle || answer.question_title || question.title || 'Question',
-            question,
-            content: getAnswerContent(answer),
-            createdAt: getAnswerCreatedAt(answer),
-            score: getOptionalCount(answer.score, answer.reactions_count, answer.reaction_count, answer.reactionsCount),
-          } satisfies AnswerActivity
-        }),
-    )
-
-    const commentPosts = commentActivities
-      .map((comment) => comment?.post)
-      .filter((post): post is PostRecord => Boolean(post))
-
-    await hydratePostMedia([...ownPosts, ...nextScoredPosts, ...nextSavedPosts, ...commentPosts])
-
-    userPosts.value = sortedByDate(ownPosts, getPostCreatedAt)
-    scoredPosts.value = sortedByDate(nextScoredPosts, getPostCreatedAt)
-    userQuestions.value = sortedByDate(ownQuestions, getQuestionCreatedAt)
-    savedPosts.value = sortedByDate(nextSavedPosts, getPostCreatedAt)
-    savedQuestions.value = []
-    userComments.value = sortedByDate(
-      commentActivities.filter((comment): comment is CommentActivity => Boolean(comment)),
-      (comment) => comment.createdAt,
-    )
-    userAnswers.value = sortedByDate(
-      answerActivities.filter((answer): answer is AnswerActivity => Boolean(answer)),
-      (answer) => answer.createdAt,
-    )
+    if (tab === 'posts' || tab === 'scored' || tab === 'saved') {
+      await loadPostActivityTab(tab, page, append, userId)
+    } else if (tab === 'comments') {
+      await loadCommentActivityTab(page, append, userId)
+    } else if (tab === 'questions') {
+      await loadQuestionActivityTab(page, append, userId)
+    } else {
+      await loadAnswerActivityTab(page, append, userId)
+    }
   } catch (error) {
-    loadError.value = error instanceof ApiError || error instanceof Error
+    state.error = error instanceof ApiError || error instanceof Error
       ? error.message
       : 'Unable to load your activity right now.'
   } finally {
-    isLoading.value = false
+    state.isLoading = false
   }
 }
 
@@ -636,8 +783,26 @@ const confirmDelete = async () => {
   }
 }
 
+watch(
+  () => route.query.tab,
+  () => {
+    syncActiveTabFromRoute()
+  },
+)
+
+watch(activeTab, () => {
+  closeActionMenu()
+  loadActiveTabIfNeeded()
+})
+
 onMounted(() => {
-  void loadActivities()
+  syncActiveTabFromRoute()
+  window.addEventListener('scroll', handleWindowScroll, { passive: true })
+  loadActiveTabIfNeeded()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', handleWindowScroll)
 })
 </script>
 
@@ -660,10 +825,9 @@ onMounted(() => {
             ? 'border-[var(--accent)] text-[var(--accent-strong)]'
             : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
         "
-        @click="activeTab = tab.id"
+        @click="setActiveTab(tab.id)"
       >
         {{ tab.label }}
-        <span class="ml-1 text-xs text-[var(--text-tertiary)]">({{ activeCount[tab.id] }})</span>
       </button>
     </nav>
 
@@ -698,6 +862,7 @@ onMounted(() => {
           @post-updated="handleManagedPostUpdated"
           @delete-requested="openDeletePost"
           @score-changed="handleManagedPostScoreChanged"
+          @save-changed="handleManagedSaveChanged"
         />
       </template>
 
@@ -711,6 +876,7 @@ onMounted(() => {
             :post="mapApiPostToFeedPost(comment.post, postMediaById.get(comment.postId) ?? [])"
             @post-updated="handleManagedPostUpdated"
             @score-changed="handleManagedPostScoreChanged"
+            @save-changed="handleManagedSaveChanged"
           />
           <section class="overflow-visible rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
             <header class="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4">
@@ -776,6 +942,7 @@ onMounted(() => {
           :key="post.apiId || post.slug"
           :post="post"
           @score-changed="handleManagedPostScoreChanged"
+          @save-changed="handleManagedSaveChanged"
         />
       </template>
 
@@ -786,6 +953,7 @@ onMounted(() => {
           :post="item"
           @post-updated="handleManagedPostUpdated"
           @score-changed="handleManagedPostScoreChanged"
+          @save-changed="handleManagedSaveChanged"
         />
       </template>
 
@@ -866,6 +1034,23 @@ onMounted(() => {
         >
           <p class="text-sm font-semibold text-[var(--text-primary)]">{{ activeEmptyMessage }}</p>
           <p class="mt-1 text-sm text-[var(--text-secondary)]">Your activity will appear here as you use Skills4Export.</p>
+        </div>
+
+        <div
+          v-if="isLoadingMore"
+          class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-center text-sm font-semibold text-[var(--text-secondary)]"
+        >
+          Loading more activity...
+        </div>
+
+        <div v-else-if="activeTabState.isLoaded && activeTabState.hasMore" class="flex justify-center pt-1">
+          <button
+            type="button"
+            class="inline-flex h-10 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
+            @click="loadMoreActiveTab"
+          >
+            Load more
+          </button>
         </div>
       </div>
     </div>

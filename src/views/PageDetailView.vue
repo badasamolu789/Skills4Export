@@ -1163,7 +1163,7 @@ const submitPagePost = async () => {
     agreedToPagePostTerms.value = false
     activeTab.value = 'posts'
     await loadPagePosts()
-    await router.push(`/posts/${response.data.id}`)
+    await router.push({ name: 'manage-activities', query: { tab: 'posts' } })
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

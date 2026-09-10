@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ArrowUp, BookOpen, Bookmark, Check, CloudUpload, Flag, MessageSquare, Share2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { useCurrentUserIdentity, getInitials, getProfileSkills } from '@/composables/useCurrentUserIdentity'
@@ -22,6 +22,7 @@ import { readFollowState } from '@/utils/followState'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
@@ -87,6 +88,10 @@ let realtimeTimer: ReturnType<typeof window.setInterval> | null = null
 
 const question = computed(() => apiQuestion.value)
 const questionId = computed(() => question.value?.apiId)
+const manageActivityRoute = (tab: 'posts' | 'comments' | 'scored' | 'saved' | 'answers' | 'questions') => ({
+  name: 'manage-activities',
+  query: { tab },
+})
 const questionBodyText = computed(() => {
   const body = question.value?.body?.trim() || ''
   const title = question.value?.title?.trim() || ''
@@ -636,6 +641,7 @@ const submitAnswer = async () => {
         media: responseMedia.length ? responseMedia : uploadedPreviewMedia,
       })
       closeAnswerModal()
+      await router.push(manageActivityRoute('answers'))
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to post answer.'
       toast.error('Answer failed', { description: message })
@@ -683,6 +689,9 @@ const toggleAnswerScore = async (answer: AnswerItem) => {
     )
     answer.isScored = !answer.isScored
     answer.score = response.data.count
+    if (answer.isScored) {
+      await router.push(manageActivityRoute('scored'))
+    }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
     toast.error('Reaction failed', { description: message })
@@ -818,6 +827,7 @@ const submitAnswerComment = async (answer: AnswerItem) => {
     answer.comments += 1
     answer.commentInput = ''
     answer.isCommentsOpen = true
+    await router.push(manageActivityRoute('comments'))
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
     toast.error('Comment failed', { description: message })
@@ -881,6 +891,9 @@ const toggleAnswerSave = async (answer: AnswerItem) => {
       authStore.authToken,
     )
     answer.isSaved = response.data.saved
+    if (answer.isSaved) {
+      await router.push(manageActivityRoute('saved'))
+    }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
     toast.error('Save failed', { description: message })

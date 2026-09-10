@@ -62,6 +62,11 @@ type RecentCreatedPost = {
   media: PostMediaRecord[]
 }
 
+const manageActivityRoute = (tab: 'posts' | 'comments' | 'scored' | 'saved' | 'answers' | 'questions') => ({
+  name: 'manage-activities',
+  query: { tab },
+})
+
 const props = withDefaults(
   defineProps<{
     logoSrc: string
@@ -480,9 +485,7 @@ const submitQuestion = async () => {
     postAudienceId.value = ''
     closeComposer()
 
-    if (question.id) {
-      await router.push(`/questions/${question.id}`)
-    }
+    await router.push(manageActivityRoute('questions'))
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to post question.'
     toast.error('Question failed', { description: message })
@@ -640,7 +643,7 @@ const submitPost = async () => {
       ),
     )
     window.dispatchEvent(new CustomEvent(POST_CREATED_EVENT, { detail: { postId: responsePost.id } }))
-    await router.push(`/posts/${responsePost.id}`)
+    await router.push(manageActivityRoute('posts'))
   } catch (error) {
     const message =
       error instanceof ApiError || error instanceof Error

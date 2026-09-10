@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
                 {{ targetCommunityName }}
               </h1>
               <p class="mt-2 max-w-3xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-                {{ richTextToPlainText(community?.description) || (isHeadlinesPage ? 'Join the discussions.' : 'Share decent jokes and anecdotes with the community.') }}
+                {{ richTextToPlainText(community?.description) || (isHeadlinesPage ? 'Join the Discussions: make comments, answer questions, share and score, on your favorite posts. All posts submited by users are subject to approval. Only approved posts will be published.' : 'Share decent jokes and anecdotes with the community.') }}
               </p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowUp,
   Bookmark,
@@ -38,6 +38,7 @@ import { getDisplayName } from '@/utils/displayName'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
@@ -69,6 +70,10 @@ const closeImagePreview = () => {
 }
 
 const apiPostId = computed(() => post.value?.apiId)
+const manageActivityRoute = (tab: 'posts' | 'comments' | 'scored' | 'saved' | 'answers' | 'questions') => ({
+  name: 'manage-activities',
+  query: { tab },
+})
 const getPublicProfileIdFromRoute = (routeTarget: string) => {
   const match = routeTarget.match(/\/profile\/view\/([^/?#]+)/)
   return match?.[1] ?? ''
@@ -788,6 +793,9 @@ const toggleScore = async () => {
   if (!apiPostId.value) {
     isScored.value = !isScored.value
     currentScore.value += isScored.value ? 1 : -1
+    if (isScored.value) {
+      void router.push(manageActivityRoute('scored'))
+    }
     return
   }
 
@@ -811,6 +819,9 @@ const toggleScore = async () => {
     )
     isScored.value = socialActionsStore.isContentScored(apiPostId.value)
     currentScore.value = count ?? currentScore.value
+    if (isScored.value) {
+      await router.push(manageActivityRoute('scored'))
+    }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
     toast.error('Reaction failed', { description: message })
@@ -822,6 +833,9 @@ const toggleScore = async () => {
 const toggleSave = async () => {
   if (!apiPostId.value) {
     isSaved.value = !isSaved.value
+    if (isSaved.value) {
+      void router.push(manageActivityRoute('saved'))
+    }
     return
   }
 
@@ -839,12 +853,24 @@ const toggleSave = async () => {
   isSavingPost.value = true
 
   try {
-    const response = await postsService.toggleSave(
-      apiPostId.value,
-      { userId: authStore.userId },
-      authStore.authToken,
-    )
-    isSaved.value = response.data.saved
+    if (isQuestionRoute.value) {
+      const response = await questionsService.toggleQuestionSave(
+        apiPostId.value,
+        { userId: authStore.userId },
+        authStore.authToken,
+      )
+      isSaved.value = typeof response.data.saved === 'boolean' ? response.data.saved : !isSaved.value
+    } else {
+      const response = await postsService.toggleSave(
+        apiPostId.value,
+        { userId: authStore.userId },
+        authStore.authToken,
+      )
+      isSaved.value = response.data.saved
+    }
+    if (isSaved.value) {
+      await router.push(manageActivityRoute('saved'))
+    }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
     toast.error('Save failed', { description: message })
@@ -1045,6 +1071,9 @@ const toggleCommentScore = async (comment: DetailComment | PostCommentThreadItem
 const toggleAnswerScore = (answer: QuestionAnswerItem) => {
   answer.isScored = !answer.isScored
   answer.score += answer.isScored ? 1 : -1
+  if (answer.isScored) {
+    void router.push(manageActivityRoute('scored'))
+  }
 }
 
 const toggleCommentFollow = (comment: DetailComment | PostCommentThreadItem) => {
@@ -1158,6 +1187,7 @@ const submitCommentReply = async (comment: DetailComment | PostCommentThreadItem
     comment.isReplying = false
     comment.replyInput = ''
     currentComments.value += 1
+    await router.push(manageActivityRoute('comments'))
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add reply.'
     toast.error('Reply failed', { description: message })
@@ -1201,6 +1231,7 @@ const submitComment = async () => {
     )
     currentComments.value = socialActionsStore.getCommentCount(apiPostId.value, currentComments.value + 1)
     commentInput.value = ''
+    await router.push(manageActivityRoute('comments'))
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
     toast.error('Comment failed', { description: message })
@@ -1252,6 +1283,7 @@ const submitAnswer = async () => {
         }
       }
 
+      await router.push(manageActivityRoute('answers'))
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to post answer.'
       toast.error('Answer failed', { description: message })

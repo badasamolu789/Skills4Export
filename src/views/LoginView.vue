@@ -278,7 +278,7 @@ const continueWithGoogle = async () => {
       </button>
 
       <p class="pt-2 text-center text-sm text-[var(--text-secondary)] sm:text-base">
-        Already have an account?
+        New to Skills4export.com?
         <RouterLink class="font-semibold text-[var(--accent-strong)]" to="/auth/signup">
           Sign Up
         </RouterLink>

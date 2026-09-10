@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   ArrowUp,
   Bookmark,
@@ -69,9 +70,11 @@ const emit = defineEmits<{
   (event: 'post-updated', post: PostRecord): void
   (event: 'delete-requested', post: FeedPost): void
   (event: 'score-changed', payload: { post: FeedPost; isScored: boolean; score: number }): void
+  (event: 'save-changed', payload: { post: FeedPost; isSaved: boolean }): void
 }>()
 
 const authStore = useAuthStore()
+const router = useRouter()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
 const localFollowing = ref(props.post.isFollowing ?? false)
@@ -119,6 +122,10 @@ const isLoadingSharedOriginal = ref(false)
 const followLabel = computed(() => (isFollowing.value ? 'Unfollow' : 'Follow'))
 const activeActionClass =
   'border-[color:var(--accent)] bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)] hover:text-white'
+const manageActivityRoute = (tab: 'posts' | 'comments' | 'scored' | 'saved' | 'answers' | 'questions') => ({
+  name: 'manage-activities',
+  query: { tab },
+})
 const apiPostId = computed(() => props.post.apiId)
 const detailPath = computed(() =>
   props.post.type === 'question' ? `/questions/${props.post.slug}` : `/posts/${props.post.slug}`,
@@ -947,6 +954,9 @@ const toggleScore = async () => {
       isScored: localScored.value,
       score: localScore.value,
     })
+    if (localScored.value) {
+      void router.push(manageActivityRoute('scored'))
+    }
     return
   }
 
@@ -975,6 +985,9 @@ const toggleScore = async () => {
       isScored: localScored.value,
       score: localScore.value,
     })
+    if (localScored.value) {
+      await router.push(manageActivityRoute('scored'))
+    }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update reaction.'
     toast.error('Reaction failed', { description: message })
@@ -986,6 +999,10 @@ const toggleScore = async () => {
 const toggleSave = async () => {
   if (!apiPostId.value) {
     isSaved.value = !isSaved.value
+    emit('save-changed', { post: props.post, isSaved: isSaved.value })
+    if (isSaved.value) {
+      void router.push(manageActivityRoute('saved'))
+    }
     return
   }
 
@@ -1017,6 +1034,10 @@ const toggleSave = async () => {
         authStore.authToken,
       )
       isSaved.value = response.data.saved
+    }
+    emit('save-changed', { post: props.post, isSaved: isSaved.value })
+    if (isSaved.value) {
+      await router.push(manageActivityRoute('saved'))
     }
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to update saved state.'
@@ -1083,6 +1104,7 @@ const submitComment = async () => {
         replies: [],
       })
       commentInput.value = ''
+      await router.push(manageActivityRoute('comments'))
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to add comment.'
       toast.error('Comment failed', { description: message })
@@ -1223,6 +1245,7 @@ const submitAnswer = async () => {
     )
 
     closeAnswerModal()
+    await router.push(manageActivityRoute('answers'))
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to post your answer.'
     toast.error('Answer failed', { description: message })
@@ -1570,6 +1593,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
     comment.areRepliesOpen = true
     comment.isReplying = false
     comment.replyInput = ''
+    await router.push(manageActivityRoute('comments'))
   } catch (error) {
     const message = error instanceof ApiError ? error.message : 'Unable to add reply.'
     toast.error('Reply failed', { description: message })
