@@ -140,6 +140,7 @@ const isOptimizingEditAvatar = ref(false)
 const isUpdatingPageFollow = ref(false)
 
 const POST_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+const POST_VIDEO_MAX_BYTES = 100 * 1024 * 1024
 const POST_IMAGE_ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif'])
 const postImageSizeReferences = [
   '1080 x 1350 (4:5)',
@@ -447,6 +448,11 @@ const handlePagePostFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
 
+  if (!file) {
+    pagePostFile.value = null
+    return
+  }
+
   if (file?.type.startsWith('image/')) {
     if (!POST_IMAGE_ALLOWED_TYPES.has(file.type) && file.type !== 'image/webp') {
       toast.error('Unsupported post image format', {
@@ -469,6 +475,24 @@ const handlePagePostFileChange = async (event: Event) => {
     }
 
     pagePostFile.value = uploadFile
+    return
+  }
+
+  if (!file.type.startsWith('video/')) {
+    toast.error('Unsupported post media format', {
+      description: 'Use an image or video file for posts.',
+    })
+    target.value = ''
+    pagePostFile.value = null
+    return
+  }
+
+  if (file.size > POST_VIDEO_MAX_BYTES) {
+    toast.error('Post video is too large', {
+      description: 'Post videos must be 100 MB or smaller.',
+    })
+    target.value = ''
+    pagePostFile.value = null
     return
   }
 
@@ -1921,7 +1945,7 @@ watch(pagePostFile, (file, previousFile) => {
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span class="text-[var(--danger)]">*</span></span>
         <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
-          Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB.
+          Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB. Videos up to 100 MB.
         </span>
         <button
           v-if="!pagePostFile"

@@ -8,11 +8,14 @@ import { NIGERIA_COUNTRY, nigeriaStates } from '@/data/locations'
 import { ApiError } from '@/lib/api'
 import { authService } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { usePagesStore } from '@/stores/pages'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
 import { collectValidationErrors } from '@/utils/formValidation'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
+import { ensureStudentPageFromSignup } from '@/utils/studentPage'
 
 const authStore = useAuthStore()
+const pagesStore = usePagesStore()
 const route = useRoute()
 const router = useRouter()
 const isSubmitting = ref(false)
@@ -34,7 +37,7 @@ const {
 >()
 
 const currentYear = new Date().getFullYear()
-const yearStartedOptions = Array.from({ length: 50 }, (_, index) => String(currentYear - index))
+const yearStartedOptions = Array.from({ length: 50 }, (_, index) => String(currentYear + index))
 
 const form = ref({
   is16OrAbove: authStore.signUpDraft.is16OrAbove,
@@ -122,6 +125,9 @@ const persistDraftDetails = () => {
 
 const completeGoogleOnboarding = async () => {
   await syncSignUpDetailsToProfile(authStore)
+  if (authStore.signUpDraft.accountType === 'student') {
+    await ensureStudentPageFromSignup(authStore, pagesStore)
+  }
   authStore.setOnboardingRequired(false)
 }
 
@@ -312,9 +318,6 @@ const submitDetails = async () => {
         </div>
         <p v-if="getFieldError('country') || getFieldError('state')" class="input-feedback input-feedback--error">
           {{ getFieldError('country') || getFieldError('state') }}
-        </p>
-        <p v-if="form.state && form.country" class="text-xs text-[var(--text-tertiary)]">
-          Profile location: {{ form.state }}, {{ form.country }}
         </p>
       </div>
 

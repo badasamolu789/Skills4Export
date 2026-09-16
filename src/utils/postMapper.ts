@@ -5,7 +5,7 @@ import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
-import { getProfileContextTag } from '@/utils/profileContextTag'
+import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const formatPostTime = (value: string) => {
   const date = new Date(value)
@@ -103,26 +103,7 @@ const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
 }
 
 const getAuthorTag = (author?: MyProfileData | null) => {
-  const authorRecord = isRecord(author) ? author : null
-  const profileRecord = getNestedRecord(author, 'profile') ?? authorRecord
-  const rawSkills = Array.isArray(author?.skills)
-    ? author.skills
-    : Array.isArray(profileRecord?.skills)
-      ? profileRecord.skills
-      : []
-
-  const skills = rawSkills
-    .map((skill) => {
-      if (typeof skill === 'string') {
-        return skill.trim()
-      }
-
-      return getStringValue(skill, ['name', 'skill', 'skillName', 'skill_name', 'title', 'label'])
-    })
-    .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
-    .slice(0, 3)
-
-  return skills.join(' | ') || getProfileContextTag(author)
+  return getProfileDisplayTitle(author)
 }
 
 const getAuthorAvatar = (post: PostRecord, author?: MyProfileData | null) => {

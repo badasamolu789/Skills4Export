@@ -565,6 +565,17 @@ export type UpsertUserProfileRequest = {
   current_job_title?: string
   currentWorkspace?: string
   current_workspace?: string
+  accountType?: 'default' | 'student' | string
+  account_type?: 'default' | 'student' | string
+  university?: string
+  institutionOfStudy?: string
+  institution_of_study?: string
+  yearStarted?: string
+  year_started?: string
+  graduationDate?: string
+  graduation_date?: string
+  courseOfStudy?: string
+  course_of_study?: string
 }
 
 export type UpdateUserRequest = {

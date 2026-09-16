@@ -4,7 +4,7 @@ import type { CompactFeedMedia, CompactFeedRecord } from '@/services/feeds'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { readBooleanFlag, readFollowState } from '@/utils/followState'
 import { getOptionalCount, isVideoPostMedia } from '@/utils/postMapper'
-import { getProfileContextTag } from '@/utils/profileContextTag'
+import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -57,21 +57,7 @@ const getInitials = (value: string) =>
     .slice(0, 2)
     .toUpperCase()
 
-const getAuthorSkills = (author: unknown) => {
-  const rawSkills = isRecord(author) && Array.isArray(author.skills) ? author.skills : []
-
-  return rawSkills
-    .map((skill) => {
-      if (typeof skill === 'string') {
-        return skill.trim()
-      }
-
-      return readString(skill, ['name', 'skill', 'skillName', 'skill_name', 'title', 'label'])
-    })
-    .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
-    .slice(0, 3)
-    .join(' | ') || getProfileContextTag(author)
-}
+const getAuthorDisplayTitle = (author: unknown) => getProfileDisplayTitle(author)
 
 const normalizeMediaItem = (
   value: CompactFeedMedia,
@@ -146,7 +132,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       authorName,
       authorTo: userId ? `/profile/view/${userId}` : '/profile',
       authorAvatarSrc: readString(author, ['avatar', 'avatarUrl', 'avatar_url']) || null,
-      tag: getAuthorSkills(author),
+      tag: getAuthorDisplayTitle(author),
       answers: getOptionalCount(item.answersCount, item.answers_count, item.answer_count),
       score: getOptionalCount(item.score),
       ...(readFollowState(viewerState, item, author) !== undefined
@@ -183,7 +169,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       to: pageId ? `/pages/${item.page?.slug || pageId}/public` : `/profile/view/${userId}`,
       avatarText: getInitials(authorName || 'Community member'),
       avatarSrc,
-      tag: pageId ? '' : getAuthorSkills(author),
+      tag: pageId ? '' : getAuthorDisplayTitle(author),
     },
     time: formatFeedTime(createdAt),
     title,

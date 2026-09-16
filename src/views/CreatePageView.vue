@@ -108,7 +108,9 @@ const pageTypes = computed<PageTypeOption[]>(() => {
 
     const maxPages = category.max_pages_per_user
     const totalPages = category.total_pages ?? 0
-    const isLimitReached = typeof maxPages === 'number' && maxPages > 0 && totalPages >= maxPages
+    const categoryLimitReached = typeof maxPages === 'number' && maxPages > 0 && totalPages >= maxPages
+    const isStudentLimitReached = value === 'student' && (pagesStore.hasStudentPage || pagesStore.isCheckingStudentPage)
+    const isLimitReached = categoryLimitReached || isStudentLimitReached
 
     return [{
       label: getCategoryCardLabel(value),
@@ -292,6 +294,18 @@ const loadPagePrefill = async (type: PageCategory) => {
 
 const selectPageType = (item: PageTypeOption) => {
   if (item.isLimitReached) {
+    if (item.value === 'student' && pagesStore.isCheckingStudentPage) {
+      toast.info('Checking student page status...')
+      return
+    }
+
+    if (item.value === 'student' && pagesStore.hasStudentPage) {
+      toast.error('Student page already exists', {
+        description: 'Each user can only create one student page.',
+      })
+      return
+    }
+
     toast.error('Page limit reached', {
       description: `You have reached the limit for ${item.category?.name || item.value} pages.`,
     })
@@ -644,6 +658,11 @@ onBeforeUnmount(() => {
 
 onMounted(() => {
   void loadPageCategories()
+  void pagesStore.loadStudentPageStatus().then(() => {
+    if (selectedPageType.value === 'student' && pagesStore.hasStudentPage) {
+      goBackToOptions()
+    }
+  })
   applyRequestedPageType()
 })
 </script>
@@ -675,6 +694,9 @@ onMounted(() => {
           <p v-else-if="!pageTypes.length" class="mt-4 text-sm text-[var(--text-secondary)]">
             No page categories are available yet.
           </p>
+          <p v-else-if="pagesStore.studentPageCheckError" class="mt-4 text-sm text-[var(--text-secondary)]">
+            {{ pagesStore.studentPageCheckError }}
+          </p>
         </div>
 
         <div class="grid gap-5 md:grid-cols-2">
@@ -690,6 +712,12 @@ onMounted(() => {
               <component :is="item.icon" class="h-11 w-11" />
             </span>
             <span class="mt-7 text-xl font-semibold text-[var(--text-primary)]">{{ item.label }}</span>
+            <span v-if="item.value === 'student' && pagesStore.hasStudentPage" class="mt-3 text-sm font-medium text-[var(--text-secondary)]">
+              Student page already created
+            </span>
+            <span v-else-if="item.value === 'student' && pagesStore.isCheckingStudentPage" class="mt-3 text-sm font-medium text-[var(--text-secondary)]">
+              Checking availability...
+            </span>
           </button>
         </div>
       </div>

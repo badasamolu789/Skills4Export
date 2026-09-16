@@ -6,6 +6,7 @@ import vue from '@vitejs/plugin-vue'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiBaseUrl = env.VITE_API_BASE_URL?.trim()
+  const mediaUploadProxyTimeoutMs = 10 * 60 * 1000
   const parsedApiUrl = apiBaseUrl
     ? (() => {
         try {
@@ -75,8 +76,8 @@ export default defineConfig(({ mode }) => {
               target: proxyTarget,
               changeOrigin: true,
               secure: isHttpsProxyTarget,
-              timeout: 60000,
-              proxyTimeout: 60000,
+              timeout: mediaUploadProxyTimeoutMs,
+              proxyTimeout: mediaUploadProxyTimeoutMs,
             },
             '/health': {
               target: proxyTarget,

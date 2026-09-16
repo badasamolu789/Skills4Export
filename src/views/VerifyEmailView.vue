@@ -7,11 +7,14 @@ import AuthShell from '@/components/AuthShell.vue'
 import { getErrorMessage } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
 import { useAuthStore } from '@/stores/auth'
+import { usePagesStore } from '@/stores/pages'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
+import { ensureStudentPageFromSignup } from '@/utils/studentPage'
 import { useFormFieldStates } from '@/composables/useFormFieldStates'
 import { isStrongPassword } from '@/utils/formValidation'
 
 const authStore = useAuthStore()
+const pagesStore = usePagesStore()
 const router = useRouter()
 
 const otp = ref('')
@@ -149,10 +152,16 @@ const verifyOtp = async () => {
       authStore.setUserProfile(response.data.profile)
     }
     await syncSignUpDetailsToProfile(authStore)
+    if (authStore.signUpDraft.accountType === 'student') {
+      toast.loading('Creating your student page...', { id: loadingToastId })
+      await ensureStudentPageFromSignup(authStore, pagesStore)
+    }
 
     toast.success('Email verified', {
       id: loadingToastId,
-      description: 'Your account has been verified successfully and your registration is complete.',
+      description: authStore.signUpDraft.accountType === 'student'
+        ? 'Your account and student page are ready.'
+        : 'Your account has been verified successfully and your registration is complete.',
     })
 
     router.replace('/feed')

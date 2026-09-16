@@ -736,7 +736,42 @@ const profileDetailsForm = ref({
   location: '',
   currentWorkplace: '',
   currentJobTitle: '',
+  institutionOfStudy: '',
+  graduationYear: '',
+  courseOfStudy: '',
 })
+
+const getStudentProfileField = (
+  profileData: UserProfile | null | undefined,
+  data: MyProfileData | null | undefined,
+  keys: string[],
+) => getStringField(profileData, keys) || getStringField(data, keys)
+
+const getPrimaryEducation = (data?: MyProfileData | null) =>
+  data?.educations?.[0] || data?.education?.[0] || educations.value[0] || null
+
+const isStudentProfile = computed(() => {
+  const profileData = profileResponseData.value?.profile ?? authStore.userProfile
+
+  return (
+    authStore.signUpDraft.accountType === 'student' ||
+    getStudentProfileField(profileData, profileResponseData.value, ['accountType', 'account_type']) === 'student' ||
+    Boolean(
+      authStore.signUpDraft.university ||
+        authStore.signUpDraft.courseOfStudy ||
+        getStudentProfileField(profileData, profileResponseData.value, [
+          'institutionOfStudy',
+          'institution_of_study',
+          'university',
+          'courseOfStudy',
+          'course_of_study',
+        ]),
+    )
+  )
+})
+
+const buildStudentDisplayTitle = (institution: string, course: string) =>
+  [institution, course].filter(Boolean).join(' | ')
 
 const loadProfile = async () => {
   if (!authStore.isAuthenticated) {
@@ -976,6 +1011,27 @@ const toggleFollowFromModal = async (targetUserId: string) => {
 const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
   const profileData = data?.profile ?? authStore.userProfile
   const userData = data?.user ?? authStore.currentUser
+  const education = getPrimaryEducation(data)
+  const institutionOfStudy = toInitialCaps(
+    authStore.signUpDraft.university ||
+      getStudentProfileField(profileData, data, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
+      education?.school ||
+      '',
+    { keepSmallWords: true },
+  )
+  const graduationYear = (
+    authStore.signUpDraft.yearStarted ||
+      getStudentProfileField(profileData, data, ['graduationDate', 'graduation_date', 'yearStarted', 'year_started']) ||
+      education?.endDate ||
+      ''
+  ).slice(0, 4)
+  const courseOfStudy = toInitialCaps(
+    authStore.signUpDraft.courseOfStudy ||
+      getStudentProfileField(profileData, data, ['courseOfStudy', 'course_of_study', 'field']) ||
+      education?.field ||
+      '',
+    { keepSmallWords: true },
+  )
   const currentExperience =
     data?.experiences?.find((experience) => Boolean(experience.isCurrent)) ||
     data?.experiences?.[0] ||
@@ -1007,19 +1063,41 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
         authStore.signUpDraft.name,
         profileData?.username,
       )),
-    displayTitle: [currentJobTitle, currentWorkplace].filter(Boolean).join(' at '),
+    displayTitle: isStudentProfile.value
+      ? buildStudentDisplayTitle(institutionOfStudy, courseOfStudy)
+      : [currentJobTitle, currentWorkplace].filter(Boolean).join(' at '),
     location: toInitialCaps(profileData?.location || authStore.signUpDraft.location || ''),
     currentWorkplace,
     currentJobTitle,
+    institutionOfStudy,
+    graduationYear,
+    courseOfStudy,
   }
 }
 
 watch(
   () => [profileDetailsForm.value.currentJobTitle, profileDetailsForm.value.currentWorkplace] as const,
   ([currentJobTitle, currentWorkplace]) => {
+    if (isStudentProfile.value) {
+      return
+    }
+
     const title = toInitialCaps(currentJobTitle, { keepSmallWords: true })
     const workplace = toInitialCaps(currentWorkplace, { keepSmallWords: true })
     profileDetailsForm.value.displayTitle = [title, workplace].filter(Boolean).join(' at ')
+  },
+)
+
+watch(
+  () => [profileDetailsForm.value.institutionOfStudy, profileDetailsForm.value.courseOfStudy, isStudentProfile.value] as const,
+  ([institutionOfStudy, courseOfStudy, isStudent]) => {
+    if (!isStudent) {
+      return
+    }
+
+    const institution = toInitialCaps(institutionOfStudy, { keepSmallWords: true })
+    const course = toInitialCaps(courseOfStudy, { keepSmallWords: true })
+    profileDetailsForm.value.displayTitle = buildStudentDisplayTitle(institution, course)
   },
 )
 
@@ -1123,8 +1201,12 @@ const saveProfileDetails = async () => {
     const displayName = toInitialCaps(profileDetailsForm.value.displayName)
     const bio = authStore.userProfile?.bio || profileResponseData.value?.profile?.bio || profileResponseData.value?.bio || ''
     const location = toInitialCaps(profileDetailsForm.value.location)
+    const isStudent = isStudentProfile.value
     const currentWorkspace = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
     const currentJobTitle = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
+    const institutionOfStudy = toInitialCaps(profileDetailsForm.value.institutionOfStudy, { keepSmallWords: true })
+    const graduationYear = profileDetailsForm.value.graduationYear.trim()
+    const courseOfStudy = toInitialCaps(profileDetailsForm.value.courseOfStudy, { keepSmallWords: true })
     const profilePayload = {
       username: authStore.userProfile?.username || authStore.signUpDraft.username,
       displayName,
@@ -1133,8 +1215,24 @@ const saveProfileDetails = async () => {
       website: authStore.userProfile?.website || authStore.signUpDraft.website || '',
       linkedin: authStore.userProfile?.linkedin || authStore.signUpDraft.linkedin || '',
       github: authStore.userProfile?.github || authStore.signUpDraft.github || '',
-      ...(currentJobTitle ? { currentJobTitle } : {}),
-      ...(currentWorkspace ? { currentWorkspace } : {}),
+      ...(isStudent
+        ? {
+            accountType: 'student',
+            account_type: 'student',
+            institutionOfStudy,
+            institution_of_study: institutionOfStudy,
+            university: institutionOfStudy,
+            yearStarted: graduationYear,
+            year_started: graduationYear,
+            graduationDate: graduationYear,
+            graduation_date: graduationYear,
+            courseOfStudy,
+            course_of_study: courseOfStudy,
+          }
+        : {
+            ...(currentJobTitle ? { currentJobTitle } : {}),
+            ...(currentWorkspace ? { currentWorkspace } : {}),
+          }),
     }
 
     const userResponse = displayName
@@ -1159,33 +1257,41 @@ const saveProfileDetails = async () => {
       ? responseProfile as UserProfile
       : (profileResponse.data as UserProfile | null) ?? authStore.userProfile
 
-    try {
-      await upsertCurrentExperience()
-    } catch {
-      const company = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
-      const title = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
+    if (!isStudent) {
+      try {
+        await upsertCurrentExperience()
+      } catch {
+        const company = toInitialCaps(profileDetailsForm.value.currentWorkplace, { keepSmallWords: true })
+        const title = toInitialCaps(profileDetailsForm.value.currentJobTitle, { keepSmallWords: true })
 
-      if (company && title) {
-        experiences.value = [
-          {
-            id: `local-current-${authStore.userId}`,
-            userId: authStore.userId,
-            company,
-            title,
-            employmentType: 'full-time',
-            startDate: new Date().toISOString().slice(0, 10),
-            endDate: null,
-            isCurrent: true,
-            description: '',
-          },
-          ...experiences.value.filter((experience) => experience.id !== `local-current-${authStore.userId}`),
-        ]
+        if (company && title) {
+          experiences.value = [
+            {
+              id: `local-current-${authStore.userId}`,
+              userId: authStore.userId,
+              company,
+              title,
+              employmentType: 'full-time',
+              startDate: new Date().toISOString().slice(0, 10),
+              endDate: null,
+              isCurrent: true,
+              description: '',
+            },
+            ...experiences.value.filter((experience) => experience.id !== `local-current-${authStore.userId}`),
+          ]
+        }
       }
     }
 
     authStore.signUpDraft.name = displayName
     authStore.signUpDraft.headline = bio
     authStore.signUpDraft.location = location
+    if (isStudent) {
+      authStore.signUpDraft.accountType = 'student'
+      authStore.signUpDraft.university = institutionOfStudy
+      authStore.signUpDraft.yearStarted = graduationYear
+      authStore.signUpDraft.courseOfStudy = courseOfStudy
+    }
     if (userResponse?.data?.user) {
       authStore.setCurrentUser(userResponse.data.user)
     }
@@ -1194,8 +1300,24 @@ const saveProfileDetails = async () => {
       displayName,
       bio,
       location,
-      ...(currentJobTitle ? { currentJobTitle } : {}),
-      ...(currentWorkspace ? { currentWorkspace } : {}),
+      ...(isStudent
+        ? {
+            accountType: 'student',
+            account_type: 'student',
+            institutionOfStudy,
+            institution_of_study: institutionOfStudy,
+            university: institutionOfStudy,
+            yearStarted: graduationYear,
+            year_started: graduationYear,
+            graduationDate: graduationYear,
+            graduation_date: graduationYear,
+            courseOfStudy,
+            course_of_study: courseOfStudy,
+          }
+        : {
+            ...(currentJobTitle ? { currentJobTitle } : {}),
+            ...(currentWorkspace ? { currentWorkspace } : {}),
+          }),
     })
 
     isProfileDetailsModalOpen.value = false
@@ -1407,22 +1529,32 @@ const profile = computed(() => {
 })
 
 const featuredExperience = computed(() => experiences.value[0] ?? null)
+const featuredEducation = computed(() => getPrimaryEducation(profileResponseData.value))
 
 const featuredSkill = computed(() => skills.value[0]?.name || '')
 
 const profileSkillLabel = computed(() => toInitialCaps(
-  featuredExperience.value?.title ||
-    authStore.signUpDraft.jobTitle ||
-    authStore.signUpDraft.courseOfStudy ||
-    featuredSkill.value ||
-    '',
+  isStudentProfile.value
+    ? authStore.signUpDraft.courseOfStudy ||
+      getStudentProfileField(authStore.userProfile, profileResponseData.value, ['courseOfStudy', 'course_of_study', 'field']) ||
+      featuredEducation.value?.field ||
+      featuredSkill.value ||
+      ''
+    : featuredExperience.value?.title ||
+      authStore.signUpDraft.jobTitle ||
+      featuredSkill.value ||
+      '',
   { keepSmallWords: true },
 ))
 const profileCompanyLabel = computed(() => toInitialCaps(
-  featuredExperience.value?.company ||
-    authStore.signUpDraft.workplace ||
-    authStore.signUpDraft.university ||
-    '',
+  isStudentProfile.value
+    ? authStore.signUpDraft.university ||
+      getStudentProfileField(authStore.userProfile, profileResponseData.value, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
+      featuredEducation.value?.school ||
+      ''
+    : featuredExperience.value?.company ||
+      authStore.signUpDraft.workplace ||
+      '',
   { keepSmallWords: true },
 ))
 const profileCountryLabel = computed(() => toInitialCaps(profile.value.location || ''))
@@ -2242,12 +2374,12 @@ const editModalTitle = computed(() => {
             v-model="profileDetailsForm.displayTitle"
             type="text"
             readonly
-            placeholder="Add a current job title and workplace"
+            :placeholder="isStudentProfile ? 'Add institution and course of study' : 'Add a current job title and workplace'"
             class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
           />
         </label>
 
-        <label class="block space-y-2">
+        <label v-if="!isStudentProfile" class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Location</span>
           <select
             v-model="profileDetailsForm.location"
@@ -2260,7 +2392,35 @@ const editModalTitle = computed(() => {
           </select>
         </label>
 
-        <label class="block space-y-2">
+        <label v-if="isStudentProfile" class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Institution of Study</span>
+          <input
+            v-model="profileDetailsForm.institutionOfStudy"
+            type="text"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label v-if="isStudentProfile" class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Year of graduation</span>
+          <input
+            v-model="profileDetailsForm.graduationYear"
+            type="text"
+            inputmode="numeric"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label v-if="isStudentProfile" class="block space-y-2">
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Current course of study</span>
+          <input
+            v-model="profileDetailsForm.courseOfStudy"
+            type="text"
+            class="h-11 w-full rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 text-sm outline-none transition focus:border-[var(--accent)]"
+          />
+        </label>
+
+        <label v-if="!isStudentProfile" class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Current work place</span>
           <input
             v-model="profileDetailsForm.currentWorkplace"
@@ -2269,7 +2429,7 @@ const editModalTitle = computed(() => {
           />
         </label>
 
-        <label class="block space-y-2">
+        <label v-if="!isStudentProfile" class="block space-y-2">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Current job title</span>
           <input
             v-model="profileDetailsForm.currentJobTitle"

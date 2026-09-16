@@ -390,7 +390,7 @@ export const mediaService = {
         return api.post<MediaUploadFileResponse>('/media/upload', formData, {
             token: options?.token,
             retry: false,
-            timeoutMs: options?.timeoutMs ?? 180000,
+            timeoutMs: options?.timeoutMs ?? (uploadFile.type.startsWith('video/') ? 600000 : 180000),
         })
     },
 

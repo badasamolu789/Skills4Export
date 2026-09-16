@@ -61,6 +61,21 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
     displayName: identity.displayName || undefined,
     bio,
     location,
+    ...(draft.accountType === 'student'
+      ? {
+          accountType: 'student',
+          account_type: 'student',
+          institutionOfStudy: draft.university.trim() || undefined,
+          institution_of_study: draft.university.trim() || undefined,
+          university: draft.university.trim() || undefined,
+          yearStarted: draft.yearStarted || undefined,
+          year_started: draft.yearStarted || undefined,
+          graduationDate: draft.yearStarted || undefined,
+          graduation_date: draft.yearStarted || undefined,
+          courseOfStudy: draft.courseOfStudy.trim() || undefined,
+          course_of_study: draft.courseOfStudy.trim() || undefined,
+        }
+      : {}),
     currentJobTitle: draft.accountType === 'student'
       ? draft.courseOfStudy.trim() || undefined
       : draft.jobTitle.trim() || undefined,

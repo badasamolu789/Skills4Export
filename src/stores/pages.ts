@@ -255,12 +255,18 @@ export const usePagesStore = defineStore('pages', () => {
   const pagesError = ref('')
   const loadedForUserId = ref('')
   const pagePersistenceWarning = ref('')
+  const isCheckingStudentPage = ref(false)
+  const studentPageCheckError = ref('')
+  const studentPageExists = ref(false)
+  const studentPageCheckedForUserId = ref('')
   let pagesRequest: Promise<void> | null = null
   let pageRequests = new Map<string, Promise<ManagedPage | null>>()
   let pagesLoadedAt = 0
 
   const pageCount = computed(() => pages.value.length)
   const currentUserId = computed(() => authStore.userId || extractUserIdFromToken(authStore.authToken) || '')
+  const studentPage = computed(() => pages.value.find((page) => page.category === 'student') ?? null)
+  const hasStudentPage = computed(() => studentPageExists.value || Boolean(studentPage.value))
 
   const getPageBySlug = (slug: string) => pages.value.find((page) => page.slug === slug) ?? null
   const getPageByIdOrSlug = (idOrSlug: string) =>
@@ -274,6 +280,10 @@ export const usePagesStore = defineStore('pages', () => {
     loadedForUserId.value = ''
     publicPages.value = []
     pagesLoadedAt = 0
+    isCheckingStudentPage.value = false
+    studentPageCheckError.value = ''
+    studentPageExists.value = false
+    studentPageCheckedForUserId.value = ''
     pagesRequest = null
     pageRequests = new Map()
   }
@@ -419,6 +429,49 @@ export const usePagesStore = defineStore('pages', () => {
     })()
 
     return pagesRequest
+  }
+
+  const loadStudentPageStatus = async (options: { force?: boolean } = {}) => {
+    if (!authStore.authToken || !currentUserId.value) {
+      studentPageExists.value = false
+      studentPageCheckedForUserId.value = ''
+      return null
+    }
+
+    if (
+      !options.force &&
+      studentPageCheckedForUserId.value === currentUserId.value
+    ) {
+      return studentPage.value
+    }
+
+    isCheckingStudentPage.value = true
+    studentPageCheckError.value = ''
+
+    try {
+      const response = await pagesService.listMyPages(
+        {
+          type: 'student',
+          per_page: 1,
+        },
+        authStore.authToken,
+      )
+      const record = response.data[0] ?? null
+
+      studentPageExists.value = Boolean(record)
+      studentPageCheckedForUserId.value = currentUserId.value
+
+      if (!record) {
+        return null
+      }
+
+      return addPageFromApi(record, { trustAsOwned: true })
+    } catch (error) {
+      studentPageCheckError.value = getDisplayErrorMessage(error, 'Unable to check student page status.')
+      return studentPage.value
+    } finally {
+      isCheckingStudentPage.value = false
+    }
   }
 
   const loadPage = async (idOrSlug: string) => {
@@ -568,6 +621,10 @@ export const usePagesStore = defineStore('pages', () => {
     if (payloadCategory) {
       rememberPageCategory(page, payloadCategory)
       page.category = payloadCategory
+      if (payloadCategory === 'student') {
+        studentPageExists.value = true
+        studentPageCheckedForUserId.value = currentUserId.value
+      }
     }
 
     return page
@@ -626,6 +683,7 @@ export const usePagesStore = defineStore('pages', () => {
   const deletePageFromApi = async (id: string) => {
     await pagesService.deletePage(id, authStore.authToken)
     pages.value = pages.value.filter((page) => page.id !== id)
+    studentPageExists.value = pages.value.some((page) => page.category === 'student')
   }
 
   watch(
@@ -643,6 +701,10 @@ export const usePagesStore = defineStore('pages', () => {
     isLoadingPages,
     pagesError,
     pagePersistenceWarning,
+    isCheckingStudentPage,
+    studentPageCheckError,
+    studentPage,
+    hasStudentPage,
     pageCount,
     getPageBySlug,
     getPageByIdOrSlug,
@@ -653,6 +715,7 @@ export const usePagesStore = defineStore('pages', () => {
     rememberOwnedPage,
     clearPages,
     loadPages,
+    loadStudentPageStatus,
     loadPage,
     loadPublicPage,
     setPageFollowing,

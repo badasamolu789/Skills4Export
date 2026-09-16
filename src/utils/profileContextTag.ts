@@ -64,7 +64,7 @@ const unique = (values: string[]) => {
   })
 }
 
-export const getProfileContextTag = (source: unknown) => {
+export const getProfileDisplayTitle = (source: unknown) => {
   const profile = readRecord(source, ['profile', 'userProfile', 'user_profile'])
   const user = readRecord(source, ['user'])
   const education = [
@@ -72,6 +72,15 @@ export const getProfileContextTag = (source: unknown) => {
     ...readArray(profile, ['educations', 'education']),
     ...readArray(user, ['educations', 'education']),
   ].find(isRecord)
+  const accountType = (
+    readString(source, ['accountType', 'account_type']) ||
+    readString(profile, ['accountType', 'account_type']) ||
+    readString(user, ['accountType', 'account_type'])
+  ).toLowerCase()
+  const explicitDisplayTitle =
+    readString(source, ['displayTitle', 'display_title']) ||
+    readString(profile, ['displayTitle', 'display_title']) ||
+    readString(user, ['displayTitle', 'display_title'])
   const course =
     readString(source, ['courseOfStudy', 'course_of_study']) ||
     readString(profile, ['courseOfStudy', 'course_of_study']) ||
@@ -87,9 +96,15 @@ export const getProfileContextTag = (source: unknown) => {
     readString(source, ['currentWorkspace', 'current_workspace', 'workplace']) ||
     readString(profile, ['currentWorkspace', 'current_workspace', 'workplace'])
 
-  if (course || school) {
-    return unique([course ? `Studying ${course}` : '', school]).slice(0, 2).join(' | ')
+  if (explicitDisplayTitle) {
+    return explicitDisplayTitle
   }
 
-  return unique([title, workspace]).slice(0, 2).join(' | ')
+  if (accountType === 'student' || course || school) {
+    return unique([school, course]).slice(0, 2).join(' | ')
+  }
+
+  return title && workspace ? `${title} at ${workspace}` : unique([title, workspace]).slice(0, 1).join('')
 }
+
+export const getProfileContextTag = (source: unknown) => getProfileDisplayTitle(source)

@@ -121,6 +121,7 @@ const agreedToPostTerms = ref(false)
 const isSubmittingQuestion = ref(false)
 const isSubmittingPost = ref(false)
 const POST_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+const POST_VIDEO_MAX_BYTES = 100 * 1024 * 1024
 const POST_IMAGE_ALLOWED_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif'])
 const postImageSizeReferences = [
   '1080 x 1350 (4:5)',
@@ -154,6 +155,28 @@ const postFileRecommendation = computed(() => {
   return 'Best: 1080 x 1350 portrait. Also supports square 1080 x 1080 and landscape 1200 x 627.'
 })
 const isJokesView = computed(() => route.name === 'jokes-community')
+const isHeadlinesComposer = computed(() => {
+  const selectedCommunity = communities.value.find((item) => item.id === postAudienceId.value)
+  return selectedCommunity?.name?.trim().toLowerCase() === 'headlines'
+})
+const postComposerTitle = computed(() => {
+  if (isHeadlinesComposer.value) {
+    return 'Submit Post'
+  }
+
+  return isJokesView.value ? 'Post a Joke' : 'Create Post'
+})
+const postSubmitLabel = computed(() => {
+  if (isSubmittingPost.value) {
+    return isHeadlinesComposer.value ? 'Submitting...' : 'Posting...'
+  }
+
+  if (isHeadlinesComposer.value) {
+    return 'Submit Post'
+  }
+
+  return isJokesView.value ? 'Post a Joke' : 'Post'
+})
 const communityOptions = computed(() =>
   communities.value
     .filter((community) => community.id && community.name)
@@ -239,6 +262,11 @@ const handlePostFileChange = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
 
+  if (!file) {
+    postFile.value = null
+    return
+  }
+
   if (file?.type.startsWith('image/')) {
     if (!POST_IMAGE_ALLOWED_TYPES.has(file.type) && file.type !== 'image/webp') {
       toast.error('Unsupported post image format', {
@@ -261,6 +289,24 @@ const handlePostFileChange = async (event: Event) => {
     }
 
     postFile.value = uploadFile
+    return
+  }
+
+  if (!file.type.startsWith('video/')) {
+    toast.error('Unsupported post media format', {
+      description: 'Use an image or video file for posts.',
+    })
+    target.value = ''
+    postFile.value = null
+    return
+  }
+
+  if (file.size > POST_VIDEO_MAX_BYTES) {
+    toast.error('Post video is too large', {
+      description: 'Post videos must be 100 MB or smaller.',
+    })
+    target.value = ''
+    postFile.value = null
     return
   }
 
@@ -585,6 +631,8 @@ const submitPost = async () => {
     }
 
     const selectedCommunityId = postAudienceId.value || null
+    const selectedCommunity = communities.value.find((item) => item.id === selectedCommunityId)
+    const isHeadlineSubmission = selectedCommunity?.name?.trim().toLowerCase() === 'headlines'
     const mediaAssetIds = uploadedMedia.mediaAssetIds.length ? uploadedMedia.mediaAssetIds : undefined
     const postPayload: CreatePostRequest = {
       userId: authStore.userId,
@@ -624,9 +672,9 @@ const submitPost = async () => {
         ]
       : []
 
-    toast.success('Post created', {
+    toast.success(isHeadlineSubmission ? 'Post submitted' : 'Post created', {
       id: loadingToastId,
-      description: title,
+      description: isHeadlineSubmission ? 'Submitted for admin approval.' : title,
     })
 
     rememberCreatedPost({
@@ -639,7 +687,7 @@ const submitPost = async () => {
         createdPost,
         immediateMedia,
         currentUser.profileData.value,
-        communities.value.find((item) => item.id === selectedCommunityId)?.name,
+        selectedCommunity?.name,
       ),
     )
     window.dispatchEvent(new CustomEvent(POST_CREATED_EVENT, { detail: { postId: responsePost.id } }))
@@ -1156,8 +1204,8 @@ onMounted(() => {
 
     <ResponsiveOverlay
       :model-value="activeComposer === 'post'"
-      label="Post"
-      :title="isJokesView ? 'Post a Joke' : 'Create Post'"
+      :label="postComposerTitle"
+      :title="postComposerTitle"
       max-width-class="sm:max-w-4xl"
       @update:model-value="(value) => { if (!value) closeComposer() }"
     >
@@ -1245,7 +1293,7 @@ onMounted(() => {
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span v-if="!isJokesView" class="text-[var(--danger)]">*</span></span>
           <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
-            Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB.
+            Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB. Videos up to 100 MB.
           </span>
           <span
             v-if="!postFile"
@@ -1312,7 +1360,7 @@ onMounted(() => {
           :disabled="isSubmittingPost"
           @click="submitPost"
         >
-          {{ isSubmittingPost ? 'Posting...' : isJokesView ? 'Post a Joke' : 'Post' }}
+          {{ postSubmitLabel }}
           <ArrowRight class="h-4 w-4" />
         </button>
         <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">

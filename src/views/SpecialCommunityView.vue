@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Newspaper, PenLine, Plus, SmilePlus } from 'lucide-vue-next'
+import { ClipboardList, Newspaper, PenLine, Plus, SmilePlus } from 'lucide-vue-next'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import AppRightRail from '@/components/AppRightRail.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
@@ -34,6 +34,8 @@ const errorMessage = ref('')
 const pageKind = computed(() => String(route.meta.specialCommunity ?? 'jokes'))
 const targetCommunityName = computed(() => pageKind.value === 'headlines' ? 'Headlines' : 'Jokes')
 const isHeadlinesPage = computed(() => pageKind.value === 'headlines')
+const headlineDescription =
+  'Join the Discussions: make comments, answer questions, share and score, on your favorite posts. All posts submited by users are subject to approval. Only approved posts will be published.'
 const selectedHeadlineId = computed(() => String(route.query.headline ?? ''))
 const sortOrder = computed(() => route.query.sort === 'popular' ? 'popular' : 'latest')
 const getMemberUserId = (member: CommunityMemberRecord) =>
@@ -260,19 +262,37 @@ onBeforeUnmount(() => {
 
       <div class="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div class="min-w-0">
-          <div class="flex items-center gap-3">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
-              <Newspaper v-if="isHeadlinesPage" class="h-6 w-6" />
-              <i v-else-if="community" :class="getCommunityLineAwesomeClass(community)" class="text-[1.6rem] leading-none" aria-hidden="true" />
-              <SmilePlus v-else class="h-6 w-6" />
-            </span>
-            <div>
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
+                <Newspaper v-if="isHeadlinesPage" class="h-6 w-6" />
+                <i v-else-if="community" :class="getCommunityLineAwesomeClass(community)" class="text-[1.6rem] leading-none" aria-hidden="true" />
+                <SmilePlus v-else class="h-6 w-6" />
+              </span>
               <h1 class="text-[2rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[2.35rem]">
                 {{ targetCommunityName }}
               </h1>
-              <p class="mt-2 max-w-3xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
-                {{ richTextToPlainText(community?.description) || (isHeadlinesPage ? 'Join the Discussions: make comments, answer questions, share and score, on your favorite posts. All posts submited by users are subject to approval. Only approved posts will be published.' : 'Share decent jokes and anecdotes with the community.') }}
-              </p>
+            </div>
+            <p class="max-w-4xl text-sm leading-7 text-[var(--text-secondary)] sm:text-base">
+              {{ isHeadlinesPage ? headlineDescription : richTextToPlainText(community?.description) || 'Share decent jokes and anecdotes with the community.' }}
+            </p>
+            <div v-if="isHeadlinesPage" class="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                :disabled="!community"
+                class="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[0.55rem] bg-[var(--surface-secondary)] px-3.5 text-sm font-semibold uppercase tracking-normal text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+                @click="openCommunityPostModal"
+              >
+                <PenLine class="h-4 w-4" />
+                Submit Post
+              </button>
+              <RouterLink
+                to="/community-regulations"
+                class="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[0.55rem] px-3.5 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
+              >
+                <ClipboardList class="h-4 w-4" />
+                View Guideline
+              </RouterLink>
             </div>
           </div>
         </div>
