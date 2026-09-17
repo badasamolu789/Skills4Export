@@ -99,7 +99,7 @@ const loadQuestions = async () => {
     })
     hasLoadedApiQuestions.value = true
   } catch (error) {
-    questionsError.value = getDisplayErrorMessage(error, 'Unable to load questions from the server.')
+    questionsError.value = getDisplayErrorMessage(error, 'Questions could not be loaded. Please try again.')
     apiQuestions.value = []
     hasLoadedApiQuestions.value = true
   } finally {

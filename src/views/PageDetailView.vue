@@ -968,7 +968,7 @@ const savePageEdit = async () => {
     }
 
     if (pagesStore.pagePersistenceWarning || avatarPersistenceWarning) {
-      toast.warning('Page updated with a backend persistence warning', {
+      toast.warning('Page updated, but confirmation is delayed', {
         id: toastId,
         description: [pagesStore.pagePersistenceWarning, avatarPersistenceWarning].filter(Boolean).join(' '),
       })

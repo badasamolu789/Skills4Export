@@ -1115,7 +1115,7 @@ const submitComment = async () => {
   }
 
   toast.error('Comment needs a post ID', {
-    description: 'Only posts loaded from the API can receive live comments.',
+    description: 'This post is not ready for comments yet. Refresh the page and try again.',
   })
 }
 
@@ -1215,7 +1215,7 @@ const submitAnswer = async () => {
 
   if (!apiPostId.value) {
     toast.error('Answer needs a question ID', {
-      description: 'Only questions loaded from the API can receive live answers.',
+      description: 'This question is not ready for answers yet. Refresh the page and try again.',
     })
     return
   }
@@ -1303,7 +1303,7 @@ const submitShare = async () => {
 
     if (!apiPostId.value) {
       toast.error('Share needs a post ID', {
-        description: 'Only API posts can be shared into a community.',
+        description: 'This post is not ready to share yet. Refresh the page and try again.',
       })
       return
     }
@@ -1551,7 +1551,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
   if (!apiPostId.value || typeof comment.id !== 'string') {
     toast.error('Reply needs a saved comment', {
-      description: 'Only comments loaded from the API can receive live replies.',
+      description: 'This comment is not ready for replies yet. Refresh the page and try again.',
     })
     return
   }

@@ -469,7 +469,7 @@ const uploadAvatarFile = async () => {
     clearAvatarSelection()
     toast.success('Avatar upload queued', {
       id: loadingToastId,
-      description: 'The backend accepted the image and will attach it to your profile shortly.',
+      description: 'Your image was received and will appear on your profile shortly.',
     })
   } catch (error) {
     const message = getErrorMessage(error, 'Avatar upload failed.')
@@ -507,7 +507,7 @@ const uploadBannerFile = async () => {
     clearBannerSelection()
     toast.success('Banner upload queued', {
       id: loadingToastId,
-      description: 'The backend accepted the image and will attach it to your profile shortly.',
+      description: 'Your image was received and will appear on your profile shortly.',
     })
   } catch (error) {
     const message = getErrorMessage(error, 'Banner upload failed.')

@@ -415,7 +415,7 @@ const loadFeed = async (options: {
   } catch (error) {
     if (!options.background) {
       feedError.value =
-        error instanceof ApiError ? error.message : 'Unable to load the feed from the server.'
+        error instanceof ApiError ? error.message : 'The feed could not be loaded. Please try again.'
       if (!apiPosts.value.length) {
         socialActionsStore.setFeed([])
         adverts.value = []

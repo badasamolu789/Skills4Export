@@ -602,13 +602,13 @@ export const usePagesStore = defineStore('pages', () => {
         verifiedRecord = verifiedResponse.data
       }
     } catch {
-      pagePersistenceWarning.value = 'The backend accepted the page, but the saved record could not be verified immediately.'
+      pagePersistenceWarning.value = 'Your page was created, but confirmation is taking longer than expected.'
     }
 
     if (!pagePersistenceWarning.value) {
       const persistenceIssues = getPagePersistenceIssues(payload, verifiedRecord)
       if (persistenceIssues.length) {
-        pagePersistenceWarning.value = `The backend accepted the page but the saved page does not match these fields: ${persistenceIssues.join(', ')}.`
+        pagePersistenceWarning.value = `Your page was created, but these details could not be confirmed yet: ${persistenceIssues.join(', ')}.`
       }
     }
 
@@ -638,7 +638,7 @@ export const usePagesStore = defineStore('pages', () => {
     const persistenceIssues = getPagePersistenceIssues(payload, verifiedResponse.data)
 
     if (persistenceIssues.length) {
-      pagePersistenceWarning.value = `The backend accepted the update but the saved page does not match these fields: ${persistenceIssues.join(', ')}.`
+      pagePersistenceWarning.value = `Your changes were received, but these details could not be confirmed yet: ${persistenceIssues.join(', ')}.`
     }
 
     const record = {

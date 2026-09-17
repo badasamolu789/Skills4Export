@@ -619,7 +619,7 @@ const submitPage = async () => {
     }
 
     if (pagesStore.pagePersistenceWarning || avatarPersistenceWarning) {
-      toast.warning('Page created with a backend persistence warning', {
+      toast.warning('Page created, but confirmation is delayed', {
         id: toastId,
         description: [pagesStore.pagePersistenceWarning, avatarPersistenceWarning].filter(Boolean).join(' '),
       })

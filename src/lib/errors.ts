@@ -33,17 +33,17 @@ const HTTP_STATUS_MESSAGES: Record<number, string> = {
     415: 'The file type is not supported.',
     422: 'Some information you provided is invalid. Please check and try again.',
     429: "You're doing that too often. Please wait a moment and try again.",
-    500: "Something went wrong on our end. We're working on it. Please try again later.",
-    503: 'We\'re temporarily unavailable. Please check back in a few minutes.',
-    504: 'Connection timed out. Try again.',
+    500: "We couldn't complete that right now. Please try again in a moment.",
+    503: "This feature is temporarily unavailable. Please try again in a few minutes.",
+    504: 'This is taking longer than expected. Please try again.',
 }
 
 // Network and client errors
 const NETWORK_ERROR_MESSAGES: Record<string, string> = {
-    timeout: 'Connection timed out. Try again.',
-    offline: 'No internet connection.',
-    network: 'Could not connect. Try again.',
-    abort: 'Request cancelled. Try again.',
+    timeout: 'This is taking longer than expected. Please try again.',
+    offline: 'You appear to be offline. Check your internet connection and try again.',
+    network: "We couldn't complete that right now. Please check your connection and try again.",
+    abort: 'That action was interrupted. Please try again.',
 }
 
 const INTERNAL_MESSAGE_PATTERNS = [
@@ -172,13 +172,22 @@ export function getDisplayErrorMessage(
     if (error && typeof error === 'object') {
         const payload = (error as { payload?: Record<string, unknown> | null }).payload
         const status = (error as { status?: unknown }).status
-        const backendMessage = extractBackendErrorMessage(payload, fallback)
-        if (backendMessage) {
-            return backendMessage
-        }
-
         if (payload || typeof status === 'number') {
             const errorCode = extractErrorCode(payload)
+            if (errorCode && errorCode in ERROR_MESSAGES) {
+                return ERROR_MESSAGES[errorCode]
+            }
+
+            // Infrastructure failures should never expose implementation details.
+            if (typeof status === 'number' && (status === 0 || status >= 500)) {
+                return getUserFriendlyErrorMessage(errorCode, status, fallback)
+            }
+
+            const backendMessage = extractBackendErrorMessage(payload, '')
+            if (backendMessage) {
+                return backendMessage
+            }
+
             const mappedMessage = getUserFriendlyErrorMessage(
                 errorCode,
                 typeof status === 'number' ? status : undefined,
@@ -210,7 +219,12 @@ export function sanitizeUserMessage(
         return NETWORK_ERROR_MESSAGES.timeout
     }
 
-    if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('networkerror') || lowerMessage.includes('unable to reach')) {
+    if (
+        lowerMessage.includes('failed to fetch') ||
+        lowerMessage.includes('networkerror') ||
+        lowerMessage.includes('unable to reach') ||
+        lowerMessage.includes('could not connect')
+    ) {
         return NETWORK_ERROR_MESSAGES.network
     }
 

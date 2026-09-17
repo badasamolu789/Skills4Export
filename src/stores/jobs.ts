@@ -215,10 +215,10 @@ export const useJobsStore = defineStore('jobs', () => {
 
     if (!applicationJobId) {
       throw new ApiError(
-        'This job cannot accept applications because the API did not return a valid job id.',
+        'This job is not ready to accept applications. Refresh the page and try again.',
         400,
         {
-          message: 'This job cannot accept applications because the API did not return a valid job id.',
+          message: 'This job is not ready to accept applications. Refresh the page and try again.',
         },
       )
     }

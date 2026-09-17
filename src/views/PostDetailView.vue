@@ -937,7 +937,7 @@ const submitShare = async () => {
 
     if (!apiPostId.value) {
       toast.error('Share needs a post ID', {
-        description: 'Only API posts can be shared into a community.',
+        description: 'This post is not ready to share yet. Refresh the page and try again.',
       })
       return
     }

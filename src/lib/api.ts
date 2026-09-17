@@ -1,5 +1,5 @@
 import { useAppStore } from '@/stores/app'
-import { extractBackendErrorMessage, getUserFriendlyErrorMessage, sanitizeUserMessage } from '@/lib/errors'
+import { extractBackendErrorMessage, extractErrorCode, getUserFriendlyErrorMessage, sanitizeUserMessage } from '@/lib/errors'
 
 export type ApiMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -177,24 +177,21 @@ const getErrorMessage = (payload: ApiErrorPayload | null, status: number, fallba
     return fallback
   }
 
-  const backendMessage = extractBackendErrorMessage(payload as Record<string, unknown>, fallback)
-  if (backendMessage) {
-    return backendMessage
-  }
-
-  // Try to extract error code from various locations
-  const errorCode =
-    (payload as any).code ||
-    (payload.error && typeof payload.error === 'object' && (payload.error as any).code) ||
-    (payload as any).errorCode ||
-    ((payload as any).data && (payload as any).data.code)
+  const errorCode = extractErrorCode(payload as Record<string, unknown>)
 
   // Use the new error message mapping
   if (errorCode) {
-    const userMessage = getUserFriendlyErrorMessage(errorCode, status)
-    if (userMessage && userMessage !== fallback) {
-      return userMessage
-    }
+    return getUserFriendlyErrorMessage(errorCode, status, fallback)
+  }
+
+  // Do not show infrastructure or implementation details for failed services.
+  if (status >= 500) {
+    return getUserFriendlyErrorMessage(undefined, status, fallback)
+  }
+
+  const backendMessage = extractBackendErrorMessage(payload as Record<string, unknown>, '')
+  if (backendMessage) {
+    return backendMessage
   }
 
   return sanitizeUserMessage(fallback)
@@ -533,7 +530,7 @@ export const apiRequest = async <T>(
           response.status,
           isExpiredAuthenticatedSession
             ? 'Your session has expired. Please log in again.'
-            : 'Something went wrong while contacting the server.',
+            : "We couldn't complete that action. Please try again.",
         )
 
         if (isExpiredAuthenticatedSession) {
@@ -582,7 +579,7 @@ export const apiRequest = async <T>(
           payload: { message: 'Request timeout' },
           description: 'The request timed out before the server responded.',
         })
-        throw new ApiError('Connection timed out. Try again.', 408)
+        throw new ApiError('This is taking longer than expected. Please try again.', 408)
       }
 
       reportApiError({
@@ -601,8 +598,8 @@ export const apiRequest = async <T>(
 
       throw new ApiError(
         typeof navigator !== 'undefined' && navigator.onLine === false
-          ? 'No internet connection.'
-          : 'Could not connect. Try again.',
+          ? 'You appear to be offline. Check your internet connection and try again.'
+          : "We couldn't complete that right now. Please check your connection and try again.",
         0,
       )
     } finally {

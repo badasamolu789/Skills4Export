@@ -117,11 +117,11 @@ export function useErrorHandler() {
             let message = 'Something went wrong. Try again.'
 
             if (errorName === 'aborterror') {
-                message = 'Request cancelled. Try again.'
+                message = 'That action was interrupted. Please try again.'
             } else if (errorName.includes('timeout')) {
-                message = 'Connection timed out. Try again.'
+                message = 'This is taking longer than expected. Please try again.'
             } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-                message = 'Could not connect. Try again.'
+                message = "We couldn't complete that right now. Please check your connection and try again."
             }
 
             if (shouldShowToast) {

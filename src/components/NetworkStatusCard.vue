@@ -14,13 +14,13 @@ const emit = defineEmits<{
 const title = computed(() =>
   props.offline
     ? 'No internet connection'
-    : 'We are having trouble reaching the server',
+    : 'This is taking longer than expected',
 )
 
 const description = computed(() =>
   props.offline
     ? 'Your device appears to be offline. Please wait while your connection comes back on. The app will recover automatically once the internet is available again.'
-    : 'Your internet may still be on, but the app cannot reach the server right now. Please wait a moment for the connection to come back, then try again.',
+    : 'Please wait a moment, check your connection, and try again.',
 )
 
 const footnote = computed(() => {
