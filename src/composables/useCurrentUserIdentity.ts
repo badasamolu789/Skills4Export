@@ -44,6 +44,19 @@ const workplaceKeys = [
   'employer',
 ]
 
+const studentInstitutionKeys = [
+  'institutionOfStudy',
+  'institution_of_study',
+  'university',
+  'school',
+]
+
+const courseOfStudyKeys = [
+  'courseOfStudy',
+  'course_of_study',
+  'field',
+]
+
 export const getProfileDisplayName = (profile?: MyProfileData | null) =>
   toInitialCaps(getDisplayName(
     profile?.user?.name,
@@ -98,7 +111,33 @@ export const useCurrentUserIdentity = () => {
       getRecordString(authStore.currentUser, workplaceKeys),
     ), { keepSmallWords: true }),
   )
-  const role = computed(() => [currentTitle.value, currentWorkplace.value].filter(Boolean).join(' - '))
+  const isStudent = computed(() =>
+    authStore.signUpDraft.accountType === 'student' ||
+    getRecordString(authStore.userProfile, ['accountType', 'account_type']).toLowerCase() === 'student' ||
+    Boolean(authStore.signUpDraft.university || authStore.signUpDraft.courseOfStudy),
+  )
+  const studentInstitution = computed(() =>
+    toInitialCaps(getFirstFilled(
+      authStore.signUpDraft.university,
+      getRecordString(authStore.userProfile, studentInstitutionKeys),
+      getRecordString(authStore.currentUser, studentInstitutionKeys),
+    ), { keepSmallWords: true }),
+  )
+  const courseOfStudy = computed(() =>
+    toInitialCaps(getFirstFilled(
+      authStore.signUpDraft.courseOfStudy,
+      getRecordString(authStore.userProfile, courseOfStudyKeys),
+      getRecordString(authStore.currentUser, courseOfStudyKeys),
+    ), { keepSmallWords: true }),
+  )
+  const displayTitle = computed(() =>
+    isStudent.value
+      ? [studentInstitution.value, courseOfStudy.value].filter(Boolean).join(' | ')
+      : currentTitle.value && currentWorkplace.value
+        ? `${currentTitle.value} at ${currentWorkplace.value}`
+        : [currentTitle.value, currentWorkplace.value].filter(Boolean).join(''),
+  )
+  const role = computed(() => displayTitle.value)
   const profilePath = computed(() => (authStore.userId ? `/profile/view/${authStore.userId}` : '/profile'))
   const skills = computed(() => authStore.signUpDraft.interests.slice(0, 3))
 
@@ -109,7 +148,27 @@ export const useCurrentUserIdentity = () => {
       username: authStore.userProfile?.username || authStore.signUpDraft.username || displayName.value,
       email: authStore.signUpDraft.email,
     },
-    profile: authStore.userProfile,
+    profile: {
+      ...(authStore.userProfile ?? {}),
+      displayTitle: displayTitle.value,
+      display_title: displayTitle.value,
+      ...(isStudent.value
+        ? {
+            accountType: 'student',
+            account_type: 'student',
+            institutionOfStudy: studentInstitution.value,
+            institution_of_study: studentInstitution.value,
+            university: studentInstitution.value,
+            courseOfStudy: courseOfStudy.value,
+            course_of_study: courseOfStudy.value,
+          }
+        : {
+            currentJobTitle: currentTitle.value,
+            current_job_title: currentTitle.value,
+            currentWorkspace: currentWorkplace.value,
+            current_workspace: currentWorkplace.value,
+          }),
+    },
   }))
 
   return {
@@ -117,8 +176,11 @@ export const useCurrentUserIdentity = () => {
     avatarSrc,
     initials,
     role,
+    displayTitle,
     currentTitle,
     currentWorkplace,
+    studentInstitution,
+    courseOfStudy,
     profilePath,
     skills,
     profileData,

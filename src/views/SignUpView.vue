@@ -20,6 +20,7 @@ const passwordToggle = usePasswordToggle()
 const {
   getFieldAttrs,
   getFieldError,
+  setFieldError,
   setFieldErrors,
   setApiFieldErrors,
   clearFieldError,
@@ -35,7 +36,17 @@ const form = ref({
 })
 
 const passwordRequirementMessage =
-  'Password must be at least 8 characters and include uppercase, lowercase, and a number.'
+  'Password must be at least 8 characters and include uppercase, lowercase, and a number. Use letters and numbers only.'
+const passwordCharacterMessage = 'Password can contain letters and numbers only.'
+
+const handlePasswordInput = () => {
+  if (form.value.password && !/^[A-Za-z0-9]+$/.test(form.value.password)) {
+    setFieldError('password', passwordCharacterMessage)
+    return
+  }
+
+  clearFieldError('password')
+}
 
 const continueSignUp = async () => {
   if (isSubmitting.value) {
@@ -65,12 +76,12 @@ const continueSignUp = async () => {
       value: form.value.password,
       message: 'Password is required.',
     },
-    {
-      field: 'password',
-      value: form.value.password,
-      message: passwordRequirementMessage,
-      validate: (value) => isStrongPassword(String(value)),
-    },
+            {
+              field: 'password',
+              value: form.value.password,
+              message: /^[A-Za-z0-9]+$/.test(form.value.password) ? passwordRequirementMessage : passwordCharacterMessage,
+              validate: (value) => isStrongPassword(String(value)),
+            },
     {
       field: 'acceptedTerms',
       value: form.value.acceptedTerms,
@@ -222,7 +233,7 @@ const signUpWithGoogle = async () => {
               placeholder="Create a secure password"
               v-bind="getFieldAttrs('password')"
               class="h-12 w-full rounded-2xl border border-(--border-soft) bg-(--surface-secondary) px-4 pr-12 text-sm outline-none transition focus:border-(--accent) sm:h-13 sm:text-base"
-              @input="clearFieldError('password')"
+              @input="handlePasswordInput"
             />
             <button
               type="button"

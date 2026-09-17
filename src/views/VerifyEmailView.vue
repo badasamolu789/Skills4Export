@@ -96,7 +96,7 @@ const verifyOtp = async () => {
 
   try {
     if (!isStrongPassword(authStore.signUpDraft.password)) {
-      throw new Error('Password must be at least 8 characters and include uppercase, lowercase, and a number.')
+      throw new Error('Password must be at least 8 characters and include uppercase, lowercase, and a number. Use letters and numbers only.')
     }
 
     await authService.setRegistrationPassword({
@@ -151,17 +151,32 @@ const verifyOtp = async () => {
     if (response.data?.profile) {
       authStore.setUserProfile(response.data.profile)
     }
-    await syncSignUpDetailsToProfile(authStore)
+
+    const setupWarnings: string[] = []
+
+    try {
+      await syncSignUpDetailsToProfile(authStore)
+    } catch (error) {
+      setupWarnings.push(getErrorMessage(error, 'Your profile setup could not finish automatically.'))
+    }
+
     if (authStore.signUpDraft.accountType === 'student') {
       toast.loading('Creating your student page...', { id: loadingToastId })
-      await ensureStudentPageFromSignup(authStore, pagesStore)
+
+      try {
+        await ensureStudentPageFromSignup(authStore, pagesStore)
+      } catch (error) {
+        setupWarnings.push(getErrorMessage(error, 'Your student page could not be created automatically.'))
+      }
     }
 
     toast.success('Email verified', {
       id: loadingToastId,
-      description: authStore.signUpDraft.accountType === 'student'
-        ? 'Your account and student page are ready.'
-        : 'Your account has been verified successfully and your registration is complete.',
+      description: setupWarnings[0] || (
+        authStore.signUpDraft.accountType === 'student'
+          ? 'Your account and student page are ready.'
+          : 'Your account has been verified successfully and your registration is complete.'
+      ),
     })
 
     router.replace('/feed')
