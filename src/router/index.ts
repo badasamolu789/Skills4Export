@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getStoredOnboardingRequired } from '@/stores/auth'
+import { getDetailPathFromShare } from '@/utils/shareLinks'
 
 const CreateAlertView = () => import('@/views/CreateAlertView.vue')
 const CreatePageView = () => import('@/views/CreatePageView.vue')
@@ -298,6 +299,22 @@ const router = createRouter({
         requiresAuth: true,
         hideSidebar: true,
         hideRightRail: true,
+      },
+    },
+    {
+      path: '/share/posts/:slug',
+      name: 'share-post-redirect',
+      redirect: (to) => getDetailPathFromShare('post', String(to.params.slug || '')),
+      meta: {
+        layout: 'public',
+      },
+    },
+    {
+      path: '/share/questions/:slug',
+      name: 'share-question-redirect',
+      redirect: (to) => getDetailPathFromShare('question', String(to.params.slug || '')),
+      meta: {
+        layout: 'public',
       },
     },
     {

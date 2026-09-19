@@ -39,6 +39,7 @@ import { getDisplayName } from '@/utils/displayName'
 import { richTextToPlainText } from '@/utils/richText'
 import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
+import { getShareUrl } from '@/utils/shareLinks'
 
 const route = useRoute()
 const router = useRouter()
@@ -638,9 +639,11 @@ const loadPostComments = async (postId: string) => {
 }
 
 const shareLink = computed(() =>
-  typeof window === 'undefined'
-    ? `${post.value?.type === 'question' ? '/questions' : '/posts'}/${post.value?.slug ?? ''}`
-    : window.location.href,
+  post.value
+    ? getShareUrl(post.value.type === 'question' ? 'question' : 'post', post.value.slug)
+    : typeof window === 'undefined'
+      ? ''
+      : window.location.href,
 )
 
 const sharePreviewAuthor = computed(() => author.value?.name || '')

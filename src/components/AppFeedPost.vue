@@ -38,6 +38,7 @@ import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost
 import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
+import { getShareUrl } from '@/utils/shareLinks'
 type PostComment = {
   id: number | string
   parentId?: string | null
@@ -134,8 +135,7 @@ const detailPath = computed(() =>
 const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 const shareLink = computed(() => {
-  const path = detailPath.value
-  return typeof window === 'undefined' ? path : new URL(path, window.location.origin).toString()
+  return getShareUrl(props.post.type === 'question' ? 'question' : 'post', props.post.slug)
 })
 const sharePreviewAuthor = computed(() =>
   props.post.type === 'question' ? props.post.authorName : props.post.author.name,
