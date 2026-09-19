@@ -5,6 +5,22 @@ export type CompactFeedAuthor = {
   id?: string | null
   name?: string | null
   username?: string | null
+  displayTitle?: string | null
+  display_title?: string | null
+  accountType?: string | null
+  account_type?: string | null
+  currentJobTitle?: string | null
+  current_job_title?: string | null
+  currentWorkspace?: string | null
+  current_workspace?: string | null
+  currentWorkplace?: string | null
+  current_workplace?: string | null
+  institutionOfStudy?: string | null
+  institution_of_study?: string | null
+  university?: string | null
+  school?: string | null
+  courseOfStudy?: string | null
+  course_of_study?: string | null
   avatar?: string | null
   avatarUrl?: string | null
   avatar_url?: string | null
@@ -53,6 +69,22 @@ export type CompactFeedRecord = {
   community_id?: string | null
   pageId?: string | null
   page_id?: string | null
+  displayTitle?: string | null
+  display_title?: string | null
+  accountType?: string | null
+  account_type?: string | null
+  currentJobTitle?: string | null
+  current_job_title?: string | null
+  currentWorkspace?: string | null
+  current_workspace?: string | null
+  currentWorkplace?: string | null
+  current_workplace?: string | null
+  institutionOfStudy?: string | null
+  institution_of_study?: string | null
+  university?: string | null
+  school?: string | null
+  courseOfStudy?: string | null
+  course_of_study?: string | null
   title?: string | null
   content?: string | null
   body?: string | null

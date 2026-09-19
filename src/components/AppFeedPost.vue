@@ -35,6 +35,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
+import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
@@ -577,19 +578,12 @@ const formatCommentTime = (value: string) => {
   }).format(date)
 }
 
-const getProfileSkills = (profile?: MyProfileData | null) =>
-  profile?.skills
-    ?.map((skill) => (skill.name || skill.skill || '').trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(' | ') || ''
-
 const currentUserCommentProfile = () => {
   return {
     name: currentUser.displayName.value,
     to: currentUser.profilePath.value,
     avatarSrc: currentUser.avatarSrc.value || null,
-    tag: currentUser.skills.value.join(' | '),
+    tag: currentUser.displayTitle.value,
   }
 }
 
@@ -618,7 +612,7 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
     name,
     to: comment.user_id ? `/profile/view/${comment.user_id}` : '/profile',
     avatarSrc: profile?.profile?.avatar || readString(embeddedProfile, ['avatar', 'avatarUrl', 'avatar_url', 'profileImage', 'profile_image']) || null,
-    tag: getProfileSkills(profile),
+    tag: getProfileDisplayTitle(profile) || getProfileDisplayTitle(embeddedData),
   }
 }
 

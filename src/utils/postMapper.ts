@@ -102,8 +102,13 @@ const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
   )
 }
 
-const getAuthorTag = (author?: MyProfileData | null) => {
-  return getProfileDisplayTitle(author)
+const getAuthorTag = (post: PostRecord, author?: MyProfileData | null) => {
+  return (
+    getProfileDisplayTitle(author) ||
+    getProfileDisplayTitle(post.user) ||
+    getProfileDisplayTitle(post) ||
+    getProfileDisplayTitle(firstNestedRecord(post, ['author', 'creator', 'owner']))
+  )
 }
 
 const getAuthorAvatar = (post: PostRecord, author?: MyProfileData | null) => {
@@ -291,7 +296,7 @@ export const mapApiPostToFeedPost = (
       ? getStringValue(resolvedPage, ['avatar', 'avatarUrl', 'avatar_url', 'logo', 'logoUrl', 'logo_url']) || null
       : getAuthorAvatar(post, author),
   }
-  const authorTag = postPageId ? getPageTag(resolvedPage) : getAuthorTag(author)
+  const authorTag = postPageId ? getPageTag(resolvedPage) : getAuthorTag(post, author)
   const isFollowingAuthor = postPageId
     ? readFollowState(resolvedPage)
     : readFollowState(post, post.user, author)

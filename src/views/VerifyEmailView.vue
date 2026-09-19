@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner'
 import AuthShell from '@/components/AuthShell.vue'
 import { getErrorMessage } from '@/lib/errors'
 import { authService, extractAuthSession } from '@/services/auth'
+import type { PageRecord } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
 import { usePagesStore } from '@/stores/pages'
 import { syncSignUpDetailsToProfile } from '@/utils/signupProfile'
@@ -116,6 +117,15 @@ const verifyOtp = async () => {
   }
 
   try {
+    const studentDisplayTitle = [
+      authStore.signUpDraft.courseOfStudy,
+      authStore.signUpDraft.university,
+    ].map((item) => item.trim()).filter(Boolean).join(' | ')
+    const professionalDisplayTitle =
+      authStore.signUpDraft.jobTitle.trim() && authStore.signUpDraft.workplace.trim()
+        ? `${authStore.signUpDraft.jobTitle.trim()} at ${authStore.signUpDraft.workplace.trim()}`
+        : [authStore.signUpDraft.jobTitle, authStore.signUpDraft.workplace].map((item) => item.trim()).filter(Boolean).join('')
+
     const response = await authService.completeRegistration({
       email: authStore.signUpDraft.email,
       name: authStore.signUpDraft.name,
@@ -127,12 +137,17 @@ const verifyOtp = async () => {
         accountType: authStore.signUpDraft.accountType,
         ...(authStore.signUpDraft.accountType === 'student'
           ? {
+              displayTitle: studentDisplayTitle,
+              display_title: studentDisplayTitle,
               university: authStore.signUpDraft.university,
               yearStarted: authStore.signUpDraft.yearStarted,
               courseOfStudy: authStore.signUpDraft.courseOfStudy,
             }
           : {
+              displayTitle: professionalDisplayTitle,
+              display_title: professionalDisplayTitle,
               jobTitle: authStore.signUpDraft.jobTitle,
+              company: authStore.signUpDraft.workplace,
               workplace: authStore.signUpDraft.workplace,
             }),
       },
@@ -161,10 +176,17 @@ const verifyOtp = async () => {
     }
 
     if (authStore.signUpDraft.accountType === 'student') {
-      toast.loading('Creating your student page...', { id: loadingToastId })
+      const backendStudentPage = response.data?.studentPage
 
       try {
-        await ensureStudentPageFromSignup(authStore, pagesStore)
+        if (backendStudentPage) {
+          pagesStore.addPageFromApi(backendStudentPage as PageRecord, { trustAsOwned: true })
+        } else {
+          toast.loading('Creating your student page...', { id: loadingToastId })
+          await ensureStudentPageFromSignup(authStore, pagesStore)
+        }
+
+        await pagesStore.loadStudentPageStatus({ force: true })
       } catch (error) {
         setupWarnings.push(getErrorMessage(error, 'Your student page could not be created automatically.'))
       }

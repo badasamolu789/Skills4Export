@@ -18,13 +18,14 @@ import {
   X,
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import { useCurrentUserIdentity, getInitials, getProfileDisplayName, getProfileSkills } from '@/composables/useCurrentUserIdentity'
+import { useCurrentUserIdentity, getInitials, getProfileDisplayName } from '@/composables/useCurrentUserIdentity'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import RichTextContent from '@/components/RichTextContent.vue'
 import PostCommentThread from '@/components/PostCommentThread.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
+import { useSeoMeta } from '@/composables/useSeoMeta'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/services/posts'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
@@ -35,6 +36,8 @@ import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
+import { richTextToPlainText } from '@/utils/richText'
+import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 
 const route = useRoute()
@@ -42,6 +45,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
+const { setSeoMeta, resetSeoMeta } = useSeoMeta()
 
 const apiPost = ref<FeedPost | null>(null)
 const isLoadingPost = ref(false)
@@ -267,7 +271,7 @@ const mapAnswerItem = (answer: QuestionAnswerRecord): QuestionAnswerItem => {
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
     avatarSrc: isCurrentUser ? currentUser.avatarSrc.value || null : getEmbeddedAvatar(answer),
     avatarText: getInitials(isCurrentUser ? currentUser.displayName.value : embeddedName),
-    authorMeta: getProfileSkills(embeddedProfile),
+    authorMeta: (getProfileDisplayTitle(embeddedProfile) || '').split('|').map((item) => item.trim()).filter(Boolean),
     time: formatCommentTime(answer.createdAt || answer.created_at || ''),
     content: mapAnswerBody(answer),
     score: getOptionalCount(
@@ -297,14 +301,12 @@ const formatCommentTime = (value: string) => {
   }).format(date)
 }
 
-const getProfileSkillsLine = (profile?: MyProfileData | null) => getProfileSkills(profile).join(' | ')
-
 const currentUserCommentProfile = () => {
   return {
     name: currentUser.displayName.value,
     to: currentUser.profilePath.value,
     avatarSrc: currentUser.avatarSrc.value || null,
-    tag: currentUser.skills.value.join(' | '),
+    tag: currentUser.displayTitle.value,
   }
 }
 
@@ -324,7 +326,7 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
     name,
     to: comment.user_id ? `/profile/view/${comment.user_id}` : '/profile',
     avatarSrc: profile?.profile?.avatar || getEmbeddedAvatar(comment),
-    tag: getProfileSkillsLine(profile),
+    tag: getProfileDisplayTitle(profile) || getProfileDisplayTitle(embeddedProfile),
   }
 }
 
@@ -650,9 +652,40 @@ const sharePreviewDescription = computed(() => {
   return 'description' in post.value ? post.value.description : post.value.body || post.value.title
 })
 const sharePreviewImageSrc = computed(() =>
-  post.value && 'imageSrc' in post.value ? post.value.imageSrc : '',
+  post.value && 'imageSrc' in post.value
+    ? post.value.imageSrc ||
+      post.value.media?.find((item) => item.thumbnailUrl)?.thumbnailUrl ||
+      post.value.media?.find((item) => item.url && !isVideoPostMedia(item))?.url ||
+      ''
+    : '',
 )
 const sharePreviewImageAlt = computed(() => post.value?.title || 'Shared post')
+
+watch(
+  post,
+  (nextPost) => {
+    if (!nextPost) {
+      resetSeoMeta()
+      return
+    }
+
+    const rawDescription =
+      nextPost.type === 'question'
+        ? nextPost.body || nextPost.title
+        : nextPost.description || nextPost.title
+    const plainDescription = richTextToPlainText(rawDescription) || nextPost.title
+    const sharedBy = sharePreviewAuthor.value ? `Shared by ${sharePreviewAuthor.value}.` : ''
+
+    setSeoMeta({
+      title: nextPost.title,
+      description: [plainDescription, sharedBy].filter(Boolean).join(' '),
+      image: sharePreviewImageSrc.value || undefined,
+      url: shareLink.value,
+      type: 'article',
+    })
+  },
+  { immediate: true },
+)
 
 watch(
   () => route.params.slug,

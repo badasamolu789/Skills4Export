@@ -57,7 +57,8 @@ const getInitials = (value: string) =>
     .slice(0, 2)
     .toUpperCase()
 
-const getAuthorDisplayTitle = (author: unknown) => getProfileDisplayTitle(author)
+const getAuthorDisplayTitle = (author: unknown, item?: unknown) =>
+  getProfileDisplayTitle(author) || getProfileDisplayTitle(item)
 
 const normalizeMediaItem = (
   value: CompactFeedMedia,
@@ -132,7 +133,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       authorName,
       authorTo: userId ? `/profile/view/${userId}` : '/profile',
       authorAvatarSrc: readString(author, ['avatar', 'avatarUrl', 'avatar_url']) || null,
-      tag: getAuthorDisplayTitle(author),
+      tag: getAuthorDisplayTitle(author, item),
       answers: getOptionalCount(item.answersCount, item.answers_count, item.answer_count),
       score: getOptionalCount(item.score),
       ...(readFollowState(viewerState, item, author) !== undefined
@@ -169,7 +170,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       to: pageId ? `/pages/${item.page?.slug || pageId}/public` : `/profile/view/${userId}`,
       avatarText: getInitials(authorName || 'Community member'),
       avatarSrc,
-      tag: pageId ? '' : getAuthorDisplayTitle(author),
+      tag: pageId ? '' : getAuthorDisplayTitle(author, item),
     },
     time: formatFeedTime(createdAt),
     title,

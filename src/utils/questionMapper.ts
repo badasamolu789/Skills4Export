@@ -109,30 +109,22 @@ const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) 
   return profileName || userName
 }
 
-const getAuthorTag = (author?: MyProfileData | null) => {
-  const profileRecord = author?.profile as Record<string, unknown> | null | undefined
-  const rawSkills = author?.skills ?? (Array.isArray(profileRecord?.skills) ? profileRecord.skills : [])
-  const skills = rawSkills
-    ?.map((skill) => {
-      if (typeof skill === 'string') {
-        return skill.trim()
-      }
+const getAuthorTag = (question: QuestionRecord, author?: MyProfileData | null) => {
+  const questionUser = isRecord(question.user) ? question.user : null
+  const questionAsker = isRecord(question.asker) ? question.asker : null
+  const questionAuthor = readRecord(question, ['author', 'creator', 'owner'])
+  const questionProfile =
+    readRecord(question, ['profile', 'userProfile', 'user_profile']) ??
+    readRecord(questionUser, ['profile', 'userProfile', 'user_profile'])
 
-      const skillRecord = skill as Record<string, unknown>
-      const value =
-        skillRecord.name ||
-        skillRecord.skill ||
-        skillRecord.skillName ||
-        skillRecord.skill_name ||
-        skillRecord.title ||
-        skillRecord.label
-
-      return typeof value === 'string' ? value.trim() : ''
-    })
-    .filter((skill) => skill && skill.toLowerCase() !== 'skills4export member')
-    .slice(0, 3) ?? []
-
-  return skills.join(' | ') || getProfileContextTag(author)
+  return (
+    getProfileContextTag(author) ||
+    getProfileContextTag(questionProfile) ||
+    getProfileContextTag(questionUser) ||
+    getProfileContextTag(questionAsker) ||
+    getProfileContextTag(questionAuthor) ||
+    getProfileContextTag(question)
+  )
 }
 
 export const mapApiQuestionToFeedPost = (
@@ -185,7 +177,7 @@ export const mapApiQuestionToFeedPost = (
     authorName,
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
     authorAvatarSrc: author?.profile?.avatar ?? null,
-    tag: getAuthorTag(author),
+    tag: getAuthorTag(question, author),
     answers: answerCount,
     score: getOptionalCount(
       question.score,

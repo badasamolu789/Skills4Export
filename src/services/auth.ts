@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import { apiConfig } from '@/lib/api'
+import type { PageRecord } from '@/services/pages'
 
 export type LoginRequest = {
   email: string
@@ -23,7 +24,10 @@ export type RegistrationOnboardingRequest = {
   state: string
   country: string
   accountType: 'default' | 'student'
+  displayTitle?: string
+  display_title?: string
   jobTitle?: string
+  company?: string
   workplace?: string
   university?: string
   yearStarted?: string
@@ -73,6 +77,7 @@ export type AuthSuccessResponse = {
     profile?: Record<string, unknown> | null
     education?: Record<string, unknown>[]
     experiences?: Record<string, unknown>[]
+    studentPage?: PageRecord | Record<string, unknown> | null
     settings?: Record<string, unknown> | null
     onboardingCompleted?: boolean
     session?: {

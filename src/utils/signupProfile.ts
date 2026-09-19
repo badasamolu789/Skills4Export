@@ -52,6 +52,11 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
   const onboardingTitle = draft.accountType === 'student'
     ? draft.courseOfStudy.trim()
     : draft.jobTitle.trim()
+  const displayTitle = draft.accountType === 'student'
+    ? [draft.courseOfStudy.trim(), draft.university.trim()].filter(Boolean).join(' | ')
+    : draft.jobTitle.trim() && draft.workplace.trim()
+      ? `${draft.jobTitle.trim()} at ${draft.workplace.trim()}`
+      : [draft.jobTitle.trim(), draft.workplace.trim()].filter(Boolean).join('')
   const existingBio = authStore.userProfile?.bio?.trim() || ''
   const bio = existingBio.toLowerCase() === onboardingTitle.toLowerCase()
     ? ''
@@ -59,6 +64,8 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
   const profilePayload = {
     username: identity.username,
     displayName: identity.displayName || undefined,
+    displayTitle: displayTitle || undefined,
+    display_title: displayTitle || undefined,
     bio,
     location,
     ...(draft.accountType === 'student'

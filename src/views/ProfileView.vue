@@ -771,7 +771,7 @@ const isStudentProfile = computed(() => {
 })
 
 const buildStudentDisplayTitle = (institution: string, course: string) =>
-  [institution, course].filter(Boolean).join(' | ')
+  [course, institution].filter(Boolean).join(' | ')
 
 const loadProfile = async () => {
   if (!authStore.isAuthenticated) {

@@ -84,24 +84,28 @@ export const getProfileDisplayTitle = (source: unknown) => {
   const course =
     readString(source, ['courseOfStudy', 'course_of_study']) ||
     readString(profile, ['courseOfStudy', 'course_of_study']) ||
+    readString(user, ['courseOfStudy', 'course_of_study']) ||
     readString(education, ['field', 'courseOfStudy', 'course_of_study'])
   const school =
-    readString(source, ['university', 'school']) ||
-    readString(profile, ['university', 'school']) ||
+    readString(source, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
+    readString(profile, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
+    readString(user, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
     readString(education, ['school', 'university'])
   const title =
     readString(source, ['currentJobTitle', 'current_job_title', 'jobTitle', 'job_title']) ||
-    readString(profile, ['currentJobTitle', 'current_job_title', 'jobTitle', 'job_title'])
+    readString(profile, ['currentJobTitle', 'current_job_title', 'jobTitle', 'job_title']) ||
+    readString(user, ['currentJobTitle', 'current_job_title', 'jobTitle', 'job_title'])
   const workspace =
-    readString(source, ['currentWorkspace', 'current_workspace', 'workplace']) ||
-    readString(profile, ['currentWorkspace', 'current_workspace', 'workplace'])
+    readString(source, ['currentWorkspace', 'current_workspace', 'currentWorkplace', 'current_workplace', 'workplace']) ||
+    readString(profile, ['currentWorkspace', 'current_workspace', 'currentWorkplace', 'current_workplace', 'workplace']) ||
+    readString(user, ['currentWorkspace', 'current_workspace', 'currentWorkplace', 'current_workplace', 'workplace'])
 
   if (explicitDisplayTitle) {
     return explicitDisplayTitle
   }
 
   if (accountType === 'student' || course || school) {
-    return unique([school, course]).slice(0, 2).join(' | ')
+    return unique([course, school]).slice(0, 2).join(' | ')
   }
 
   return title && workspace ? `${title} at ${workspace}` : unique([title, workspace]).slice(0, 1).join('')

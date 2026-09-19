@@ -34,6 +34,8 @@ export type UserProfile = {
   website?: string
   linkedin?: string
   github?: string
+  displayTitle?: string | null
+  display_title?: string | null
   currentJobTitle?: string | null
   current_job_title?: string | null
   currentWorkspace?: string | null
@@ -266,6 +268,7 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
     const topLevelBio = getStringFromRecord(record, ['bio', 'description', 'about', 'aboutMe', 'about_me'])
     const topLevelLocation = getStringFromRecord(record, ['location'])
     const topLevelDisplayName = getStringFromRecord(record, ['displayName', 'display_name', 'name'])
+    const topLevelDisplayTitle = getStringFromRecord(record, ['displayTitle', 'display_title'])
     const topLevelJobTitle = getStringFromRecord(record, ['currentJobTitle', 'current_job_title'])
     const topLevelWorkspace = getStringFromRecord(record, ['currentWorkspace', 'current_workspace'])
     const topLevelAvatar = getStringFromRecord(record, ['avatar', 'profile_image', 'profileImage'])
@@ -275,6 +278,7 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
       ...(topLevelBio ? { bio: topLevelBio } : {}),
       ...(topLevelLocation ? { location: topLevelLocation } : {}),
       ...(topLevelDisplayName ? { displayName: topLevelDisplayName } : {}),
+      ...(topLevelDisplayTitle ? { displayTitle: topLevelDisplayTitle, display_title: topLevelDisplayTitle } : {}),
       ...(topLevelJobTitle
         ? { currentJobTitle: topLevelJobTitle, current_job_title: topLevelJobTitle }
         : {}),
@@ -300,6 +304,8 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
     'current_job_title',
     'currentWorkspace',
     'current_workspace',
+    'displayTitle',
+    'display_title',
   ].some((key) => record[key] !== undefined && record[key] !== null)
 
   if (!hasProfileFields) {
@@ -310,6 +316,7 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
   const avatar = getStringFromRecord(record, ['avatar', 'profile_image', 'profileImage', 'profile_image'])
   const currentJobTitle = getStringFromRecord(record, ['currentJobTitle', 'current_job_title'])
   const currentWorkspace = getStringFromRecord(record, ['currentWorkspace', 'current_workspace'])
+  const displayTitle = getStringFromRecord(record, ['displayTitle', 'display_title'])
 
   return {
     ...(data as UserProfile),
@@ -318,6 +325,7 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
     ...(avatar ? { avatar } : {}),
     ...(currentJobTitle ? { currentJobTitle, current_job_title: currentJobTitle } : {}),
     ...(currentWorkspace ? { currentWorkspace, current_workspace: currentWorkspace } : {}),
+    ...(displayTitle ? { displayTitle, display_title: displayTitle } : {}),
   }
 }
 
@@ -561,6 +569,8 @@ export type UpsertUserProfileRequest = {
   website?: string
   linkedin?: string
   github?: string
+  displayTitle?: string
+  display_title?: string
   currentJobTitle?: string
   current_job_title?: string
   currentWorkspace?: string
