@@ -30,6 +30,7 @@ import { communitiesService, type CommunityRecord } from '@/services/communities
 import { postsService, type PostCommentRecord, type PostRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { mediaService } from '@/services/media'
+import { shareMetadataService, type ShareMetadata } from '@/services/shareMetadata'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
@@ -109,6 +110,8 @@ const shareComment = ref('')
 const shareCommunities = ref<CommunityRecord[]>([])
 const isLoadingShareCommunities = ref(false)
 const hasLoadedShareCommunities = ref(false)
+const shareMetadata = ref<ShareMetadata | null>(null)
+const isLoadingShareMetadata = ref(false)
 const selectedReportReason = ref('')
 const reportTargetLabel = ref('this post')
 const isSavingPost = ref(false)
@@ -135,7 +138,28 @@ const detailPath = computed(() =>
 const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 const shareLink = computed(() => {
-  return getShareUrl(props.post.type === 'question' ? 'question' : 'post', props.post.slug)
+  return shareMetadata.value?.url || getShareUrl(props.post.type === 'question' ? 'question' : 'post', props.post.slug)
+})
+
+const loadShareMetadata = async () => {
+  if (shareMetadata.value || isLoadingShareMetadata.value || !apiPostId.value) return
+
+  isLoadingShareMetadata.value = true
+  try {
+    const response = await shareMetadataService.get(
+      props.post.type === 'question' ? 'question' : 'post',
+      apiPostId.value,
+    )
+    shareMetadata.value = response.data
+  } catch {
+    // Sharing remains available if metadata is temporarily unavailable.
+  } finally {
+    isLoadingShareMetadata.value = false
+  }
+}
+
+watch(apiPostId, () => {
+  shareMetadata.value = null
 })
 const sharePreviewAuthor = computed(() =>
   props.post.type === 'question' ? props.post.authorName : props.post.author.name,
@@ -1115,6 +1139,7 @@ const submitComment = async () => {
 
 const openShareModal = () => {
   isShareModalOpen.value = true
+  void loadShareMetadata()
   void loadShareCommunities()
 }
 
@@ -1250,6 +1275,7 @@ const submitAnswer = async () => {
 
 const copyShareLink = async () => {
   try {
+    await loadShareMetadata()
     await navigator.clipboard.writeText(shareLink.value)
     if (apiPostId.value) {
       await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken)
@@ -1335,10 +1361,11 @@ const submitShare = async () => {
   const canNativeShare = 'share' in navigator && typeof navigator.share === 'function'
 
   try {
+    await loadShareMetadata()
     if (canNativeShare) {
       await navigator.share({
-        title: props.post.title,
-        text: text || props.post.title,
+        title: shareMetadata.value?.title || props.post.title,
+        text: text || shareMetadata.value?.description || props.post.title,
         url: shareLink.value,
       })
     } else {

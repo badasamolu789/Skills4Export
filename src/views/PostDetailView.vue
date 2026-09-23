@@ -29,6 +29,7 @@ import { useSeoMeta } from '@/composables/useSeoMeta'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/services/posts'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
+import { shareMetadataService, type ShareMetadata } from '@/services/shareMetadata'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
@@ -51,6 +52,8 @@ const { setSeoMeta, resetSeoMeta } = useSeoMeta()
 const apiPost = ref<FeedPost | null>(null)
 const isLoadingPost = ref(false)
 const postError = ref('')
+const shareMetadata = ref<ShareMetadata | null>(null)
+const isLoadingShareMetadata = ref(false)
 const post = computed(() => apiPost.value)
 const primaryPostMedia = computed(() => {
   if (!post.value || post.value.type === 'question') {
@@ -639,12 +642,36 @@ const loadPostComments = async (postId: string) => {
 }
 
 const shareLink = computed(() =>
-  post.value
+  shareMetadata.value?.url || (post.value
     ? getShareUrl(post.value.type === 'question' ? 'question' : 'post', post.value.slug)
     : typeof window === 'undefined'
       ? ''
-      : window.location.href,
+      : window.location.href),
 )
+
+const loadShareMetadata = async () => {
+  if (shareMetadata.value || isLoadingShareMetadata.value || !post.value?.apiId) return
+
+  isLoadingShareMetadata.value = true
+  try {
+    const response = await shareMetadataService.get(
+      post.value.type === 'question' ? 'question' : 'post',
+      post.value.apiId,
+    )
+    shareMetadata.value = response.data
+    setSeoMeta({
+      title: response.data.title,
+      description: response.data.description,
+      image: response.data.image || undefined,
+      url: response.data.canonicalUrl || response.data.url,
+      type: 'article',
+    })
+  } catch {
+    // The post itself remains usable if preview metadata cannot be refreshed.
+  } finally {
+    isLoadingShareMetadata.value = false
+  }
+}
 
 const sharePreviewAuthor = computed(() => author.value?.name || '')
 const sharePreviewDescription = computed(() => {
@@ -686,6 +713,15 @@ watch(
       url: shareLink.value,
       type: 'article',
     })
+  },
+  { immediate: true },
+)
+
+watch(
+  apiPostId,
+  (id) => {
+    shareMetadata.value = null
+    if (id) void loadShareMetadata()
   },
   { immediate: true },
 )
@@ -917,6 +953,7 @@ const toggleSave = async () => {
 
 const copyShareLink = async () => {
   try {
+    await loadShareMetadata()
     await navigator.clipboard.writeText(shareLink.value)
     if (apiPostId.value) {
       await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken)
@@ -929,6 +966,7 @@ const copyShareLink = async () => {
 
 const openShareModal = () => {
   isShareModalOpen.value = true
+  void loadShareMetadata()
   void loadShareCommunities()
 }
 
@@ -1011,10 +1049,11 @@ const submitShare = async () => {
   const canNativeShare = 'share' in navigator && typeof navigator.share === 'function'
 
   try {
+    await loadShareMetadata()
     if (canNativeShare) {
       await navigator.share({
-        title: post.value.title,
-        text: text || post.value.title,
+        title: shareMetadata.value?.title || post.value.title,
+        text: text || shareMetadata.value?.description || post.value.title,
         url: shareLink.value,
       })
     } else {

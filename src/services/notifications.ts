@@ -218,15 +218,30 @@ export const normalizeNotification = (record: Record<string, unknown>): Notifica
     (data ? getRecord(data, ['actor', 'sender', 'user', 'fromUser', 'from_user']) : null)
   const target = getRecord(record, ['target', 'resource', 'entity']) ||
     (data ? getRecord(data, ['target', 'resource', 'entity']) : null)
+  const actorName = getDisplayName(
+    getString(actor ?? {}, ['name', 'displayName', 'display_name']) ||
+      getString(record, ['actorName', 'actor_name', 'senderName', 'sender_name', 'userName', 'user_name']) ||
+      getString(data ?? {}, ['actorName', 'actor_name', 'senderName', 'sender_name', 'userName', 'user_name']),
+    getString(actor ?? {}, ['username']) ||
+      getString(record, ['actorUsername', 'actor_username', 'senderUsername', 'sender_username', 'username']) ||
+      getString(data ?? {}, ['actorUsername', 'actor_username', 'senderUsername', 'sender_username', 'username']),
+  )
+  const actorAvatar = getString(actor ?? {}, ['avatar', 'avatarUrl', 'avatar_url', 'image', 'imageUrl']) ||
+    getString(record, ['actorAvatar', 'actor_avatar', 'senderAvatar', 'sender_avatar']) ||
+    getString(data ?? {}, ['actorAvatar', 'actor_avatar', 'senderAvatar', 'sender_avatar'])
   const id = getString(record, ['id', 'notificationId', 'notification_id', 'uuid']) || getString(data ?? {}, ['id'])
-  const title =
+  const rawTitle =
     getString(record, ['title', 'subject', 'heading']) ||
     getString(data ?? {}, ['title', 'subject', 'heading']) ||
     'Notification'
-  const description =
+  const rawDescription =
     getString(record, ['description', 'body', 'message', 'content']) ||
     getString(data ?? {}, ['description', 'body', 'message', 'content']) ||
-    title
+    rawTitle
+  const replaceAnonymousActor = (value: string) =>
+    actorName ? value.replace(/\bsomeone\b/gi, actorName) : value
+  const title = replaceAnonymousActor(rawTitle)
+  const description = replaceAnonymousActor(rawDescription)
   const createdAt =
     getString(record, ['createdAt', 'created_at', 'created', 'timestamp']) ||
     getString(data ?? {}, ['createdAt', 'created_at', 'created', 'timestamp']) ||
@@ -255,13 +270,12 @@ export const normalizeNotification = (record: Record<string, unknown>): Notifica
     actor: actor
       ? {
           id: getString(actor, ['id', 'userId', 'user_id']),
-          name: getDisplayName(
-            getString(actor, ['name', 'displayName', 'display_name']),
-            getString(actor, ['username']),
-          ),
-          avatar: getString(actor, ['avatar', 'avatarUrl', 'avatar_url', 'image', 'imageUrl']) || null,
+          name: actorName,
+          avatar: actorAvatar || null,
         }
-      : null,
+      : actorName
+        ? { name: actorName, avatar: actorAvatar || null }
+        : null,
     target: normalizedTarget,
     targetUrl: inferTargetUrl(record, target),
     raw: record,
