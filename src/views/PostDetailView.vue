@@ -37,10 +37,8 @@ import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
-import { richTextToPlainText } from '@/utils/richText'
 import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
-import { getShareUrl } from '@/utils/shareLinks'
 
 const route = useRoute()
 const router = useRouter()
@@ -642,11 +640,7 @@ const loadPostComments = async (postId: string) => {
 }
 
 const shareLink = computed(() =>
-  shareMetadata.value?.url || (post.value
-    ? getShareUrl(post.value.type === 'question' ? 'question' : 'post', post.value.slug)
-    : typeof window === 'undefined'
-      ? ''
-      : window.location.href),
+  shareMetadata.value?.url || '',
 )
 
 const loadShareMetadata = async () => {
@@ -666,14 +660,11 @@ const loadShareMetadata = async () => {
       url: response.data.canonicalUrl || response.data.url,
       type: 'article',
     })
-  } catch {
-    // The post itself remains usable if preview metadata cannot be refreshed.
   } finally {
     isLoadingShareMetadata.value = false
   }
 }
 
-const sharePreviewAuthor = computed(() => author.value?.name || '')
 const sharePreviewDescription = computed(() => {
   if (!post.value) {
     return ''
@@ -681,47 +672,16 @@ const sharePreviewDescription = computed(() => {
 
   return 'description' in post.value ? post.value.description : post.value.body || post.value.title
 })
-const sharePreviewImageSrc = computed(() =>
-  post.value && 'imageSrc' in post.value
-    ? post.value.imageSrc ||
-      post.value.media?.find((item) => item.thumbnailUrl)?.thumbnailUrl ||
-      post.value.media?.find((item) => item.url && !isVideoPostMedia(item))?.url ||
-      ''
-    : '',
-)
-const sharePreviewImageAlt = computed(() => post.value?.title || 'Shared post')
-
-watch(
-  post,
-  (nextPost) => {
-    if (!nextPost) {
-      resetSeoMeta()
-      return
-    }
-
-    const rawDescription =
-      nextPost.type === 'question'
-        ? nextPost.body || nextPost.title
-        : nextPost.description || nextPost.title
-    const plainDescription = richTextToPlainText(rawDescription) || nextPost.title
-    const sharedBy = sharePreviewAuthor.value ? `Shared by ${sharePreviewAuthor.value}.` : ''
-
-    setSeoMeta({
-      title: nextPost.title,
-      description: [plainDescription, sharedBy].filter(Boolean).join(' '),
-      image: sharePreviewImageSrc.value || undefined,
-      url: shareLink.value,
-      type: 'article',
-    })
-  },
-  { immediate: true },
-)
 
 watch(
   apiPostId,
   (id) => {
     shareMetadata.value = null
-    if (id) void loadShareMetadata()
+    if (!id) {
+      resetSeoMeta()
+      return
+    }
+    void loadShareMetadata().catch(() => resetSeoMeta())
   },
   { immediate: true },
 )
@@ -964,10 +924,17 @@ const copyShareLink = async () => {
   }
 }
 
-const openShareModal = () => {
-  isShareModalOpen.value = true
-  void loadShareMetadata()
-  void loadShareCommunities()
+const openShareModal = async () => {
+  try {
+    await loadShareMetadata()
+    if (!shareMetadata.value?.url) throw new Error('Share metadata is unavailable.')
+    isShareModalOpen.value = true
+    void loadShareCommunities()
+  } catch (error) {
+    toast.error('Unable to prepare this post for sharing', {
+      description: error instanceof Error ? error.message : 'Please try again.',
+    })
+  }
 }
 
 const closeShareModal = () => {

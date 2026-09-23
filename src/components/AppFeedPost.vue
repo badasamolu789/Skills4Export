@@ -39,7 +39,6 @@ import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost
 import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
-import { getShareUrl } from '@/utils/shareLinks'
 type PostComment = {
   id: number | string
   parentId?: string | null
@@ -138,7 +137,7 @@ const detailPath = computed(() =>
 const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 const shareLink = computed(() => {
-  return shareMetadata.value?.url || getShareUrl(props.post.type === 'question' ? 'question' : 'post', props.post.slug)
+  return shareMetadata.value?.url || ''
 })
 
 const loadShareMetadata = async () => {
@@ -151,8 +150,6 @@ const loadShareMetadata = async () => {
       apiPostId.value,
     )
     shareMetadata.value = response.data
-  } catch {
-    // Sharing remains available if metadata is temporarily unavailable.
   } finally {
     isLoadingShareMetadata.value = false
   }
@@ -1137,10 +1134,17 @@ const submitComment = async () => {
   })
 }
 
-const openShareModal = () => {
-  isShareModalOpen.value = true
-  void loadShareMetadata()
-  void loadShareCommunities()
+const openShareModal = async () => {
+  try {
+    await loadShareMetadata()
+    if (!shareMetadata.value?.url) throw new Error('Share metadata is unavailable.')
+    isShareModalOpen.value = true
+    void loadShareCommunities()
+  } catch (error) {
+    toast.error('Unable to prepare this post for sharing', {
+      description: error instanceof Error ? error.message : 'Please try again.',
+    })
+  }
 }
 
 const closeShareModal = () => {
