@@ -30,7 +30,7 @@ import { communitiesService, type CommunityRecord } from '@/services/communities
 import { postsService, type PostCommentRecord, type PostRecord } from '@/services/posts'
 import { questionsService } from '@/services/questions'
 import { mediaService } from '@/services/media'
-import { shareMetadataService, type ShareMetadata } from '@/services/shareMetadata'
+import { getPublicShareUrl, getShareMetadata, type ShareMetadata } from '@/services/shareMetadata'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
@@ -110,7 +110,6 @@ const shareCommunities = ref<CommunityRecord[]>([])
 const isLoadingShareCommunities = ref(false)
 const hasLoadedShareCommunities = ref(false)
 const shareMetadata = ref<ShareMetadata | null>(null)
-const isLoadingShareMetadata = ref(false)
 const selectedReportReason = ref('')
 const reportTargetLabel = ref('this post')
 const isSavingPost = ref(false)
@@ -137,37 +136,26 @@ const detailPath = computed(() =>
 const isSharedPost = computed(() => Boolean(props.post.originalPostId))
 const COMMUNITY_FOLLOWS_KEY = 'skills4export-community-follows'
 const shareLink = computed(() => {
-  return shareMetadata.value?.url || ''
+  return apiPostId.value
+    ? getPublicShareUrl(props.post.type === 'question' ? 'question' : 'post', apiPostId.value)
+    : ''
 })
 
 const loadShareMetadata = async () => {
-  if (shareMetadata.value || isLoadingShareMetadata.value || !apiPostId.value) return
+  if (shareMetadata.value) return shareMetadata.value
+  if (!apiPostId.value) throw new Error('This post does not have a shareable ID.')
 
-  isLoadingShareMetadata.value = true
-  try {
-    const response = await shareMetadataService.get(
-      props.post.type === 'question' ? 'question' : 'post',
-      apiPostId.value,
-    )
-    shareMetadata.value = response.data
-  } finally {
-    isLoadingShareMetadata.value = false
-  }
+  const metadata = await getShareMetadata(
+    props.post.type === 'question' ? 'question' : 'post',
+    apiPostId.value,
+  )
+  shareMetadata.value = metadata
+  return metadata
 }
 
 watch(apiPostId, () => {
   shareMetadata.value = null
 })
-const sharePreviewAuthor = computed(() =>
-  props.post.type === 'question' ? props.post.authorName : props.post.author.name,
-)
-const sharePreviewDescription = computed(() =>
-  'description' in props.post ? props.post.description : '',
-)
-const sharePreviewImageSrc = computed(() => ('imageSrc' in props.post ? props.post.imageSrc : ''))
-const sharePreviewImageAlt = computed(() =>
-  'imageAlt' in props.post ? props.post.imageAlt || props.post.title : props.post.title,
-)
 const primaryMedia = computed(() => {
   if (isSharedPost.value) {
     return null
@@ -1137,7 +1125,6 @@ const submitComment = async () => {
 const openShareModal = async () => {
   try {
     await loadShareMetadata()
-    if (!shareMetadata.value?.url) throw new Error('Share metadata is unavailable.')
     isShareModalOpen.value = true
     void loadShareCommunities()
   } catch (error) {
@@ -1358,23 +1345,19 @@ const submitShare = async () => {
   }
 
   const comment = shareComment.value.trim()
-  const communityContext = shareCommunity.value ? `Shared from ${shareCommunity.value}` : ''
-  const text = [comment, communityContext, sharePreviewDescription.value]
-    .filter(Boolean)
-    .join('\n\n')
   const canNativeShare = 'share' in navigator && typeof navigator.share === 'function'
 
   try {
-    await loadShareMetadata()
+    const metadata = await loadShareMetadata()
     if (canNativeShare) {
       await navigator.share({
-        title: shareMetadata.value?.title || props.post.title,
-        text: text || shareMetadata.value?.description || props.post.title,
+        title: metadata.title,
+        text: comment || metadata.description,
         url: shareLink.value,
       })
     } else {
       await navigator.clipboard.writeText(
-        [comment, props.post.title, shareLink.value].filter(Boolean).join('\n\n'),
+        [comment, metadata.title, shareLink.value].filter(Boolean).join('\n\n'),
       )
     }
 

@@ -25,11 +25,10 @@ import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import RichTextContent from '@/components/RichTextContent.vue'
 import PostCommentThread from '@/components/PostCommentThread.vue'
 import type { PostCommentThreadItem } from '@/components/PostCommentThread.vue'
-import { useSeoMeta } from '@/composables/useSeoMeta'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { postsService, type PostCommentRecord, type PostMediaRecord } from '@/services/posts'
 import { questionsService, type QuestionAnswerRecord } from '@/services/questions'
-import { shareMetadataService, type ShareMetadata } from '@/services/shareMetadata'
+import { getPublicShareUrl, getShareMetadata, type ShareMetadata } from '@/services/shareMetadata'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
@@ -45,13 +44,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
-const { setSeoMeta, resetSeoMeta } = useSeoMeta()
-
 const apiPost = ref<FeedPost | null>(null)
 const isLoadingPost = ref(false)
 const postError = ref('')
 const shareMetadata = ref<ShareMetadata | null>(null)
-const isLoadingShareMetadata = ref(false)
 const post = computed(() => apiPost.value)
 const primaryPostMedia = computed(() => {
   if (!post.value || post.value.type === 'question') {
@@ -640,50 +636,28 @@ const loadPostComments = async (postId: string) => {
 }
 
 const shareLink = computed(() =>
-  shareMetadata.value?.url || '',
+  post.value?.apiId
+    ? getPublicShareUrl(post.value.type === 'question' ? 'question' : 'post', post.value.apiId)
+    : '',
 )
 
 const loadShareMetadata = async () => {
-  if (shareMetadata.value || isLoadingShareMetadata.value || !post.value?.apiId) return
+  if (shareMetadata.value) return shareMetadata.value
+  if (!post.value?.apiId) throw new Error('This post does not have a shareable ID.')
 
-  isLoadingShareMetadata.value = true
-  try {
-    const response = await shareMetadataService.get(
-      post.value.type === 'question' ? 'question' : 'post',
-      post.value.apiId,
-    )
-    shareMetadata.value = response.data
-    setSeoMeta({
-      title: response.data.title,
-      description: response.data.description,
-      image: response.data.image || undefined,
-      url: response.data.canonicalUrl || response.data.url,
-      type: 'article',
-    })
-  } finally {
-    isLoadingShareMetadata.value = false
-  }
+  const metadata = await getShareMetadata(
+    post.value.type === 'question' ? 'question' : 'post',
+    post.value.apiId,
+  )
+  shareMetadata.value = metadata
+  return metadata
 }
-
-const sharePreviewDescription = computed(() => {
-  if (!post.value) {
-    return ''
-  }
-
-  return 'description' in post.value ? post.value.description : post.value.body || post.value.title
-})
 
 watch(
   apiPostId,
-  (id) => {
+  () => {
     shareMetadata.value = null
-    if (!id) {
-      resetSeoMeta()
-      return
-    }
-    void loadShareMetadata().catch(() => resetSeoMeta())
   },
-  { immediate: true },
 )
 
 watch(
@@ -927,7 +901,6 @@ const copyShareLink = async () => {
 const openShareModal = async () => {
   try {
     await loadShareMetadata()
-    if (!shareMetadata.value?.url) throw new Error('Share metadata is unavailable.')
     isShareModalOpen.value = true
     void loadShareCommunities()
   } catch (error) {
@@ -1009,23 +982,19 @@ const submitShare = async () => {
   }
 
   const comment = shareComment.value.trim()
-  const communityContext = shareCommunity.value ? `Shared from ${shareCommunity.value}` : ''
-  const text = [comment, communityContext, sharePreviewDescription.value]
-    .filter(Boolean)
-    .join('\n\n')
   const canNativeShare = 'share' in navigator && typeof navigator.share === 'function'
 
   try {
-    await loadShareMetadata()
+    const metadata = await loadShareMetadata()
     if (canNativeShare) {
       await navigator.share({
-        title: shareMetadata.value?.title || post.value.title,
-        text: text || shareMetadata.value?.description || post.value.title,
+        title: metadata.title,
+        text: comment || metadata.description,
         url: shareLink.value,
       })
     } else {
       await navigator.clipboard.writeText(
-        [comment, post.value.title, shareLink.value].filter(Boolean).join('\n\n'),
+        [comment, metadata.title, shareLink.value].filter(Boolean).join('\n\n'),
       )
     }
 
