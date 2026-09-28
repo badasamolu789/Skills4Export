@@ -85,6 +85,8 @@ const localScored = ref(props.post.isScored ?? false)
 const localScore = ref('score' in props.post ? props.post.score || 0 : 0)
 const isCommentsOpen = ref(false)
 const isShareModalOpen = ref(false)
+const isShareLinkCopied = ref(false)
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 const isReportModalOpen = ref(false)
 const isAnswerModalOpen = ref(false)
 const isPostMenuOpen = ref(false)
@@ -799,6 +801,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
 })
 
 watch(
@@ -1136,6 +1139,8 @@ const openShareModal = async () => {
 
 const closeShareModal = () => {
   isShareModalOpen.value = false
+  isShareLinkCopied.value = false
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
 }
 
 const openAnswerModal = () => {
@@ -1268,12 +1273,12 @@ const copyShareLink = async () => {
   try {
     await loadShareMetadata()
     await navigator.clipboard.writeText(shareLink.value)
+    isShareLinkCopied.value = true
+    if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+    copyFeedbackTimer = setTimeout(() => { isShareLinkCopied.value = false }, 2000)
     if (apiPostId.value) {
-      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken)
+      void postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken).catch(() => {})
     }
-    toast.success('Link copied', {
-      description: 'The post link has been copied to your clipboard.',
-    })
   } catch {
     toast.error('Unable to copy link', {
       description: 'Your browser blocked clipboard access. You can still copy the link manually.',
@@ -2509,11 +2514,13 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 />
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1.5 border-l border-[color:var(--border-soft)] px-3 text-[0.84rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                  class="inline-flex min-w-[5.6rem] items-center justify-center gap-1.5 border-l border-[color:var(--border-soft)] px-3 text-[0.84rem] font-semibold transition-colors duration-300"
+                  :class="isShareLinkCopied ? 'bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
                   @click="copyShareLink"
                 >
-                  <Copy class="h-4 w-4" />
-                  Copy
+                  <Check v-if="isShareLinkCopied" class="h-4 w-4" />
+                  <Copy v-else class="h-4 w-4" />
+                  {{ isShareLinkCopied ? 'Copied' : 'Copy' }}
                 </button>
               </div>
             </div>

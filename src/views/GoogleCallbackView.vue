@@ -110,12 +110,13 @@ onMounted(async () => {
       ? 'Google sign-in complete. Finish your profile details to continue...'
       : 'Google sign-in complete. Redirecting to your workspace...'
 
-    toast.success('Signed in with Google', {
-      id: loadingToastId,
-      description: redirectTarget === '/auth/signup/details'
-        ? 'Add a few profile details to finish your setup.'
-        : 'Your account session is ready.',
-    })
+    // toast.success('Signed in with Google', {
+    //   id: loadingToastId,
+    //   description: redirectTarget === '/auth/signup/details'
+    //     ? 'Add a few profile details to finish your setup.'
+    //     : 'Your account session is ready.',
+    // })
+    toast.dismiss(loadingToastId)
 
     if (finishInPopupIfNeeded({ success: true, token })) {
       return

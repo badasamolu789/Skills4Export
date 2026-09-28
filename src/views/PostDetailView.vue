@@ -155,6 +155,8 @@ const answerAttachmentPreviews = ref<Array<{ key: string; name: string; url: str
 const answererProfile = ref<MyProfileData | null>(null)
 const isLoadingAnswererProfile = ref(false)
 const isShareModalOpen = ref(false)
+const isShareLinkCopied = ref(false)
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 const shareCommunity = ref('')
 const shareComment = ref('')
 const shareCommunities = ref<CommunityRecord[]>([])
@@ -738,6 +740,7 @@ watch(answerAttachments, (files) => {
 
 onBeforeUnmount(() => {
   answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
 })
 
 const toggleFollow = async () => {
@@ -889,10 +892,12 @@ const copyShareLink = async () => {
   try {
     await loadShareMetadata()
     await navigator.clipboard.writeText(shareLink.value)
+    isShareLinkCopied.value = true
+    if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+    copyFeedbackTimer = setTimeout(() => { isShareLinkCopied.value = false }, 2000)
     if (apiPostId.value) {
-      await postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken)
+      void postsService.recordShareEvent(apiPostId.value, { type: 'copy_link' }, authStore.authToken).catch(() => {})
     }
-    toast.success('Post link copied')
   } catch {
     toast.error('Unable to copy link')
   }
@@ -912,6 +917,8 @@ const openShareModal = async () => {
 
 const closeShareModal = () => {
   isShareModalOpen.value = false
+  isShareLinkCopied.value = false
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
 }
 
 const loadShareCommunities = async () => {
@@ -2047,11 +2054,13 @@ const submitAnswer = async () => {
                 />
                 <button
                   type="button"
-                  class="inline-flex items-center gap-1.5 border-l border-[color:var(--border-soft)] px-3 text-[0.84rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                  class="inline-flex min-w-[5.6rem] items-center justify-center gap-1.5 border-l border-[color:var(--border-soft)] px-3 text-[0.84rem] font-semibold transition-colors duration-300"
+                  :class="isShareLinkCopied ? 'bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
                   @click="copyShareLink"
                 >
-                  <Copy class="h-4 w-4" />
-                  Copy
+                  <Check v-if="isShareLinkCopied" class="h-4 w-4" />
+                  <Copy v-else class="h-4 w-4" />
+                  {{ isShareLinkCopied ? 'Copied' : 'Copy' }}
                 </button>
               </div>
             </div>

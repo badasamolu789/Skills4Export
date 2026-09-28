@@ -88,10 +88,11 @@ const submitLogin = async () => {
     authStore.setAuthenticatedSession(session.token, session.userId)
     authStore.setOnboardingRequired(false)
 
-    toast.success('Signed in', {
-      id: loadingToastId,
-      description: 'Your account session is now active. Redirecting you now.',
-    })
+    // toast.success('Signed in', {
+    //   id: loadingToastId,
+    //   description: 'Your account session is now active. Redirecting you now.',
+    // })
+    toast.dismiss(loadingToastId)
 
     router.push(redirectTarget)
   } catch (error) {
@@ -132,12 +133,13 @@ const continueWithGoogle = async () => {
 
     authStore.setAuthenticatedSession(session.token, session.userId)
     const redirectTarget = await resolveGoogleOnboardingRedirect(authStore, response)
-    toast.success('Signed in with Google', {
-      id: loadingToastId,
-      description: redirectTarget === '/auth/signup/details'
-        ? 'Finish your profile details to continue.'
-        : 'Your account session is ready. Redirecting now.',
-    })
+    // toast.success('Signed in with Google', {
+    //   id: loadingToastId,
+    //   description: redirectTarget === '/auth/signup/details'
+    //     ? 'Finish your profile details to continue.'
+    //     : 'Your account session is ready. Redirecting now.',
+    // })
+    toast.dismiss(loadingToastId)
     router.push(redirectTarget)
   } catch (error) {
     const message = getErrorMessage(error, 'Google sign-in is unavailable right now.')
