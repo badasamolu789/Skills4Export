@@ -1366,16 +1366,19 @@ const submitShare = async () => {
       )
     }
 
-    toast.success('Post shared', {
-      description: canNativeShare ? 'The native share sheet has been opened.' : 'The share text has been copied.',
-    })
+    if (canNativeShare) toast.success('Post shared')
     if (apiPostId.value) {
       await postsService
         .recordShareEvent(apiPostId.value, { type: canNativeShare ? 'native_share' : 'manual_share' }, authStore.authToken)
     }
     shareCommunity.value = ''
     shareComment.value = ''
-    closeShareModal()
+    if (canNativeShare) closeShareModal()
+    else {
+      isShareLinkCopied.value = true
+      if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+      copyFeedbackTimer = setTimeout(() => { isShareLinkCopied.value = false }, 2000)
+    }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return
@@ -2567,11 +2570,13 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           <div class="flex justify-end">
             <button
               type="button"
-              class="inline-flex min-w-[7rem] items-center justify-center gap-1.5 rounded-[0.8rem] bg-[var(--accent)] px-4 py-2.5 text-[0.86rem] font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+              class="inline-flex min-w-[7rem] items-center justify-center gap-1.5 rounded-[0.8rem] px-4 py-2.5 text-[0.86rem] font-semibold transition"
+              :class="isShareLinkCopied ? 'bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-strong)]'"
               @click="submitShare"
             >
-              <span>Share</span>
-              <ArrowUp class="h-4 w-4 rotate-45" />
+              <span>{{ isShareLinkCopied ? 'Copied' : 'Share' }}</span>
+              <Check v-if="isShareLinkCopied" class="h-4 w-4" />
+              <ArrowUp v-else class="h-4 w-4 rotate-45" />
             </button>
           </div>
         </div>

@@ -27,6 +27,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
+const copiedAnswerId = ref('')
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined
 
 type AnswerItem = {
   id: string
@@ -863,7 +865,11 @@ const shareAnswer = async (answer: AnswerItem) => {
       { type: canNativeShare ? 'native_share' : 'copy_link' },
       authStore.authToken,
     )
-    toast.success(canNativeShare ? 'Share opened' : 'Answer link copied')
+    if (!canNativeShare) {
+      copiedAnswerId.value = answer.id
+      if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+      copyFeedbackTimer = setTimeout(() => { copiedAnswerId.value = '' }, 2000)
+    }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       return
@@ -973,6 +979,7 @@ watch(answerAttachments, (files) => {
 })
 
 onBeforeUnmount(() => {
+  if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
   answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
   if (realtimeTimer) {
     window.clearInterval(realtimeTimer)
@@ -1170,11 +1177,13 @@ onBeforeUnmount(() => {
               </button>
               <button
                 type="button"
-                class="inline-flex h-8 items-center gap-1 rounded-lg bg-[var(--surface-secondary)] px-3 text-xs font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+                class="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-semibold transition"
+                :class="copiedAnswerId === answer.id ? 'bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'bg-[var(--surface-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"
                 @click="shareAnswer(answer)"
               >
-                <Share2 class="h-3.5 w-3.5" />
-                Share
+                <Check v-if="copiedAnswerId === answer.id" class="h-3.5 w-3.5" />
+                <Share2 v-else class="h-3.5 w-3.5" />
+                {{ copiedAnswerId === answer.id ? 'Copied' : 'Share' }}
               </button>
               <button
                 type="button"

@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ArrowRight, Copy } from 'lucide-vue-next'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { ArrowRight, Check, Copy } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import { useAuthStore } from '@/stores/auth'
 
 const authStore = useAuthStore()
 const emailInput = ref('')
+const isLinkCopied = ref(false)
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined
+
+onBeforeUnmount(() => { if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer) })
 
 const referralLink = computed(() => {
   const username = authStore.signUpDraft.username || 'samuelbada'
@@ -40,9 +44,9 @@ const sendReferralInvite = () => {
 const copyReferralLink = async () => {
   try {
     await navigator.clipboard.writeText(referralLink.value)
-    toast.success('Referral link copied', {
-      description: 'You can now paste it anywhere you want to share it.',
-    })
+    isLinkCopied.value = true
+    if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+    copyFeedbackTimer = setTimeout(() => { isLinkCopied.value = false }, 2000)
   } catch {
     toast.error('Unable to copy referral link.')
   }
@@ -90,11 +94,13 @@ const copyReferralLink = async () => {
               </div>
               <button
                 type="button"
-                class="inline-flex min-h-16 items-center justify-center gap-3 border-t border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-6 text-lg font-medium text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)] sm:min-w-[10.5rem] sm:border-l sm:border-t-0"
+                class="inline-flex min-h-16 items-center justify-center gap-3 border-t border-[color:var(--border-soft)] px-6 text-lg font-medium transition sm:min-w-[10.5rem] sm:border-l sm:border-t-0"
+                :class="isLinkCopied ? 'bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'bg-[var(--surface-primary)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)]'"
                 @click="copyReferralLink"
               >
-                <Copy class="h-5 w-5" />
-                <span>Copy</span>
+                <Check v-if="isLinkCopied" class="h-5 w-5" />
+                <Copy v-else class="h-5 w-5" />
+                <span>{{ isLinkCopied ? 'Copied' : 'Copy' }}</span>
               </button>
             </div>
           </div>

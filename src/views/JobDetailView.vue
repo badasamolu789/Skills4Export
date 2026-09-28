@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
-import { ArrowRight, BriefcaseBusiness, CalendarDays, CheckCircle2, Copy, MapPin, Megaphone, UploadCloud, Wallet } from 'lucide-vue-next'
+import { ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, Copy, MapPin, Megaphone, UploadCloud, Wallet } from 'lucide-vue-next'
 import RichTextContent from '@/components/RichTextContent.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
@@ -23,6 +23,10 @@ const isReferralModalOpen = ref(false)
 const referralEmails = ref('')
 const adverts = ref<AdvertRecord[]>([])
 const isLoadingAdverts = ref(false)
+const isReferralLinkCopied = ref(false)
+let copyFeedbackTimer: ReturnType<typeof setTimeout> | undefined
+
+onBeforeUnmount(() => { if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer) })
 const resumeInput = ref<HTMLInputElement | null>(null)
 const selectedResumeFile = ref<File | null>(null)
 const hasAgreedToApplicationTerms = ref(false)
@@ -266,7 +270,9 @@ const loadAdverts = async () => {
 const copyReferralLink = async () => {
   try {
     await navigator.clipboard.writeText(referralLink.value)
-    toast.success('Referral link copied')
+    isReferralLinkCopied.value = true
+    if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)
+    copyFeedbackTimer = setTimeout(() => { isReferralLinkCopied.value = false }, 2000)
   } catch {
     toast.error('Unable to copy link')
   }
@@ -612,11 +618,13 @@ watch(
             </span>
             <button
               type="button"
-              class="inline-flex h-11 items-center justify-center gap-2 border-t border-[color:var(--border-soft)] px-5 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-secondary)] sm:border-l sm:border-t-0"
+              class="inline-flex h-11 items-center justify-center gap-2 border-t border-[color:var(--border-soft)] px-5 text-sm font-semibold transition sm:border-l sm:border-t-0"
+              :class="isReferralLinkCopied ? 'bg-[var(--accent-soft)] text-[var(--accent-strong)]' : 'text-[var(--text-primary)] hover:bg-[var(--surface-secondary)]'"
               @click="copyReferralLink"
             >
-              <Copy class="h-4 w-4" />
-              Copy
+              <Check v-if="isReferralLinkCopied" class="h-4 w-4" />
+              <Copy v-else class="h-4 w-4" />
+              {{ isReferralLinkCopied ? 'Copied' : 'Copy' }}
             </button>
           </div>
         </div>
