@@ -7,6 +7,18 @@ const AUTH_TOKEN_KEY = 'skills4export-auth-token'
 const AUTH_USER_ID_KEY = 'skills4export-user-id'
 const ONBOARDING_REQUIRED_KEY = 'skills4export-onboarding-required'
 const PROFILE_OVERRIDES_KEY = 'skills4export-profile-overrides'
+const ACCOUNT_TYPES_KEY = 'skills4export-account-types'
+
+type AccountType = 'default' | 'student'
+
+const getStoredAccountTypes = (): Record<string, AccountType> => {
+  if (typeof window === 'undefined') return {}
+  try {
+    return JSON.parse(window.localStorage.getItem(ACCOUNT_TYPES_KEY) || '{}') as Record<string, AccountType>
+  } catch {
+    return {}
+  }
+}
 
 const getStoredToken = () => {
   if (typeof window === 'undefined') {
@@ -67,6 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
   const authToken = ref(getStoredToken())
   const userId = ref(getStoredUserId())
   const onboardingRequired = ref(getStoredOnboardingRequired())
+  const accountType = ref<AccountType | null>(getStoredAccountTypes()[userId.value] ?? null)
   const isAuthenticated = ref(Boolean(authToken.value))
   const currentUser = ref<UserRecord | null>(null)
   const userProfile = ref<UserProfile | null>(null)
@@ -118,6 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const persistUserId = (id: string) => {
     userId.value = id
+    accountType.value = getStoredAccountTypes()[id] ?? null
 
     if (typeof window !== 'undefined') {
       if (id) {
@@ -138,6 +152,14 @@ export const useAuthStore = defineStore('auth', () => {
         window.localStorage.removeItem(ONBOARDING_REQUIRED_KEY)
       }
     }
+  }
+
+  const setAccountType = (type: AccountType) => {
+    accountType.value = type
+    if (!userId.value || typeof window === 'undefined') return
+    const types = getStoredAccountTypes()
+    types[userId.value] = type
+    window.localStorage.setItem(ACCOUNT_TYPES_KEY, JSON.stringify(types))
   }
 
   const resetUserScopedState = () => {
@@ -361,6 +383,7 @@ export const useAuthStore = defineStore('auth', () => {
     currentUser,
     userProfile,
     onboardingRequired,
+    accountType,
     isAuthenticated,
     signUpDraft,
     authMenuLabel,
@@ -371,6 +394,7 @@ export const useAuthStore = defineStore('auth', () => {
     setUserProfile,
     setUserProfileOverride,
     setOnboardingRequired,
+    setAccountType,
     toggleAuth,
     resetSignUpDraft,
   }

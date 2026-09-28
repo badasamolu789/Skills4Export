@@ -124,6 +124,7 @@ const persistDraftDetails = () => {
 }
 
 const completeGoogleOnboarding = async () => {
+  authStore.setAccountType(authStore.signUpDraft.accountType)
   await syncSignUpDetailsToProfile(authStore)
   if (authStore.signUpDraft.accountType === 'student') {
     await ensureStudentPageFromSignup(authStore, pagesStore)

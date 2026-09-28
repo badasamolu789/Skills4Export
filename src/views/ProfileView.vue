@@ -9,7 +9,6 @@ import { getErrorMessage } from '@/lib/errors'
 import { normalizeUserSkills, usersService } from '@/services/users'
 import { mediaService } from '@/services/media'
 import { useAuthStore } from '@/stores/auth'
-import { usePagesStore } from '@/stores/pages'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 import { optimizeImageFile } from '@/utils/imageOptimization'
@@ -26,7 +25,6 @@ type ProfileUploadItem = {
 }
 
 const authStore = useAuthStore()
-const pagesStore = usePagesStore()
 const socialActionsStore = useSocialActionsStore()
 const isLoadingProfile = ref(false)
 const hasLoadedProfile = ref(false)
@@ -755,23 +753,18 @@ const getPrimaryEducation = (data?: MyProfileData | null) =>
 const isStudentProfile = computed(() => {
   const profileData = profileResponseData.value?.profile ?? authStore.userProfile
   const settings = profileResponseData.value?.settings ?? profileResponseData.value?.setting
+  const backendType = getStudentProfileField(profileData, profileResponseData.value, ['accountType', 'account_type']) ||
+    getStringField(settings, ['accountType', 'account_type'])
 
-  return (
-    pagesStore.hasStudentPage ||
-    authStore.signUpDraft.accountType === 'student' ||
-    getStudentProfileField(profileData, profileResponseData.value, ['accountType', 'account_type']) === 'student' ||
-    getStringField(settings, ['accountType', 'account_type']) === 'student' ||
-    Boolean(
-      authStore.signUpDraft.university ||
-        authStore.signUpDraft.courseOfStudy ||
-        getStudentProfileField(profileData, profileResponseData.value, [
-          'institutionOfStudy',
-          'institution_of_study',
-          'university',
-          'courseOfStudy',
-          'course_of_study',
-        ]),
-    )
+  if (backendType === 'student' || backendType === 'default') return backendType === 'student'
+  if (authStore.accountType) return authStore.accountType === 'student'
+  if (authStore.signUpDraft.accountType === 'student') return true
+
+  const education = getPrimaryEducation(profileResponseData.value)
+  const displayTitle = getStudentProfileField(profileData, profileResponseData.value, ['displayTitle', 'display_title'])
+  return Boolean(
+    education?.field && education.school &&
+    displayTitle.toLowerCase() === buildStudentDisplayTitle(education.school, education.field).toLowerCase(),
   )
 })
 
@@ -1020,7 +1013,6 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
   const institutionOfStudy = toInitialCaps(
     authStore.signUpDraft.university ||
       getStudentProfileField(profileData, data, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
-      getStringField(pagesStore.studentPage?.metadata, ['university', 'institutionOfStudy', 'institution_of_study']) ||
       education?.school ||
       '',
     { keepSmallWords: true },
@@ -1028,14 +1020,12 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
   const graduationYear = (
     authStore.signUpDraft.yearStarted ||
       getStudentProfileField(profileData, data, ['graduationDate', 'graduation_date', 'yearStarted', 'year_started']) ||
-      getStringField(pagesStore.studentPage?.metadata, ['graduationDate', 'yearStarted']) ||
       education?.endDate ||
       ''
   ).slice(0, 4)
   const courseOfStudy = toInitialCaps(
     authStore.signUpDraft.courseOfStudy ||
       getStudentProfileField(profileData, data, ['courseOfStudy', 'course_of_study', 'field']) ||
-      getStringField(pagesStore.studentPage?.metadata, ['courseOfStudy', 'course_of_study']) ||
       education?.field ||
       '',
     { keepSmallWords: true },
@@ -1117,7 +1107,6 @@ const openProfileDetailsModal = async () => {
   isLoadingProfileDetails.value = true
 
   try {
-    await pagesStore.loadStudentPageStatus()
     const response = await usersService.getMyProfile(authStore.authToken)
     const data = response.data ?? null
 
@@ -1295,6 +1284,7 @@ const saveProfileDetails = async () => {
     authStore.signUpDraft.name = displayName
     authStore.signUpDraft.headline = bio
     authStore.signUpDraft.location = location
+    authStore.setAccountType(isStudent ? 'student' : 'default')
     if (isStudent) {
       authStore.signUpDraft.accountType = 'student'
       authStore.signUpDraft.university = institutionOfStudy

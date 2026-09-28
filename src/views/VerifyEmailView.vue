@@ -163,6 +163,7 @@ const verifyOtp = async () => {
     if (response.data?.user) {
       authStore.setCurrentUser(response.data.user)
     }
+    authStore.setAccountType(authStore.signUpDraft.accountType)
     if (response.data?.profile) {
       authStore.setUserProfile(response.data.profile)
     }
