@@ -90,6 +90,7 @@ export const renderResourceHtml = (baseHtml, metadata, type, id) => {
     : ''
   const twitterCard = image ? 'summary_large_image' : 'summary'
   const metadataTags = `
+    <meta name="description" content="${description}" />
     <link rel="canonical" href="${resourceUrl}" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="${siteName}" />
@@ -147,7 +148,7 @@ const tryServeAsset = async (pathname, response, method) => {
   }
 }
 
-const server = createServer(async (request, response) => {
+export const server = createServer(async (request, response) => {
   const method = request.method || 'GET'
   if (method !== 'GET' && method !== 'HEAD') {
     send(response, method, 405, 'Method not allowed.', 'text/plain; charset=utf-8')
