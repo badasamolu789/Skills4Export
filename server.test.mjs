@@ -95,6 +95,15 @@ test('resource routes fetch the matching metadata and return initial HTML', asyn
   }
 })
 
+test('static job routes load Vue without requesting share metadata', async () => {
+  for (const path of ['/jobs/feed', '/jobs/feed/', '/jobs/alerts', '/jobs/alerts/']) {
+    const { status, body, requestedApiUrl } = await requestPage(path)
+    assert.equal(status, 200, path)
+    assert.equal(body, baseHtml, path)
+    assert.equal(requestedApiUrl, '', path)
+  }
+})
+
 test('missing metadata, malformed IDs, static assets, and Vue routes', async () => {
   const missing = await requestPage('/jobs/missing-job', { ok: false, status: 404 })
   assert.equal(missing.status, 404)

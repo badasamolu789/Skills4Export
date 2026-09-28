@@ -17,6 +17,7 @@ const RESOURCE_PATHS = {
 const RESOURCE_TYPES = Object.fromEntries(
   Object.entries(RESOURCE_PATHS).map(([type, path]) => [path, type]),
 )
+const STATIC_APP_ROUTES = new Set(['/jobs/feed', '/jobs/alerts'])
 
 const CONTENT_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -157,6 +158,12 @@ export const server = createServer(async (request, response) => {
 
   const pathname = new URL(request.url || '/', PUBLIC_ORIGIN).pathname
   if (await tryServeAsset(pathname, response, method)) return
+
+  if (STATIC_APP_ROUTES.has(pathname.replace(/\/$/, ''))) {
+    const baseHtml = await readFile(INDEX_FILE)
+    send(response, method, 200, baseHtml, 'text/html; charset=utf-8')
+    return
+  }
 
   const resourceRoute = pathname.match(/^\/(posts|questions|jobs)\/([^/]+)\/?$/)
   if (resourceRoute) {
