@@ -8,6 +8,7 @@ import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
 import { ApiError } from '@/lib/api'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { mediaService } from '@/services/media'
+import { getPublicShareUrl } from '@/services/shareMetadata'
 import { useAuthStore } from '@/stores/auth'
 import { useJobsStore } from '@/stores/jobs'
 import { richTextToPlainText } from '@/utils/richText'
@@ -117,11 +118,8 @@ const jobLocationLine = computed(() =>
   'Location not listed',
 )
 const referralLink = computed(() => {
-  if (typeof window === 'undefined') {
-    return ''
-  }
-
-  return window.location.href
+  const idOrSlug = job.value?.slug || job.value?.id
+  return idOrSlug ? getPublicShareUrl('job', idOrSlug) : ''
 })
 const referralSubject = computed(() => `Job referral: ${job.value?.title || 'Skills4Export job'}`)
 const referralBody = computed(() =>

@@ -1,6 +1,6 @@
 import { api } from '@/lib/api'
 
-export type ShareResourceType = 'post' | 'question'
+export type ShareResourceType = 'post' | 'question' | 'job'
 
 export type ShareMetadata = {
   type: string
@@ -23,6 +23,11 @@ type ShareMetadataResponse = {
 }
 
 const PUBLIC_ORIGIN = 'https://skills4export.com'
+const RESOURCE_PATHS: Record<ShareResourceType, string> = {
+  post: 'posts',
+  question: 'questions',
+  job: 'jobs',
+}
 
 const assertShareMetadata = (response: ShareMetadataResponse) => {
   const metadata = response.data
@@ -41,8 +46,7 @@ const assertShareMetadata = (response: ShareMetadataResponse) => {
 }
 
 export const getPublicShareUrl = (type: ShareResourceType, id: string) => {
-  const path = type === 'post' ? 'posts' : 'questions'
-  return `${PUBLIC_ORIGIN}/${path}/${encodeURIComponent(id)}`
+  return `${PUBLIC_ORIGIN}/${RESOURCE_PATHS[type]}/${encodeURIComponent(id)}`
 }
 
 export const getShareMetadata = async (type: ShareResourceType, id: string) => {

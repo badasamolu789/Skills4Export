@@ -12,6 +12,7 @@ import { mediaService } from '@/services/media'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import type { PostMediaRecord } from '@/services/posts'
 import { questionsService, type AnswerCommentRecord, type QuestionAnswerRecord } from '@/services/questions'
+import { getPublicShareUrl } from '@/services/shareMetadata'
 import { usersService, type MyProfileData } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
@@ -837,10 +838,12 @@ const submitAnswerComment = async (answer: AnswerItem) => {
 }
 
 const shareAnswer = async (answer: AnswerItem) => {
-  const url =
-    typeof window === 'undefined'
-      ? `/questions/${question.value?.slug || questionId.value || ''}#answer-${answer.id}`
-      : `${window.location.origin}/questions/${question.value?.slug || questionId.value || ''}#answer-${answer.id}`
+  if (!questionId.value) {
+    toast.error('Unable to share answer.')
+    return
+  }
+
+  const url = `${getPublicShareUrl('question', questionId.value)}#answer-${encodeURIComponent(answer.id)}`
   const text = [question.value?.title, answer.content].filter(Boolean).join('\n\n')
   const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator && typeof navigator.share === 'function'
 
