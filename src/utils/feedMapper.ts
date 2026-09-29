@@ -170,7 +170,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       to: pageId ? `/pages/${item.page?.slug || pageId}/public` : `/profile/view/${userId}`,
       avatarText: getInitials(authorName || 'Community member'),
       avatarSrc,
-      tag: pageId ? '' : getAuthorDisplayTitle(author, item),
+      tag: pageId ? getProfileDisplayTitle(item.page) : getAuthorDisplayTitle(author, item),
     },
     time: formatFeedTime(createdAt),
     title,

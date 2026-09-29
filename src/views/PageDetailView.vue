@@ -39,6 +39,7 @@ import { getDisplayName, getInitialsFromName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { optimizeImageFile, optimizePageAvatarFile } from '@/utils/imageOptimization'
 import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
+import { getProfileDisplayTitle } from '@/utils/profileContextTag'
 
 type PageTab = 'about' | 'posts' | 'photos' | 'jobs' | 'dates'
 
@@ -315,7 +316,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
         to: publicDisplayTarget.value,
         avatarText: pageInitials.value,
         avatarSrc: pageImage.value || null,
-        tag: pageSkills.value.slice(0, 3).join(' | '),
+        tag: page.value?.category === 'student' ? getProfileDisplayTitle(page.value) : pageSkills.value.slice(0, 3).join(' | '),
       },
       time: formatPostTime(item.record.created_at),
       title: item.record.title,

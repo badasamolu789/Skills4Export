@@ -7,7 +7,7 @@ import { getOptionalCount } from '@/utils/postMapper'
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
-import { getProfileContextTag } from '@/utils/profileContextTag'
+import { getExplicitProfileDisplayTitle, getProfileContextTag } from '@/utils/profileContextTag'
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
@@ -118,6 +118,10 @@ const getAuthorTag = (question: QuestionRecord, author?: MyProfileData | null) =
     readRecord(questionUser, ['profile', 'userProfile', 'user_profile'])
 
   return (
+    getExplicitProfileDisplayTitle(questionUser) ||
+    getExplicitProfileDisplayTitle(questionProfile) ||
+    getExplicitProfileDisplayTitle(question) ||
+    getExplicitProfileDisplayTitle(author) ||
     getProfileContextTag(author) ||
     getProfileContextTag(questionProfile) ||
     getProfileContextTag(questionUser) ||

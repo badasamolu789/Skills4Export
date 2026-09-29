@@ -64,9 +64,20 @@ const unique = (values: string[]) => {
   })
 }
 
+export const getExplicitProfileDisplayTitle = (source: unknown) => {
+  const profile = readRecord(source, ['profile', 'userProfile', 'user_profile'])
+  const user = readRecord(source, ['user'])
+  const metadata = readRecord(source, ['metadata'])
+  return readString(source, ['displayTitle', 'display_title']) ||
+    readString(profile, ['displayTitle', 'display_title']) ||
+    readString(user, ['displayTitle', 'display_title']) ||
+    readString(metadata, ['displayTitle', 'display_title'])
+}
+
 export const getProfileDisplayTitle = (source: unknown) => {
   const profile = readRecord(source, ['profile', 'userProfile', 'user_profile'])
   const user = readRecord(source, ['user'])
+  const metadata = readRecord(source, ['metadata'])
   const education = [
     ...readArray(source, ['educations', 'education']),
     ...readArray(profile, ['educations', 'education']),
@@ -77,20 +88,19 @@ export const getProfileDisplayTitle = (source: unknown) => {
     readString(profile, ['accountType', 'account_type']) ||
     readString(user, ['accountType', 'account_type'])
   ).toLowerCase()
-  const explicitDisplayTitle =
-    readString(source, ['displayTitle', 'display_title']) ||
-    readString(profile, ['displayTitle', 'display_title']) ||
-    readString(user, ['displayTitle', 'display_title'])
+  const explicitDisplayTitle = getExplicitProfileDisplayTitle(source)
   const course =
-    readString(source, ['courseOfStudy', 'course_of_study']) ||
-    readString(profile, ['courseOfStudy', 'course_of_study']) ||
-    readString(user, ['courseOfStudy', 'course_of_study']) ||
-    readString(education, ['field', 'courseOfStudy', 'course_of_study'])
+    readString(source, ['courseOfStudy', 'course_of_study', 'courseName', 'course_name']) ||
+    readString(profile, ['courseOfStudy', 'course_of_study', 'courseName', 'course_name']) ||
+    readString(user, ['courseOfStudy', 'course_of_study', 'courseName', 'course_name']) ||
+    readString(metadata, ['courseOfStudy', 'course_of_study', 'courseName', 'course_name']) ||
+    readString(education, ['field', 'courseOfStudy', 'course_of_study', 'courseName', 'course_name'])
   const school =
-    readString(source, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
-    readString(profile, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
-    readString(user, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
-    readString(education, ['school', 'university'])
+    readString(source, ['institutionOfStudy', 'institution_of_study', 'institution', 'institutionName', 'institution_name', 'university', 'school']) ||
+    readString(profile, ['institutionOfStudy', 'institution_of_study', 'institution', 'institutionName', 'institution_name', 'university', 'school']) ||
+    readString(user, ['institutionOfStudy', 'institution_of_study', 'institution', 'institutionName', 'institution_name', 'university', 'school']) ||
+    readString(metadata, ['institutionOfStudy', 'institution_of_study', 'institution', 'institutionName', 'institution_name', 'university', 'school']) ||
+    readString(education, ['school', 'university', 'institution', 'institutionName', 'institution_name'])
   const title =
     readString(source, ['currentJobTitle', 'current_job_title', 'jobTitle', 'job_title']) ||
     readString(profile, ['currentJobTitle', 'current_job_title', 'jobTitle', 'job_title']) ||

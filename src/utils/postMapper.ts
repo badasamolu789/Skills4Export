@@ -5,7 +5,7 @@ import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
-import { getProfileDisplayTitle } from '@/utils/profileContextTag'
+import { getExplicitProfileDisplayTitle, getProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const formatPostTime = (value: string) => {
   const date = new Date(value)
@@ -104,6 +104,9 @@ const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
 
 const getAuthorTag = (post: PostRecord, author?: MyProfileData | null) => {
   return (
+    getExplicitProfileDisplayTitle(post.user) ||
+    getExplicitProfileDisplayTitle(post) ||
+    getExplicitProfileDisplayTitle(author) ||
     getProfileDisplayTitle(author) ||
     getProfileDisplayTitle(post.user) ||
     getProfileDisplayTitle(post) ||
@@ -145,7 +148,11 @@ const getPageTag = (page?: PostRecord['page'] | PageRecord | null) => {
   const pageRecord = isRecord(page) ? page : null
   const pageType = getStringValue(pageRecord, ['type', 'pageType', 'page_type']).toLowerCase()
 
-  if (pageType === 'business' || pageType === 'student') {
+  if (pageType === 'student' || getStringValue(pageRecord, ['category']).toLowerCase() === 'student') {
+    return getProfileDisplayTitle(pageRecord)
+  }
+
+  if (pageType === 'business') {
     return `${pageType[0]?.toUpperCase()}${pageType.slice(1)} page`
   }
 

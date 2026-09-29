@@ -37,6 +37,7 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getProfileDisplayTitle } from '@/utils/profileContextTag'
+import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
@@ -515,8 +516,33 @@ const hasStoredCommunityFollow = (communityId?: string | null) => {
   return getStoredCommunityFollows()[authStore.userId]?.includes(communityId) ?? false
 }
 
+const fetchedAuthorTitle = ref('')
+const cardAuthorTag = computed(() => props.post.type === 'question' ? props.post.tag : props.post.author.tag)
+
+watch(
+  () => [props.post.userId, cardAuthorTag.value] as const,
+  async ([userId, tag]) => {
+    fetchedAuthorTitle.value = ''
+    if (tag || !userId) return
+    if (userId === authStore.userId) {
+      fetchedAuthorTitle.value = currentUser.displayTitle.value
+      return
+    }
+
+    try {
+      const profile = await loadQuestionAuthorProfile(userId, authStore.userId, null, authStore.authToken)
+      if (props.post.userId === userId && !cardAuthorTag.value) {
+        fetchedAuthorTitle.value = getProfileDisplayTitle(profile)
+      }
+    } catch {
+      // The post remains usable when author details cannot be loaded.
+    }
+  },
+  { immediate: true },
+)
+
 const authorProfileDetails = computed(() => {
-  const tag = props.post.type === 'question' ? props.post.tag : props.post.author.tag
+  const tag = cardAuthorTag.value || fetchedAuthorTitle.value
 
   return (tag || '')
     .split('|')
@@ -527,13 +553,11 @@ const authorProfileDetails = computed(() => {
 
 const authorMetaItems = computed(() => authorProfileDetails.value.slice(0, 3))
 
-const feedPostContextDetail = computed(() => {
-  if (props.post.type === 'question') {
-    return props.post.communityName
-  }
-
-  return props.post.communityId ? props.post.communityName || '' : ''
-})
+// Community names are intentionally hidden on feed cards for now.
+// const feedPostContextDetail = computed(() => {
+//   if (props.post.type === 'question') return props.post.communityName
+//   return props.post.communityId ? props.post.communityName || '' : ''
+// })
 
 const readRecord = (source: unknown, keys: string[]) => {
   if (!source || typeof source !== 'object' || Array.isArray(source)) {
@@ -1641,15 +1665,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
             <div class="mt-2.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[0.82rem] leading-5 text-[var(--text-secondary)]">
               <span class="shrink-0">{{ post.time }}</span>
               <span class="text-[var(--text-tertiary)]">-</span>
-              <RouterLink :to="authorRoute" class="shrink-0 font-semibold text-[var(--accent-strong)]">
-                {{ authorName }}
-              </RouterLink>
-              <template v-if="authorMetaItems.length">
-                <span class="text-[var(--text-tertiary)]">-</span>
-                <span class="min-w-0 truncate font-semibold text-[var(--text-tertiary)]">
+              <span class="flex min-w-0 items-center gap-2">
+                <RouterLink :to="authorRoute" class="min-w-0 shrink truncate font-semibold text-[var(--accent-strong)]">
+                  {{ authorName }}
+                </RouterLink>
+                <span v-if="authorMetaItems.length" class="min-w-0 truncate font-semibold text-[var(--text-tertiary)]">
                   {{ authorMetaItems.join(' | ') }}
                 </span>
-              </template>
+              </span>
             </div>
           </div>
 
@@ -1742,10 +1765,10 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           <div class="min-w-0 flex-1">
             <div class="min-w-0">
               <div class="flex items-start gap-2">
-                <div class="min-w-0 flex flex-1 flex-wrap items-center gap-1.5">
+                <div class="min-w-0 flex flex-1 items-center gap-1.5">
                   <RouterLink
                     :to="authorRoute"
-                    class="shrink-0 text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.16rem]"
+                    class="min-w-0 shrink truncate text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.16rem]"
                   >
                     {{ authorName }}
                   </RouterLink>
@@ -1842,9 +1865,11 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     <span class="truncate">re-shared {{ post.time }}</span>
                   </span>
                   <span v-else class="truncate">{{ post.time }}</span>
+                  <!-- Community name is intentionally hidden on feed cards for now.
                   <span v-if="feedPostContextDetail && !props.hideCommunityContext" class="hidden truncate text-[0.78rem] text-[var(--text-tertiary)] sm:inline">
                     {{ feedPostContextDetail }}
                   </span>
+                  -->
                 </div>
 
                 <div class="ml-auto flex items-center gap-2 self-start">

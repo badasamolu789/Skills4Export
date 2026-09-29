@@ -21,6 +21,11 @@ export type CompactFeedAuthor = {
   school?: string | null
   courseOfStudy?: string | null
   course_of_study?: string | null
+  courseName?: string | null
+  course_name?: string | null
+  institution?: string | null
+  institutionName?: string | null
+  institution_name?: string | null
   avatar?: string | null
   avatarUrl?: string | null
   avatar_url?: string | null
