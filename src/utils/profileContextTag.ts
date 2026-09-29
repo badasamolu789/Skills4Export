@@ -64,6 +64,9 @@ const unique = (values: string[]) => {
   })
 }
 
+export const getDirectProfileDisplayTitle = (source: unknown) =>
+  readString(source, ['displayTitle', 'display_title'])
+
 export const getExplicitProfileDisplayTitle = (source: unknown) => {
   const profile = readRecord(source, ['profile', 'userProfile', 'user_profile'])
   const user = readRecord(source, ['user'])

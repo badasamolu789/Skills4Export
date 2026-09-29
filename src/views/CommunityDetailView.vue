@@ -3,10 +3,12 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { toast } from 'vue-sonner'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import FeedCardSkeleton from '@/components/FeedCardSkeleton.vue'
 import AppRightRail from '@/components/AppRightRail.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import type { FeedPost } from '@/data/feedPosts'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { ClipboardList, Plus } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
 import {
@@ -23,6 +25,7 @@ import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getPostCommunityId, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionCommunityId, getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { richTextToPlainText } from '@/utils/richText'
+import { hasNextPage } from '@/utils/paginatedLoader'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -32,6 +35,11 @@ const community = ref<CommunityRecord | null>(null)
 const members = ref<CommunityMemberRecord[]>([])
 const isLoadingCommunity = ref(false)
 const isLoadingCommunityFeed = ref(false)
+const isLoadingMoreCommunityFeed = ref(false)
+const nextPostPage = ref<number | null>(1)
+const nextQuestionPage = ref<number | null>(1)
+const loadMoreTarget = ref<HTMLElement | null>(null)
+const hasMoreCommunityFeed = computed(() => Boolean(nextPostPage.value || nextQuestionPage.value))
 const isJoining = ref(false)
 const communityError = ref('')
 const communityFeedError = ref('')
@@ -156,29 +164,39 @@ const getRecentCreatedPosts = (communityId: string) => {
   }
 }
 
-const loadCommunityFeed = async (communityId: string) => {
-  isLoadingCommunityFeed.value = true
+const loadCommunityFeed = async (communityId: string, append = false) => {
+  if (isLoadingCommunityFeed.value || isLoadingMoreCommunityFeed.value) return
+  if (append) isLoadingMoreCommunityFeed.value = true
+  else isLoadingCommunityFeed.value = true
   communityFeedError.value = ''
-  communityFeed.value = []
+  if (!append) {
+    communityFeed.value = []
+    nextPostPage.value = 1
+    nextQuestionPage.value = 1
+  }
 
   try {
     const [postsResponse, questionsResponse] = await Promise.all([
-      postsService.listPosts({ per_page: 10, sort: '-createdAt', communityId }, authStore.authToken),
-      questionsService.listQuestions(
-        { per_page: 10, sort: '-createdAt', communityId },
-        authStore.authToken,
-      ),
+      nextPostPage.value
+        ? postsService.listPosts({ page: nextPostPage.value, per_page: 3, sort: '-createdAt', communityId }, authStore.authToken)
+        : Promise.resolve(null),
+      nextQuestionPage.value
+        ? questionsService.listQuestions(
+          { page: nextQuestionPage.value, per_page: 2, sort: '-createdAt', communityId },
+          authStore.authToken,
+        )
+        : Promise.resolve(null),
     ])
 
-    const communityPosts = postsResponse.data.filter((post) => getPostCommunityId(post) === communityId)
-    const communityQuestions = questionsResponse.data.filter((question) => getQuestionCommunityId(question) === communityId)
+    const communityPosts = (postsResponse?.data ?? []).filter((post) => getPostCommunityId(post) === communityId)
+    const communityQuestions = (questionsResponse?.data ?? []).filter((question) => getQuestionCommunityId(question) === communityId)
 
     const [mappedPosts, mappedQuestions] = await Promise.all([
       Promise.all(communityPosts.map((post) => loadCommunityPost(post))),
       Promise.all(communityQuestions.map((question) => loadCommunityQuestion(question))),
     ])
     const apiPostIds = new Set(mappedPosts.map((post) => post.apiId || post.slug))
-    const recentPosts = getRecentCreatedPosts(communityId)
+    const recentPosts = (append ? [] : getRecentCreatedPosts(communityId))
       .filter((item) => !apiPostIds.has(item.post.id))
       .map((item) => ({
         ...mapApiPostToFeedPost(
@@ -190,13 +208,27 @@ const loadCommunityFeed = async (communityId: string) => {
         communityName: community.value?.name || 'Community post',
       }) satisfies FeedPost)
 
-    communityFeed.value = [...recentPosts, ...mappedPosts, ...mappedQuestions]
+    const seen = new Set(communityFeed.value.map((item) => item.apiId || item.slug))
+    communityFeed.value = [
+      ...(append ? communityFeed.value : []),
+      ...[...recentPosts, ...mappedPosts, ...mappedQuestions].filter((item) => !seen.has(item.apiId || item.slug)),
+    ]
+    nextPostPage.value = postsResponse && hasNextPage(postsResponse) ? postsResponse.current_page + 1 : null
+    nextQuestionPage.value = questionsResponse && hasNextPage(questionsResponse) ? questionsResponse.current_page + 1 : null
   } catch (error) {
     communityFeedError.value = error instanceof ApiError ? error.message : 'Unable to load community feed.'
   } finally {
     isLoadingCommunityFeed.value = false
+    isLoadingMoreCommunityFeed.value = false
   }
 }
+
+useInfiniteScroll(
+  loadMoreTarget,
+  () => hasMoreCommunityFeed.value && !isLoadingCommunityFeed.value && !isLoadingMoreCommunityFeed.value && Boolean(community.value),
+  () => { if (community.value) void loadCommunityFeed(community.value.id, true) },
+  () => communityFeed.value.length,
+)
 
 const loadCommunity = async (id: string) => {
   isLoadingCommunity.value = true
@@ -354,19 +386,10 @@ watch(
 
       <section class="min-w-0 space-y-4">
         <div v-if="isLoadingCommunityFeed" class="space-y-3">
-          <article
-            v-for="item in 2"
-            :key="item"
-            class="animate-pulse rounded-3xl border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-soft)]"
-          >
-            <div class="h-4 w-32 rounded-full bg-[var(--surface-secondary)]" />
-            <div class="mt-4 h-6 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
-            <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-secondary)]" />
-            <div class="mt-2 h-4 w-4/5 rounded-full bg-[var(--surface-secondary)]" />
-          </article>
+          <FeedCardSkeleton v-for="item in 2" :key="item" kind="mixed" />
         </div>
 
-        <div v-else-if="communityFeedError" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+        <div v-else-if="communityFeedError && !sortedCommunityFeed.length" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
           {{ communityFeedError }}
         </div>
 
@@ -379,11 +402,14 @@ watch(
           />
         </div>
 
-        <div v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
+        <div v-else-if="!hasMoreCommunityFeed" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">
           <p class="text-sm font-semibold text-[var(--text-primary)]">No community posts yet.</p>
           <p class="mt-1 text-sm text-[var(--text-secondary)]">
             Select this community when posting or asking a question to start the feed.
           </p>
+        </div>
+        <div v-if="hasMoreCommunityFeed && !isLoadingCommunityFeed && !communityFeedError" ref="loadMoreTarget" class="py-4 text-center text-sm text-[var(--text-secondary)]">
+          {{ isLoadingMoreCommunityFeed ? 'Loading more activity...' : 'Scroll for more activity' }}
         </div>
       </section>
 

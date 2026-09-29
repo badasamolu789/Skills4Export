@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ClipboardList, Newspaper, PenLine, Plus, SmilePlus } from 'lucide-vue-next'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import FeedCardSkeleton from '@/components/FeedCardSkeleton.vue'
 import AppRightRail from '@/components/AppRightRail.vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import { toast } from 'vue-sonner'
@@ -15,6 +16,7 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { getPostCommunityId, getPostUserId, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { richTextToPlainText } from '@/utils/richText'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import type { FeedPost } from '@/data/feedPosts'
 
 const OPEN_COMPOSER_EVENT = 'skills4export:open-composer'
@@ -27,6 +29,9 @@ const socialActionsStore = useSocialActionsStore()
 const community = ref<CommunityRecord | null>(null)
 const members = ref<CommunityMemberRecord[]>([])
 const posts = ref<Array<{ record: PostRecord; feedPost: FeedPost }>>([])
+const nextPostsPage = ref<number | null>(null)
+const isLoadingMorePosts = ref(false)
+const postsMarker = ref<HTMLElement | null>(null)
 const isLoading = ref(false)
 const isJoining = ref(false)
 const errorMessage = ref('')
@@ -107,12 +112,54 @@ const loadPost = async (post: PostRecord) => {
   }
 }
 
+const loadPostsPage = async (page: number, communityId: string) => {
+  const response = await postsService.listPosts(
+    {
+      page,
+      per_page: 5,
+      sort: sortOrder.value === 'popular' ? '-score' : '-createdAt',
+      communityId,
+    },
+    authStore.authToken,
+  )
+  const communityPosts = (response.data ?? []).filter(
+    (post) => getPostCommunityId(post) === communityId,
+  )
+  const loadedPosts = await Promise.all(communityPosts.map(loadPost))
+  posts.value = page === 1
+    ? loadedPosts
+    : [...posts.value, ...loadedPosts.filter((item) => !posts.value.some((existing) => existing.record.id === item.record.id))]
+  nextPostsPage.value = response.current_page < response.last_page ? response.current_page + 1 : null
+}
+
+const loadMorePosts = async () => {
+  if (!community.value || !nextPostsPage.value || isLoadingMorePosts.value) return
+  isLoadingMorePosts.value = true
+  try {
+    await loadPostsPage(nextPostsPage.value, community.value.id)
+  } catch (error) {
+    toast.error('Unable to load more posts', {
+      description: error instanceof Error ? error.message : 'Please try again.',
+    })
+  } finally {
+    isLoadingMorePosts.value = false
+  }
+}
+
+useInfiniteScroll(
+  postsMarker,
+  () => Boolean(nextPostsPage.value) && !isLoadingMorePosts.value && !isLoading.value,
+  () => { void loadMorePosts() },
+  () => posts.value.length,
+)
+
 const loadPage = async () => {
   isLoading.value = true
   errorMessage.value = ''
   community.value = null
   members.value = []
   posts.value = []
+  nextPostsPage.value = null
 
   try {
     const communitiesResponse = await communitiesService.listCommunities(
@@ -142,18 +189,13 @@ const loadPage = async () => {
       socialActionsStore.hydrateCommunityJoinedState(matchedCommunity.id, false)
     }
 
-    const postsResponse = await postsService.listPosts(
-      {
-        per_page: 10,
-        sort: sortOrder.value === 'popular' ? '-score' : '-createdAt',
-        communityId: matchedCommunity.id,
-      },
-      authStore.authToken,
-    )
-    const communityPosts = (postsResponse.data ?? []).filter(
-      (post) => getPostCommunityId(post) === matchedCommunity.id,
-    )
-    posts.value = await Promise.all(communityPosts.map((post) => loadPost(post)))
+    await loadPostsPage(1, matchedCommunity.id)
+    if (selectedHeadlineId.value && !posts.value.some((item) => item.record.id === selectedHeadlineId.value)) {
+      const response = await postsService.getPost(selectedHeadlineId.value, authStore.authToken)
+      if (getPostCommunityId(response.data) === matchedCommunity.id) {
+        posts.value = [...posts.value, await loadPost(response.data)]
+      }
+    }
   } catch (error) {
     errorMessage.value = error instanceof ApiError || error instanceof Error
       ? error.message
@@ -376,16 +418,7 @@ onBeforeUnmount(() => {
 
       <section class="space-y-4">
         <div v-if="isLoading" class="space-y-3">
-          <article
-            v-for="item in 3"
-            :key="item"
-            class="animate-pulse rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-soft)]"
-          >
-            <div class="h-4 w-32 rounded-full bg-[var(--surface-secondary)]" />
-            <div class="mt-4 h-6 w-2/3 rounded-full bg-[var(--surface-secondary)]" />
-            <div class="mt-3 h-4 w-full rounded-full bg-[var(--surface-secondary)]" />
-            <div class="mt-2 h-4 w-4/5 rounded-full bg-[var(--surface-secondary)]" />
-          </article>
+          <FeedCardSkeleton v-for="item in 3" :key="item" kind="post" />
         </div>
 
         <div v-else-if="errorMessage" class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
@@ -398,6 +431,8 @@ onBeforeUnmount(() => {
             :key="item.feedPost.apiId || item.feedPost.slug"
             :post="item.feedPost"
           />
+          <div v-if="nextPostsPage" ref="postsMarker" class="h-1" aria-hidden="true" />
+          <FeedCardSkeleton v-if="isLoadingMorePosts" kind="post" />
         </div>
 
         <div v-else class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]">

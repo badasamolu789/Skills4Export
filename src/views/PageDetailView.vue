@@ -39,7 +39,8 @@ import { getDisplayName, getInitialsFromName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { optimizeImageFile, optimizePageAvatarFile } from '@/utils/imageOptimization'
 import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
-import { getProfileDisplayTitle } from '@/utils/profileContextTag'
+import { getDirectProfileDisplayTitle } from '@/utils/profileContextTag'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 
 type PageTab = 'about' | 'posts' | 'photos' | 'jobs' | 'dates'
 
@@ -82,6 +83,12 @@ const socialActionsStore = useSocialActionsStore()
 const activeTab = ref<PageTab>('posts')
 const pagePosts = ref<PagePost[]>([])
 const recommendedJobs = ref<JobRecord[]>([])
+const nextPostsPage = ref<number | null>(null)
+const nextJobsPage = ref<number | null>(null)
+const postsMarker = ref<HTMLElement | null>(null)
+const jobsMarker = ref<HTMLElement | null>(null)
+const isLoadingMorePosts = ref(false)
+const isLoadingMoreJobs = ref(false)
 const isLoadingPosts = ref(false)
 const isLoadingJobs = ref(false)
 const pageLoadError = ref('')
@@ -111,6 +118,12 @@ const pagePostContent = ref('')
 const pagePostFile = ref<File | null>(null)
 const pagePostFileInput = ref<HTMLInputElement | null>(null)
 const pagePostFilePreviewUrl = ref('')
+const pagePostUploadProgress = ref(0)
+const pagePostUploadError = ref('')
+const isUploadingPagePostMedia = ref(false)
+const uploadedPagePostMedia = ref<UploadedPagePostMedia | null>(null)
+let pagePostUploadController: AbortController | null = null
+let pagePostFileSelection = 0
 const agreedToPagePostTerms = ref(false)
 const internshipRows = ref<InternshipDateRow[]>([])
 const internshipDraftRows = ref<InternshipDateRow[]>([])
@@ -316,7 +329,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
         to: publicDisplayTarget.value,
         avatarText: pageInitials.value,
         avatarSrc: pageImage.value || null,
-        tag: page.value?.category === 'student' ? getProfileDisplayTitle(page.value) : pageSkills.value.slice(0, 3).join(' | '),
+        tag: getDirectProfileDisplayTitle(item.record.user),
       },
       time: formatPostTime(item.record.created_at),
       title: item.record.title,
@@ -430,6 +443,13 @@ const getPlainTextFromHtml = (value: string) => {
 }
 
 const clearPagePostFile = () => {
+  pagePostFileSelection += 1
+  pagePostUploadController?.abort()
+  pagePostUploadController = null
+  uploadedPagePostMedia.value = null
+  pagePostUploadProgress.value = 0
+  pagePostUploadError.value = ''
+  isUploadingPagePostMedia.value = false
   pagePostFile.value = null
 
   if (pagePostFileInput.value) {
@@ -446,8 +466,14 @@ const openPagePostModal = () => {
 }
 
 const handlePagePostFileChange = async (event: Event) => {
+  const selection = ++pagePostFileSelection
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
+  pagePostUploadController?.abort()
+  pagePostUploadController = null
+  uploadedPagePostMedia.value = null
+  pagePostUploadProgress.value = 0
+  pagePostUploadError.value = ''
 
   if (!file) {
     pagePostFile.value = null
@@ -456,48 +482,43 @@ const handlePagePostFileChange = async (event: Event) => {
 
   if (file?.type.startsWith('image/')) {
     if (!POST_IMAGE_ALLOWED_TYPES.has(file.type) && file.type !== 'image/webp') {
-      toast.error('Unsupported post image format', {
-        description: 'Use PNG, JPG, JPEG, WebP, or GIF for post images.',
-      })
+      pagePostUploadError.value = 'Use PNG, JPG, JPEG, WebP, or GIF for post images.'
       target.value = ''
       pagePostFile.value = null
       return
     }
 
     const uploadFile = file.type === 'image/gif' ? file : (await optimizeImageFile(file)).file
+    if (selection !== pagePostFileSelection) return
 
     if (uploadFile.size > POST_IMAGE_MAX_BYTES) {
-      toast.error('Post image is too large', {
-        description: 'Post images must be 5 MB or smaller.',
-      })
+      pagePostUploadError.value = 'Post images must be 5 MB or smaller.'
       target.value = ''
       pagePostFile.value = null
       return
     }
 
     pagePostFile.value = uploadFile
+    void uploadSelectedPagePostMedia(uploadFile)
     return
   }
 
   if (!file.type.startsWith('video/')) {
-    toast.error('Unsupported post media format', {
-      description: 'Use an image or video file for posts.',
-    })
+    pagePostUploadError.value = 'Use an image or video file for posts.'
     target.value = ''
     pagePostFile.value = null
     return
   }
 
   if (file.size > POST_VIDEO_MAX_BYTES) {
-    toast.error('Post video is too large', {
-      description: 'Post videos must be 100 MB or smaller.',
-    })
+    pagePostUploadError.value = 'Post videos must be 100 MB or smaller.'
     target.value = ''
     pagePostFile.value = null
     return
   }
 
   pagePostFile.value = file
+  void uploadSelectedPagePostMedia(file)
 }
 
 type UploadedPagePostMedia = {
@@ -505,29 +526,32 @@ type UploadedPagePostMedia = {
   mediaType?: string
 }
 
-const uploadSelectedPagePostMedia = async () => {
-  if (!pagePostFile.value) {
-    return {
-      mediaAssetIds: [],
-    } satisfies UploadedPagePostMedia
+const uploadSelectedPagePostMedia = async (file: File) => {
+  const controller = new AbortController()
+  pagePostUploadController = controller
+  isUploadingPagePostMedia.value = true
+  const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+  try {
+    const response = await mediaService.uploadMediaFile(file, {
+      kind: mediaType === 'video' ? 'video' : 'post_image',
+      title: file.name,
+      token: authStore.authToken,
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (pagePostUploadController === controller) pagePostUploadProgress.value = Math.min(95, progress)
+      },
+    })
+    if (pagePostUploadController !== controller) return
+    const assetId = response.data.assetId || response.data.id
+    if (!assetId) throw new Error('Media upload completed without an asset ID.')
+    uploadedPagePostMedia.value = { mediaAssetIds: [assetId], mediaType }
+    pagePostUploadProgress.value = 100
+  } catch (error) {
+    if (pagePostUploadController !== controller || controller.signal.aborted) return
+    pagePostUploadError.value = error instanceof Error ? error.message : 'Media upload failed. Please try again.'
+  } finally {
+    if (pagePostUploadController === controller) isUploadingPagePostMedia.value = false
   }
-
-  const mediaType = pagePostFile.value.type.startsWith('video/') ? 'video' : 'image'
-  const uploadResponse = await mediaService.uploadMediaFile(pagePostFile.value, {
-    kind: mediaType === 'video' ? 'video' : 'post_image',
-    title: pagePostFile.value.name,
-    token: authStore.authToken,
-  })
-  const assetId = uploadResponse.data.assetId || uploadResponse.data.id
-
-  if (assetId) {
-    return {
-      mediaAssetIds: [assetId],
-      mediaType,
-    } satisfies UploadedPagePostMedia
-  }
-
-  throw new Error('Media upload completed without an asset ID.')
 }
 
 const openUploadModal = () => {
@@ -1025,19 +1049,20 @@ const togglePageFollow = async () => {
   }
 }
 
-const loadPagePosts = async () => {
+const loadPagePosts = async (pageNumber = 1) => {
   if (!page.value?.id) {
     pagePosts.value = []
     return
   }
 
-  isLoadingPosts.value = true
+  if (pageNumber === 1) isLoadingPosts.value = true
+  else isLoadingMorePosts.value = true
 
   try {
     const pageId = page.value.id
     const response = await postsService.listPagePosts(
       pageId,
-      { per_page: 10, sort: '-createdAt' },
+      { page: pageNumber, per_page: 5, sort: '-createdAt' },
       authStore.authToken,
     )
     const records = (response.data ?? []).filter((post) => {
@@ -1048,33 +1073,56 @@ const loadPagePosts = async () => {
       records.map((post) => postsService.listPostMedia(post.id, authStore.authToken)),
     )
 
-    pagePosts.value = records.map((record, index) => ({
+    const loadedPosts = records.map((record, index) => ({
       record,
       media: mediaResults[index]?.data ?? [],
     }))
+    pagePosts.value = pageNumber === 1
+      ? loadedPosts
+      : [...pagePosts.value, ...loadedPosts.filter((item) => !pagePosts.value.some((existing) => existing.record.id === item.record.id))]
+    nextPostsPage.value = response.current_page < response.last_page ? response.current_page + 1 : null
   } catch {
-    pagePosts.value = []
+    if (pageNumber === 1) pagePosts.value = []
   } finally {
     isLoadingPosts.value = false
+    isLoadingMorePosts.value = false
   }
 }
 
-const loadRecommendedJobs = async () => {
-  isLoadingJobs.value = true
+const loadRecommendedJobs = async (pageNumber = 1) => {
+  if (pageNumber === 1) isLoadingJobs.value = true
+  else isLoadingMoreJobs.value = true
 
   try {
     const response = await jobsService.listJobs(
-      { per_page: 10, sort: '-createdAt' },
+      { page: pageNumber, per_page: 5, sort: '-createdAt' },
       authStore.authToken,
     )
     const jobs = response.data ?? []
-    recommendedJobs.value = jobs
+    recommendedJobs.value = pageNumber === 1
+      ? jobs
+      : [...recommendedJobs.value, ...jobs.filter((job) => !recommendedJobs.value.some((existing) => existing.id === job.id))]
+    nextJobsPage.value = response.current_page < response.last_page ? response.current_page + 1 : null
   } catch {
-    recommendedJobs.value = []
+    if (pageNumber === 1) recommendedJobs.value = []
   } finally {
     isLoadingJobs.value = false
+    isLoadingMoreJobs.value = false
   }
 }
+
+useInfiniteScroll(
+  postsMarker,
+  () => activeTab.value === 'posts' && Boolean(nextPostsPage.value) && !isLoadingPosts.value && !isLoadingMorePosts.value,
+  () => { if (nextPostsPage.value) void loadPagePosts(nextPostsPage.value) },
+  () => pagePosts.value.length,
+)
+useInfiniteScroll(
+  jobsMarker,
+  () => activeTab.value === 'jobs' && Boolean(nextJobsPage.value) && !isLoadingJobs.value && !isLoadingMoreJobs.value,
+  () => { if (nextJobsPage.value) void loadRecommendedJobs(nextJobsPage.value) },
+  () => recommendedJobs.value.length,
+)
 
 const readUploadString = (record: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
@@ -1121,7 +1169,7 @@ const handleCreatePagePost = () => {
 }
 
 const submitPagePost = async () => {
-  if (!page.value || isSubmittingPagePost.value) {
+  if (!page.value || isSubmittingPagePost.value || isUploadingPagePostMedia.value || !uploadedPagePostMedia.value) {
     return
   }
 
@@ -1157,14 +1205,10 @@ const submitPagePost = async () => {
   }
 
   isSubmittingPagePost.value = true
-  const loadingToastId = toast.loading(pagePostFile.value ? 'Uploading media...' : 'Creating page post...')
+  const loadingToastId = toast.loading('Creating page post...')
 
   try {
-    const uploadedMedia = await uploadSelectedPagePostMedia()
-
-    if (uploadedMedia.mediaAssetIds.length > 0) {
-      toast.loading('Creating page post...', { id: loadingToastId })
-    }
+    const uploadedMedia = uploadedPagePostMedia.value
 
     const response = await postsService.createPost(
       {
@@ -1213,6 +1257,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  pagePostUploadController?.abort()
   clearUploadSelection()
   clearEditAvatarSelection()
   if (pagePostFilePreviewUrl.value) {
@@ -1399,15 +1444,37 @@ watch(pagePostFile, (file, previousFile) => {
       </section>
 
       <section v-else-if="activeTab === 'posts'" class="space-y-5">
-        <div v-if="isLoadingPosts" class="space-y-4">
-          <div v-for="item in 2" :key="item" class="h-48 animate-pulse rounded-[1rem] bg-[var(--surface-secondary)]" />
+        <div v-if="isLoadingPosts" class="space-y-4" aria-label="Loading page posts">
+          <article v-for="item in 2" :key="item" class="animate-pulse overflow-hidden rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-3 shadow-[var(--shadow-elevated)] sm:p-4">
+            <div class="flex items-center gap-3">
+              <div class="h-11 w-11 shrink-0 rounded-full bg-[var(--surface-muted)] sm:h-12 sm:w-12" />
+              <div class="min-w-0 flex-1 space-y-2">
+                <div class="h-4 w-2/5 rounded-full bg-[var(--surface-muted)]" />
+                <div class="h-3 w-1/4 rounded-full bg-[var(--surface-muted)]" />
+              </div>
+            </div>
+            <div class="mt-5 h-5 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+            <div class="mt-3 space-y-2">
+              <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-3 w-5/6 rounded-full bg-[var(--surface-muted)]" />
+            </div>
+            <div class="mt-4 aspect-[4/5] w-full rounded-[0.5rem] bg-[var(--surface-muted)] sm:aspect-[1.91/1]" />
+            <div class="mt-4 flex gap-2">
+              <div class="h-7 w-20 rounded-[0.5rem] bg-[var(--surface-muted)]" />
+              <div class="h-7 w-20 rounded-[0.5rem] bg-[var(--surface-muted)]" />
+              <div class="h-7 w-16 rounded-[0.5rem] bg-[var(--surface-muted)]" />
+            </div>
+          </article>
         </div>
         <div v-else-if="pageFeedPosts.length" class="max-w-4xl space-y-4">
           <AppFeedPost
             v-for="post in pageFeedPosts"
             :key="post.apiId || post.slug"
             :post="post"
+            hide-view-page
           />
+          <div v-if="nextPostsPage" ref="postsMarker" class="h-1" aria-hidden="true" />
+          <p v-if="isLoadingMorePosts" class="text-center text-sm text-[var(--text-secondary)]">Loading more posts...</p>
         </div>
         <div v-else class="max-w-4xl rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center">
           <p class="text-lg font-semibold text-[var(--text-primary)]">No page posts yet</p>
@@ -1462,7 +1529,17 @@ watch(pagePostFile, (file, previousFile) => {
       <section v-else-if="activeTab === 'jobs'" class="space-y-4">
         <h2 class="text-xl font-semibold text-[var(--text-primary)]">Jobs</h2>
         <div v-if="isLoadingJobs" class="space-y-4">
-          <div v-for="item in 2" :key="item" class="h-32 animate-pulse rounded-[1rem] bg-[var(--surface-secondary)]" />
+          <article v-for="item in 2" :key="item" class="animate-pulse space-y-3 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+            <div class="h-5 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-4 w-1/3 rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-3 w-4/5 rounded-full bg-[var(--surface-muted)]" />
+            <div class="flex flex-wrap gap-2 pt-1">
+              <div class="h-8 w-28 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-8 w-24 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-8 w-28 rounded-full bg-[var(--surface-muted)]" />
+            </div>
+          </article>
         </div>
         <div v-else-if="recommendedJobs.length" class="space-y-4">
           <JobCard
@@ -1470,6 +1547,8 @@ watch(pagePostFile, (file, previousFile) => {
             :key="job.id"
             :job="job"
           />
+          <div v-if="nextJobsPage" ref="jobsMarker" class="h-1" aria-hidden="true" />
+          <p v-if="isLoadingMoreJobs" class="text-center text-sm text-[var(--text-secondary)]">Loading more jobs...</p>
         </div>
         <div v-else class="rounded-[1rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center">
           <p class="text-lg font-semibold text-[var(--text-primary)]">No jobs posted yet</p>
@@ -1532,7 +1611,17 @@ watch(pagePostFile, (file, previousFile) => {
         <section class="space-y-4">
           <h2 class="text-xl font-semibold text-[var(--text-primary)]">Recommended Jobs</h2>
           <div v-if="isLoadingJobs" class="space-y-4">
-            <div v-for="item in 2" :key="item" class="h-32 animate-pulse rounded-[1rem] bg-[var(--surface-secondary)]" />
+            <article v-for="item in 2" :key="item" class="animate-pulse space-y-3 rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)]">
+              <div class="h-5 w-2/3 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-4 w-1/3 rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+              <div class="h-3 w-4/5 rounded-full bg-[var(--surface-muted)]" />
+              <div class="flex flex-wrap gap-2 pt-1">
+                <div class="h-8 w-28 rounded-full bg-[var(--surface-muted)]" />
+                <div class="h-8 w-24 rounded-full bg-[var(--surface-muted)]" />
+                <div class="h-8 w-28 rounded-full bg-[var(--surface-muted)]" />
+              </div>
+            </article>
           </div>
           <div
             v-else-if="!recommendedJobs.length"
@@ -1557,20 +1646,44 @@ watch(pagePostFile, (file, previousFile) => {
 
   <section
     v-else-if="pagesStore.isLoadingPages"
-    class="space-y-5 rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 shadow-[var(--shadow-soft)]"
+    class="page-detail-shell"
     aria-label="Loading page details"
+    aria-busy="true"
   >
-    <div class="flex animate-pulse items-center gap-4">
-      <div class="h-20 w-20 rounded-full bg-[var(--surface-muted)]" />
-      <div class="min-w-0 flex-1 space-y-3">
-        <div class="h-6 w-2/5 rounded-full bg-[var(--surface-muted)]" />
-        <div class="h-4 w-1/4 rounded-full bg-[var(--surface-muted)]" />
+    <div class="page-detail-hero animate-pulse">
+      <div class="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div class="flex min-w-0 items-center gap-4">
+          <div class="h-20 w-20 shrink-0 rounded-full bg-[var(--surface-muted)]" />
+          <div class="min-w-0 flex-1 space-y-3">
+            <div class="h-6 w-36 max-w-full rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-4 w-48 max-w-full rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-4 w-28 rounded-full bg-[var(--surface-muted)]" />
+          </div>
+        </div>
+        <div class="h-11 w-32 max-w-full rounded-[0.75rem] bg-[var(--surface-muted)]" />
+      </div>
+      <div class="page-tabs" aria-hidden="true">
+        <div v-for="item in 4" :key="item" class="mb-4 h-4 w-14 shrink-0 rounded-full bg-[var(--surface-muted)]" />
       </div>
     </div>
-    <div class="animate-pulse space-y-3">
-      <div class="h-4 w-full rounded-full bg-[var(--surface-muted)]" />
-      <div class="h-4 w-5/6 rounded-full bg-[var(--surface-muted)]" />
-      <div class="h-28 rounded-[1rem] bg-[var(--surface-muted)]" />
+    <div class="page-detail-body space-y-4 animate-pulse">
+      <article v-for="item in 2" :key="item" class="overflow-hidden rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-3 shadow-[var(--shadow-elevated)] sm:p-4">
+        <div class="flex items-center gap-3">
+          <div class="h-11 w-11 shrink-0 rounded-full bg-[var(--surface-muted)] sm:h-12 sm:w-12" />
+          <div class="min-w-0 flex-1 space-y-2">
+            <div class="h-4 w-2/5 rounded-full bg-[var(--surface-muted)]" />
+            <div class="h-3 w-1/4 rounded-full bg-[var(--surface-muted)]" />
+          </div>
+        </div>
+        <div class="mt-5 h-5 w-3/4 rounded-full bg-[var(--surface-muted)]" />
+        <div class="mt-3 h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+        <div class="mt-2 h-3 w-5/6 rounded-full bg-[var(--surface-muted)]" />
+        <div class="mt-4 aspect-[4/5] w-full rounded-[0.5rem] bg-[var(--surface-muted)] sm:aspect-[1.91/1]" />
+        <div class="mt-4 flex gap-2">
+          <div class="h-7 w-20 rounded-[0.5rem] bg-[var(--surface-muted)]" />
+          <div class="h-7 w-20 rounded-[0.5rem] bg-[var(--surface-muted)]" />
+        </div>
+      </article>
     </div>
   </section>
 
@@ -1913,7 +2026,7 @@ watch(pagePostFile, (file, previousFile) => {
     v-model="isPagePostModalOpen"
     label="Page post"
     title="Create Page Post"
-    max-width-class="sm:max-w-4xl"
+    max-width-class="sm:max-w-2xl"
   >
     <div class="space-y-5">
       <div class="rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-3">
@@ -1945,9 +2058,11 @@ watch(pagePostFile, (file, previousFile) => {
 
       <label class="block">
         <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span class="text-[var(--danger)]">*</span></span>
-        <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
+        <span v-if="pagePostUploadError" class="mt-1 block text-xs font-medium text-[var(--danger)]" role="alert">{{ pagePostUploadError }}</span>
+        <!-- Media requirements are shown only when validation fails. -->
+        <!-- <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
           Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB. Videos up to 100 MB.
-        </span>
+        </span> -->
         <button
           v-if="!pagePostFile"
           type="button"
@@ -1963,7 +2078,7 @@ watch(pagePostFile, (file, previousFile) => {
           v-else
           class="mt-2 block overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
         >
-          <span class="block bg-[var(--surface-secondary)] p-3">
+          <span class="relative block bg-[var(--surface-secondary)] p-3">
             <img loading="lazy" decoding="async"
               v-if="pagePostFileKind === 'image'"
               :src="pagePostFilePreviewUrl"
@@ -1978,6 +2093,19 @@ watch(pagePostFile, (file, previousFile) => {
               playsinline
               preload="metadata"
             />
+            <span
+              v-if="isUploadingPagePostMedia"
+              class="pointer-events-none absolute inset-3 rounded-[0.6rem] bg-[var(--surface-primary)]/70 transition-[clip-path] duration-150 ease-linear"
+              :style="{ clipPath: `inset(0 0 0 ${pagePostUploadProgress}%)` }"
+              aria-hidden="true"
+            />
+            <button
+              type="button"
+              class="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-primary)] shadow-[var(--shadow-soft)]"
+              aria-label="Cancel media upload and remove file"
+              title="Remove media"
+              @click.prevent="clearPagePostFile"
+            ><X class="h-4 w-4" /></button>
           </span>
           <span class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <span class="min-w-0">
@@ -1989,9 +2117,8 @@ watch(pagePostFile, (file, previousFile) => {
               <span class="mt-1 block text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                 {{ pagePostFileKind }} · {{ pagePostFileSize }}
               </span>
-              <span class="mt-1 block text-xs text-[var(--text-tertiary)]">
-                {{ pagePostFileRecommendation }}
-              </span>
+              <span v-if="isUploadingPagePostMedia" class="mt-1 block text-xs text-[var(--text-secondary)]" role="status">Uploading {{ pagePostUploadProgress }}%</span>
+              <span v-else-if="uploadedPagePostMedia" class="mt-1 block text-xs font-semibold text-green-600 dark:text-green-400">Ready</span>
             </span>
             <span class="flex shrink-0 items-center gap-2">
               <button
@@ -2001,33 +2128,25 @@ watch(pagePostFile, (file, previousFile) => {
               >
                 Change
               </button>
-              <button
-                type="button"
-                class="inline-flex h-10 items-center justify-center gap-2 rounded-[0.65rem] border border-[color:var(--border-soft)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
-                @click.prevent="clearPagePostFile"
-              >
-                <X class="h-4 w-4" />
-                Remove
-              </button>
             </span>
           </span>
         </span>
         <input ref="pagePostFileInput" type="file" accept="image/*,video/*" class="sr-only" required @change="handlePagePostFileChange" />
       </label>
 
+      <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+        <input v-model="agreedToPagePostTerms" type="checkbox" required class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
+        <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
+      </label>
       <button
         type="button"
         class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-        :disabled="isSubmittingPagePost"
+        :disabled="isSubmittingPagePost || isUploadingPagePostMedia || !uploadedPagePostMedia"
         @click="submitPagePost"
       >
         {{ isSubmittingPagePost ? 'Posting...' : 'Post' }}
         <ArrowRight class="h-4 w-4" />
       </button>
-      <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-        <input v-model="agreedToPagePostTerms" type="checkbox" required class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
-        <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
-      </label>
     </div>
   </ResponsiveOverlay>
 
@@ -2107,7 +2226,7 @@ watch(pagePostFile, (file, previousFile) => {
 .page-detail-shell {
   margin-inline: auto;
   width: 100%;
-  max-width: 64rem;
+  max-width: 44rem;
   min-width: 0;
   overflow-x: hidden;
   overflow-wrap: anywhere;
@@ -2260,6 +2379,10 @@ watch(pagePostFile, (file, previousFile) => {
 }
 
 @media (min-width: 1024px) {
+  .page-detail-shell {
+    max-width: 46rem;
+  }
+
   .page-detail-hero {
     padding-top: 4rem;
   }

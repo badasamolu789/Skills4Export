@@ -260,8 +260,12 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
   }
 
   const followUser = async (userId: string) => {
+    if (userId && userId === authStore.userId) {
+      throw new Error('You cannot follow your own account.')
+    }
+
     const key = `follow:${userId}`
-    if (!authStore.userId || !authStore.authToken || isFollowingUser(userId) || loadingActions.value[key]) {
+    if (!userId || !authStore.userId || !authStore.authToken || isFollowingUser(userId) || loadingActions.value[key]) {
       return
     }
 
@@ -321,8 +325,13 @@ export const useSocialActionsStore = defineStore('socialActions', () => {
     }
   }
 
-  const toggleUserFollow = (userId: string) =>
-    isFollowingUser(userId) ? unfollowUser(userId) : followUser(userId)
+  const toggleUserFollow = (userId: string) => {
+    if (userId && userId === authStore.userId) {
+      return Promise.reject(new Error('You cannot follow your own account.'))
+    }
+
+    return isFollowingUser(userId) ? unfollowUser(userId) : followUser(userId)
+  }
 
   const followPage = async (pageId: string) => {
     const key = `follow:page:${pageId}`

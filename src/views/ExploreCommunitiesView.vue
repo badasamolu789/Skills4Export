@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { getDisplayErrorMessage } from '@/lib/errors'
 import { communitiesService, type CommunityRecord } from '@/services/communities'
 import { useAuthStore } from '@/stores/auth'
@@ -8,13 +9,16 @@ import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { richTextToPlainText } from '@/utils/richText'
 
-const COMMUNITIES_PAGE_SIZE = 10
+const COMMUNITIES_PAGE_SIZE = 5
 
 const authStore = useAuthStore()
 const searchQuery = ref('')
 const communities = ref<CommunityRecord[]>([])
 const isLoadingCommunities = ref(false)
 const communitiesError = ref('')
+const nextCommunitiesPage = ref<number | null>(null)
+const isLoadingMoreCommunities = ref(false)
+const loadMoreTarget = ref<HTMLElement | null>(null)
 
 const filteredCommunities = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -30,28 +34,43 @@ const filteredCommunities = computed(() => {
   )
 })
 
-const loadCommunities = async () => {
-  isLoadingCommunities.value = true
+const loadCommunities = async (page = 1) => {
+  if (isLoadingCommunities.value || isLoadingMoreCommunities.value) return
+  if (page === 1) isLoadingCommunities.value = true
+  else isLoadingMoreCommunities.value = true
   communitiesError.value = ''
 
   try {
     const response = await loadPaginatedRecords(
       (params) => communitiesService.listCommunities(params, authStore.authToken),
-      {},
+      { page },
       { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 1 },
     )
-    communities.value = response.data.filter(
+    const nextCommunities = response.data.filter(
       (community) =>
         community.is_active !== 0 &&
         isPublicCommunity(community),
     )
+    const seen = new Set(communities.value.map((community) => community.id))
+    communities.value = page === 1
+      ? nextCommunities
+      : [...communities.value, ...nextCommunities.filter((community) => !seen.has(community.id))]
+    nextCommunitiesPage.value = response.nextPage
   } catch (error) {
     communitiesError.value = getDisplayErrorMessage(error, 'Unable to load communities.')
-    communities.value = []
+    if (page === 1) communities.value = []
   } finally {
     isLoadingCommunities.value = false
+    isLoadingMoreCommunities.value = false
   }
 }
+
+useInfiniteScroll(
+  loadMoreTarget,
+  () => Boolean(nextCommunitiesPage.value) && !isLoadingCommunities.value && !isLoadingMoreCommunities.value,
+  () => { if (nextCommunitiesPage.value) void loadCommunities(nextCommunitiesPage.value) },
+  () => communities.value.length,
+)
 
 onMounted(() => {
   void loadCommunities()
@@ -136,8 +155,12 @@ onMounted(() => {
           </div>
         </RouterLink>
 
+        <div v-if="nextCommunitiesPage" ref="loadMoreTarget" class="py-4 text-center text-sm text-[var(--text-secondary)]">
+          {{ isLoadingMoreCommunities ? 'Loading more communities...' : 'Scroll for more communities' }}
+        </div>
+
         <article
-          v-if="!isLoadingCommunities && filteredCommunities.length === 0"
+          v-if="!isLoadingCommunities && filteredCommunities.length === 0 && !nextCommunitiesPage"
           class="rounded-[1.35rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-8 text-center shadow-[var(--shadow-soft)]"
         >
           <h2 class="text-xl font-semibold text-[var(--text-primary)]">No communities found.</h2>

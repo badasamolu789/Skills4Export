@@ -16,8 +16,8 @@ import { createCachedRequest } from '@/utils/requestCache'
 
 const PUBLIC_FREELANCER_STATUSES = new Set(['available', 'certified', 'verified'])
 const PUBLIC_FREELANCE_JOB_STATUSES = new Set(['approved', 'active', 'live'])
-const FREELANCERS_PAGE_SIZE = 10
-const FREELANCE_JOBS_PAGE_SIZE = 10
+const FREELANCERS_PAGE_SIZE = 5
+const FREELANCE_JOBS_PAGE_SIZE = 5
 const FREELANCERS_CACHE_TTL_MS = 2 * 60 * 1000
 const FREELANCER_PROFILE_CACHE_TTL_MS = 5 * 60 * 1000
 

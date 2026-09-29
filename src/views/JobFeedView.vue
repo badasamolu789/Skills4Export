@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { BriefcaseBusiness, Search } from 'lucide-vue-next'
 import JobCard from '@/components/JobCard.vue'
 import PostJobModal from '@/components/PostJobModal.vue'
 import type { JobRecord } from '@/services/jobs'
 import { useJobsStore } from '@/stores/jobs'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 
 const jobsStore = useJobsStore()
 const searchQuery = ref('')
 const isPostJobModalOpen = ref(false)
-const visibleJobCount = ref(6)
+const visibleJobCount = ref(5)
 const loadMoreTarget = ref<HTMLElement | null>(null)
-let loadMoreObserver: IntersectionObserver | null = null
 
 const isPublicJob = (job: JobRecord) => {
   const status = job.status?.toLowerCase()
@@ -54,16 +54,16 @@ const loadMoreJobs = async () => {
   }
 
   if (hasMoreLoadedJobs.value) {
-    visibleJobCount.value = Math.min(visibleJobCount.value + 6, filteredJobs.value.length)
+    visibleJobCount.value = Math.min(visibleJobCount.value + 5, filteredJobs.value.length)
     return
   }
 
   await jobsStore.loadMoreJobs()
-  visibleJobCount.value = Math.min(visibleJobCount.value + 6, filteredJobs.value.length)
+  visibleJobCount.value = Math.min(visibleJobCount.value + 5, filteredJobs.value.length)
 }
 
 watch(searchQuery, () => {
-  visibleJobCount.value = 6
+  visibleJobCount.value = 5
 })
 
 const addCreatedJob = (job: JobRecord) => {
@@ -76,23 +76,14 @@ const addCreatedJob = (job: JobRecord) => {
   }
 }
 
-onMounted(() => {
-  void jobsStore.loadJobs()
+useInfiniteScroll(
+  loadMoreTarget,
+  () => hasMoreJobs.value && !jobsStore.isLoadingJobs && !jobsStore.isLoadingMoreJobs,
+  () => void loadMoreJobs(),
+  () => visibleJobs.value.length,
+)
 
-  loadMoreObserver = new IntersectionObserver((entries) => {
-    if (entries.some((entry) => entry.isIntersecting)) {
-      void loadMoreJobs()
-    }
-  })
-
-  if (loadMoreTarget.value) {
-    loadMoreObserver.observe(loadMoreTarget.value)
-  }
-})
-
-onBeforeUnmount(() => {
-  loadMoreObserver?.disconnect()
-})
+onMounted(() => void jobsStore.loadJobs())
 </script>
 
 <template>

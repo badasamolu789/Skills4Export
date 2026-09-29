@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowUp, ChevronDown, Edit2, MessageSquare, MoreHorizontal, PencilLine, Send, Trash2 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import AppFeedPost from '@/components/AppFeedPost.vue'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
 import { postsService, type PostCommentRecord, type PostMediaRecord, type PostRecord } from '@/services/posts'
@@ -106,7 +107,7 @@ const isSavingEdit = ref(false)
 const isDeleting = ref(false)
 const closedActivityPanels = ref(new Set<string>())
 const activeActionMenu = ref('')
-const ACTIVITY_PAGE_SIZE = 8
+const ACTIVITY_PAGE_SIZE = 5
 
 const createTabState = (): ActivityTabState => ({
   page: 0,
@@ -136,6 +137,15 @@ const activeCount = computed(() => ({
 }))
 
 const activeTabState = computed(() => tabState[activeTab.value])
+const loadMoreTarget = ref<HTMLElement | null>(null)
+const activeLoadedCount = computed(() => ({
+  posts: userPosts.value.length,
+  comments: userComments.value.length,
+  scored: scoredPosts.value.length,
+  saved: savedPosts.value.length + savedQuestions.value.length,
+  answers: userAnswers.value.length,
+  questions: userQuestions.value.length,
+})[activeTab.value])
 const isLoading = computed(() => activeTabState.value.isLoading && !activeTabState.value.isLoaded)
 const isLoadingMore = computed(() => activeTabState.value.isLoading && activeTabState.value.isLoaded)
 const loadError = computed(() => activeTabState.value.error)
@@ -271,14 +281,12 @@ const loadMoreActiveTab = () => {
   void loadActivities(activeTab.value, { append: true })
 }
 
-const handleWindowScroll = () => {
-  const scrollOffset = window.innerHeight + window.scrollY
-  const documentHeight = document.documentElement.scrollHeight
-
-  if (documentHeight - scrollOffset < 560) {
-    loadMoreActiveTab()
-  }
-}
+useInfiniteScroll(
+  loadMoreTarget,
+  () => activeTabState.value.isLoaded && activeTabState.value.hasMore && !activeTabState.value.isLoading,
+  loadMoreActiveTab,
+  () => activeLoadedCount.value,
+)
 
 const formatDate = (value: string) => {
   const date = new Date(value)
@@ -797,12 +805,7 @@ watch(activeTab, () => {
 
 onMounted(() => {
   syncActiveTabFromRoute()
-  window.addEventListener('scroll', handleWindowScroll, { passive: true })
   loadActiveTabIfNeeded()
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('scroll', handleWindowScroll)
 })
 </script>
 
@@ -1043,14 +1046,8 @@ onBeforeUnmount(() => {
           Loading more activity...
         </div>
 
-        <div v-else-if="activeTabState.isLoaded && activeTabState.hasMore" class="flex justify-center pt-1">
-          <button
-            type="button"
-            class="inline-flex h-10 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent)] hover:text-[var(--accent-strong)]"
-            @click="loadMoreActiveTab"
-          >
-            Load more
-          </button>
+        <div v-else-if="activeTabState.isLoaded && activeTabState.hasMore" ref="loadMoreTarget" class="py-4 text-center text-sm text-[var(--text-secondary)]">
+          Scroll for more activity
         </div>
       </div>
     </div>

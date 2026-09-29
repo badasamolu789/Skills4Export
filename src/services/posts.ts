@@ -16,6 +16,8 @@ export type PostRecord = {
     username?: string | null
     displayName?: string | null
     display_name?: string | null
+    displayTitle?: string | null
+    display_title?: string | null
     email?: string | null
     avatar?: string | null
     avatarUrl?: string | null

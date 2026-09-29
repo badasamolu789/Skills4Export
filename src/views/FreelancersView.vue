@@ -68,7 +68,7 @@ const freelancerTermsAgreed = ref(false)
 const passportFileName = ref('')
 const passportFile = ref<File | null>(null)
 const passportPreviewUrl = ref('')
-const INITIAL_VISIBLE_ITEMS = 10
+const INITIAL_VISIBLE_ITEMS = 5
 const visibleFreelancerCount = ref(INITIAL_VISIBLE_ITEMS)
 const visibleJobCount = ref(INITIAL_VISIBLE_ITEMS)
 const revealSentinel = ref<HTMLElement | null>(null)
@@ -441,7 +441,7 @@ const revealNextItems = async () => {
   if (activeTab.value === 'freelancers') {
     if (visibleFreelancerCount.value < filteredFreelancers.value.length) {
       visibleFreelancerCount.value = Math.min(
-        visibleFreelancerCount.value + 1,
+        visibleFreelancerCount.value + 5,
         filteredFreelancers.value.length,
       )
       return
@@ -451,7 +451,7 @@ const revealNextItems = async () => {
 
     if (visibleFreelancerCount.value < filteredFreelancers.value.length) {
       visibleFreelancerCount.value = Math.min(
-        visibleFreelancerCount.value + 1,
+        visibleFreelancerCount.value + 5,
         filteredFreelancers.value.length,
       )
     }
@@ -459,14 +459,14 @@ const revealNextItems = async () => {
   }
 
   if (visibleJobCount.value < filteredJobs.value.length) {
-    visibleJobCount.value = Math.min(visibleJobCount.value + 1, filteredJobs.value.length)
+    visibleJobCount.value = Math.min(visibleJobCount.value + 5, filteredJobs.value.length)
     return
   }
 
   await freelancersStore.loadMoreFreelanceJobs()
 
   if (visibleJobCount.value < filteredJobs.value.length) {
-    visibleJobCount.value = Math.min(visibleJobCount.value + 1, filteredJobs.value.length)
+    visibleJobCount.value = Math.min(visibleJobCount.value + 5, filteredJobs.value.length)
   }
 }
 
@@ -1089,15 +1089,13 @@ const clearPassportUpload = () => {
             </div>
           </article>
 
-          <button
+          <div
             v-if="hasMoreFreelancers"
             ref="revealSentinel"
-            type="button"
-            class="mx-auto flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-[0.82rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            @click="revealNextItems"
+            class="py-4 text-center text-sm text-[var(--text-secondary)]"
           >
-            Scroll to reveal more freelancers
-          </button>
+            {{ freelancersStore.isLoadingMoreFreelancers ? 'Loading more freelancers...' : 'Scroll for more freelancers' }}
+          </div>
 
           <article
             v-if="!freelancersStore.isLoadingFreelancers && visibleFreelancers.length === 0"
@@ -1218,15 +1216,13 @@ const clearPassportUpload = () => {
             </article>
           </div>
 
-          <button
+          <div
             v-if="hasMoreJobs"
             ref="revealSentinel"
-            type="button"
-            class="mx-auto flex h-10 items-center justify-center rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-[0.82rem] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
-            @click="revealNextItems"
+            class="py-4 text-center text-sm text-[var(--text-secondary)]"
           >
-            Scroll to reveal more jobs
-          </button>
+            {{ freelancersStore.isLoadingMoreFreelanceJobs ? 'Loading more jobs...' : 'Scroll for more jobs' }}
+          </div>
 
           <article
             v-if="!freelancersStore.isLoadingFreelanceJobs && visibleJobs.length === 0"

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import FeedCardSkeleton from '@/components/FeedCardSkeleton.vue'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import { useCurrentUserIdentity } from '@/composables/useCurrentUserIdentity'
 import type { QuestionPost } from '@/data/feedPosts'
 import { getDisplayErrorMessage } from '@/lib/errors'
@@ -10,12 +12,12 @@ import { usersService } from '@/services/users'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { readFollowState } from '@/utils/followState'
-import { loadPaginatedRecords } from '@/utils/paginatedLoader'
+import { hasNextPage, loadPaginatedRecords } from '@/utils/paginatedLoader'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 
-const QUESTIONS_PAGE_SIZE = 10
-const COMMUNITIES_PAGE_SIZE = 10
+const QUESTIONS_PAGE_SIZE = 5
+const COMMUNITIES_PAGE_SIZE = 5
 
 const authStore = useAuthStore()
 const socialActionsStore = useSocialActionsStore()
@@ -24,6 +26,9 @@ const isLoadingQuestions = ref(false)
 const questionsError = ref('')
 const apiQuestions = ref<QuestionPost[]>([])
 const hasLoadedApiQuestions = ref(false)
+const isLoadingMoreQuestions = ref(false)
+const nextQuestionsPage = ref<number | null>(null)
+const loadMoreTarget = ref<HTMLElement | null>(null)
 const communitiesById = ref(new Map<string, CommunityRecord>())
 
 const questions = computed(() => {
@@ -76,36 +81,57 @@ const loadQuestion = async (question: QuestionRecord) => {
   }
 }
 
-const loadQuestions = async () => {
-  isLoadingQuestions.value = true
+const loadQuestions = async (page = 1) => {
+  if (isLoadingQuestions.value || isLoadingMoreQuestions.value) return
+  if (page === 1) isLoadingQuestions.value = true
+  else isLoadingMoreQuestions.value = true
   questionsError.value = ''
 
   try {
-    const communitiesResponse = await loadPaginatedRecords(
-      (params) => communitiesService.listCommunities(params, authStore.authToken),
-      {},
-      { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 1 },
-    )
-    const response = await questionsService.listQuestions(
-      { per_page: QUESTIONS_PAGE_SIZE, sort: '-createdAt' },
-      authStore.authToken,
-    )
-    communitiesById.value = new Map(
-      (communitiesResponse.data ?? []).map((community) => [community.id, community]),
-    )
-    apiQuestions.value = await Promise.all(response.data.map((question) => loadQuestion(question)))
-    apiQuestions.value.forEach((question) => {
+    const [communitiesResponse, response] = await Promise.all([
+      page === 1
+        ? loadPaginatedRecords(
+          (params) => communitiesService.listCommunities(params, authStore.authToken),
+          {},
+          { perPage: COMMUNITIES_PAGE_SIZE, maxPages: 1 },
+        )
+        : Promise.resolve(null),
+      questionsService.listQuestions(
+        { page, per_page: QUESTIONS_PAGE_SIZE, sort: '-createdAt' },
+        authStore.authToken,
+      ),
+    ])
+    if (communitiesResponse) {
+      communitiesById.value = new Map(
+        communitiesResponse.data.map((community) => [community.id, community]),
+      )
+    }
+    const nextQuestions = await Promise.all(response.data.map((question) => loadQuestion(question)))
+    const seen = new Set(apiQuestions.value.map((question) => question.apiId || question.slug))
+    apiQuestions.value = page === 1
+      ? nextQuestions
+      : [...apiQuestions.value, ...nextQuestions.filter((question) => !seen.has(question.apiId || question.slug))]
+    nextQuestions.forEach((question) => {
       socialActionsStore.upsertFeedItem(question, { prepend: false })
     })
+    nextQuestionsPage.value = hasNextPage(response) ? response.current_page + 1 : null
     hasLoadedApiQuestions.value = true
   } catch (error) {
     questionsError.value = getDisplayErrorMessage(error, 'Questions could not be loaded. Please try again.')
-    apiQuestions.value = []
+    if (page === 1) apiQuestions.value = []
     hasLoadedApiQuestions.value = true
   } finally {
     isLoadingQuestions.value = false
+    isLoadingMoreQuestions.value = false
   }
 }
+
+useInfiniteScroll(
+  loadMoreTarget,
+  () => Boolean(nextQuestionsPage.value) && !isLoadingQuestions.value && !isLoadingMoreQuestions.value,
+  () => { if (nextQuestionsPage.value) void loadQuestions(nextQuestionsPage.value) },
+  () => apiQuestions.value.length,
+)
 
 onMounted(() => {
   void loadQuestions()
@@ -134,27 +160,7 @@ onMounted(() => {
       class="space-y-4"
       aria-label="Loading questions"
     >
-      <article
-        v-for="item in 4"
-        :key="item"
-        class="animate-pulse rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4 shadow-[var(--shadow-elevated)]"
-      >
-        <div class="flex items-center gap-2">
-          <div class="h-4 w-4 rounded-full bg-[var(--surface-muted)]" />
-          <div class="h-3 w-36 rounded-full bg-[var(--surface-muted)]" />
-        </div>
-        <div class="mt-4 h-6 w-4/5 rounded-full bg-[var(--surface-muted)]" />
-        <div class="mt-3 flex flex-wrap gap-2">
-          <div class="h-5 w-24 rounded-full bg-[var(--surface-muted)]" />
-          <div class="h-5 w-20 rounded-full bg-[var(--surface-muted)]" />
-          <div class="h-5 w-28 rounded-full bg-[var(--surface-muted)]" />
-        </div>
-        <div class="mt-5 flex gap-2">
-          <div class="h-9 w-24 rounded-[1rem] bg-[var(--surface-muted)]" />
-          <div class="h-9 w-20 rounded-[1rem] bg-[var(--surface-muted)]" />
-          <div class="h-9 w-24 rounded-[1rem] bg-[var(--surface-muted)]" />
-        </div>
-      </article>
+      <FeedCardSkeleton v-for="item in 4" :key="item" kind="question" />
     </div>
 
     <div v-else class="space-y-4">
@@ -164,6 +170,9 @@ onMounted(() => {
         :post="post"
         follow-question-author
       />
+      <div v-if="nextQuestionsPage" ref="loadMoreTarget" class="py-4 text-center text-sm text-[var(--text-secondary)]">
+        {{ isLoadingMoreQuestions ? 'Loading more questions...' : 'Scroll for more questions' }}
+      </div>
       <div
         v-if="hasLoadedApiQuestions && !questions.length"
         class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center"

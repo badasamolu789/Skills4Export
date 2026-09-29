@@ -7,7 +7,7 @@ import { getOptionalCount } from '@/utils/postMapper'
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
-import { getExplicitProfileDisplayTitle, getProfileContextTag } from '@/utils/profileContextTag'
+import { getDirectProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
@@ -109,27 +109,7 @@ const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) 
   return profileName || userName
 }
 
-const getAuthorTag = (question: QuestionRecord, author?: MyProfileData | null) => {
-  const questionUser = isRecord(question.user) ? question.user : null
-  const questionAsker = isRecord(question.asker) ? question.asker : null
-  const questionAuthor = readRecord(question, ['author', 'creator', 'owner'])
-  const questionProfile =
-    readRecord(question, ['profile', 'userProfile', 'user_profile']) ??
-    readRecord(questionUser, ['profile', 'userProfile', 'user_profile'])
-
-  return (
-    getExplicitProfileDisplayTitle(questionUser) ||
-    getExplicitProfileDisplayTitle(questionProfile) ||
-    getExplicitProfileDisplayTitle(question) ||
-    getExplicitProfileDisplayTitle(author) ||
-    getProfileContextTag(author) ||
-    getProfileContextTag(questionProfile) ||
-    getProfileContextTag(questionUser) ||
-    getProfileContextTag(questionAsker) ||
-    getProfileContextTag(questionAuthor) ||
-    getProfileContextTag(question)
-  )
-}
+const getAuthorTag = (question: QuestionRecord) => getDirectProfileDisplayTitle(question.user)
 
 export const mapApiQuestionToFeedPost = (
   question: QuestionRecord,
@@ -181,7 +161,7 @@ export const mapApiQuestionToFeedPost = (
     authorName,
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
     authorAvatarSrc: author?.profile?.avatar ?? null,
-    tag: getAuthorTag(question, author),
+    tag: getAuthorTag(question),
     answers: answerCount,
     score: getOptionalCount(
       question.score,

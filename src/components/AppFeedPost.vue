@@ -37,7 +37,6 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getProfileDisplayTitle } from '@/utils/profileContextTag'
-import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
@@ -65,6 +64,7 @@ const props = defineProps<{
   expanded?: boolean
   allowEdit?: boolean
   hideCommunityContext?: boolean
+  hideViewPage?: boolean
   followQuestionAuthor?: boolean
   syncToGlobalFeed?: boolean
 }>()
@@ -516,33 +516,10 @@ const hasStoredCommunityFollow = (communityId?: string | null) => {
   return getStoredCommunityFollows()[authStore.userId]?.includes(communityId) ?? false
 }
 
-const fetchedAuthorTitle = ref('')
 const cardAuthorTag = computed(() => props.post.type === 'question' ? props.post.tag : props.post.author.tag)
 
-watch(
-  () => [props.post.userId, cardAuthorTag.value] as const,
-  async ([userId, tag]) => {
-    fetchedAuthorTitle.value = ''
-    if (tag || !userId) return
-    if (userId === authStore.userId) {
-      fetchedAuthorTitle.value = currentUser.displayTitle.value
-      return
-    }
-
-    try {
-      const profile = await loadQuestionAuthorProfile(userId, authStore.userId, null, authStore.authToken)
-      if (props.post.userId === userId && !cardAuthorTag.value) {
-        fetchedAuthorTitle.value = getProfileDisplayTitle(profile)
-      }
-    } catch {
-      // The post remains usable when author details cannot be loaded.
-    }
-  },
-  { immediate: true },
-)
-
 const authorProfileDetails = computed(() => {
-  const tag = cardAuthorTag.value || fetchedAuthorTitle.value
+  const tag = cardAuthorTag.value
 
   return (tag || '')
     .split('|')
@@ -720,6 +697,11 @@ const isCommentFollowing = (comment: PostComment) =>
   comment.authorUserId && socialActionsStore.followingUserIds[comment.authorUserId] !== undefined
     ? socialActionsStore.isFollowingUser(comment.authorUserId)
     : comment.isFollowing
+
+const canFollowComment = (comment: PostComment) => {
+  const targetUserId = comment.authorUserId || getPublicProfileIdFromRoute(comment.authorTo)
+  return Boolean(targetUserId && targetUserId !== authStore.userId)
+}
 
 const loadComments = async () => {
   if (!apiPostId.value || isLoadingComments.value || hasLoadedComments.value) {
@@ -1795,7 +1777,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     class="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[9rem] rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-2 shadow-[var(--shadow-elevated)]"
                   >
                     <RouterLink
-                      v-if="pagePostRoute"
+                      v-if="pagePostRoute && !props.hideViewPage"
                       :to="pagePostRoute"
                       class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
                       @click="closePostMenu"
@@ -1874,7 +1856,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
                 <div class="ml-auto flex items-center gap-2 self-start">
                   <RouterLink
-                    v-if="pagePostRoute"
+                    v-if="pagePostRoute && !props.hideViewPage"
                     :to="pagePostRoute"
                     class="s4e-feed-action hidden h-8.5 shrink-0 items-center justify-center gap-1.5 rounded-[1rem] border border-[color:var(--border-soft)] px-3.5 text-[0.84rem] font-semibold leading-none text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)] sm:inline-flex"
                   >
@@ -2227,6 +2209,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                           {{ comment.isReplying ? 'Cancel Reply' : 'Reply' }}
                         </button>
                         <button
+                          v-if="canFollowComment(comment)"
                           type="button"
                           class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.76rem] font-medium transition"
                           :class="

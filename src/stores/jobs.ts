@@ -10,7 +10,7 @@ import {
   type JobRecord,
 } from '@/services/jobs'
 import { useAuthStore } from '@/stores/auth'
-import { hasNextPage, loadPaginatedRecords } from '@/utils/paginatedLoader'
+import { hasNextPage } from '@/utils/paginatedLoader'
 
 const PUBLIC_JOB_STATUSES = new Set(['approved', 'active', 'live'])
 
@@ -37,8 +37,8 @@ const mergeJobs = (...groups: JobRecord[][]) => {
 const isCompleteUuid = (value?: string | null) =>
   Boolean(value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
 
-const JOBS_PAGE_SIZE = 10
-const MANAGE_JOBS_PAGE_SIZE = 10
+const JOBS_PAGE_SIZE = 5
+const MANAGE_JOBS_PAGE_SIZE = 5
 const JOBS_CACHE_TTL_MS = 2 * 60 * 1000
 
 export const useJobsStore = defineStore('jobs', () => {
@@ -53,8 +53,12 @@ export const useJobsStore = defineStore('jobs', () => {
   const isLoadingJob = ref(false)
   const jobsError = ref('')
   const nextJobsPage = ref<number | null>(null)
+  const queuedJobs = ref<JobRecord[]>([])
   const hasMoreJobs = ref(false)
   const manageJobsError = ref('')
+  const nextPostedJobsPage = ref<number | null>(null)
+  const nextAppliedJobsPage = ref<number | null>(null)
+  const isLoadingMoreManageJobs = ref(false)
   const jobError = ref('')
   let jobsRequest: Promise<void> | null = null
   let manageJobsRequest: Promise<void> | null = null
@@ -124,14 +128,16 @@ export const useJobsStore = defineStore('jobs', () => {
     isLoadingJobs.value = true
     jobsError.value = ''
     nextJobsPage.value = null
+    queuedJobs.value = []
     hasMoreJobs.value = false
 
     jobsRequest = (async () => {
       try {
         const response = await loadJobsPage(1)
-        jobs.value = response.records
+        jobs.value = response.records.slice(0, JOBS_PAGE_SIZE)
+        queuedJobs.value = response.records.slice(JOBS_PAGE_SIZE)
         nextJobsPage.value = response.nextPage
-        hasMoreJobs.value = Boolean(response.nextPage)
+        hasMoreJobs.value = queuedJobs.value.length > 0 || Boolean(response.nextPage)
         jobsLoadedAt = Date.now()
       } catch (error) {
         jobsError.value = getDisplayErrorMessage(error, 'Unable to load jobs.')
@@ -146,17 +152,25 @@ export const useJobsStore = defineStore('jobs', () => {
   }
 
   const loadMoreJobs = async () => {
-    if (!nextJobsPage.value || isLoadingJobs.value || isLoadingMoreJobs.value) {
+    if ((!nextJobsPage.value && !queuedJobs.value.length) || isLoadingJobs.value || isLoadingMoreJobs.value) {
       return
     }
 
     isLoadingMoreJobs.value = true
 
     try {
+      if (queuedJobs.value.length) {
+        jobs.value = mergeJobs(jobs.value, queuedJobs.value.slice(0, JOBS_PAGE_SIZE))
+        queuedJobs.value = queuedJobs.value.slice(JOBS_PAGE_SIZE)
+        hasMoreJobs.value = queuedJobs.value.length > 0 || Boolean(nextJobsPage.value)
+        return
+      }
+      if (!nextJobsPage.value) return
       const response = await loadJobsPage(nextJobsPage.value)
-      jobs.value = mergeJobs(jobs.value, response.records)
+      jobs.value = mergeJobs(jobs.value, response.records.slice(0, JOBS_PAGE_SIZE))
+      queuedJobs.value = response.records.slice(JOBS_PAGE_SIZE)
       nextJobsPage.value = response.nextPage
-      hasMoreJobs.value = Boolean(response.nextPage)
+      hasMoreJobs.value = queuedJobs.value.length > 0 || Boolean(response.nextPage)
       jobsError.value = ''
     } catch (error) {
       jobsError.value = getDisplayErrorMessage(error, 'Unable to load more jobs.')
@@ -284,22 +298,22 @@ export const useJobsStore = defineStore('jobs', () => {
 
     isLoadingManageJobs.value = true
     manageJobsError.value = ''
+    nextPostedJobsPage.value = null
+    nextAppliedJobsPage.value = null
 
     manageJobsRequest = (async () => {
       try {
-        const postedResponse = await loadPaginatedRecords(
-          (params) => jobsService.listMyPostedJobs(params, authStore.authToken),
-          {},
-          { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 1 },
+        const postedResponse = await jobsService.listMyPostedJobs(
+          { page: 1, per_page: MANAGE_JOBS_PAGE_SIZE }, authStore.authToken,
         )
-        const appliedResponse = await loadPaginatedRecords(
-          (params) => jobsService.listMyJobApplications(params, authStore.authToken),
-          {},
-          { perPage: MANAGE_JOBS_PAGE_SIZE, maxPages: 1 },
+        const appliedResponse = await jobsService.listMyJobApplications(
+          { page: 1, per_page: MANAGE_JOBS_PAGE_SIZE }, authStore.authToken,
         )
 
         postedJobs.value = postedResponse.data
         appliedJobs.value = appliedResponse.data
+        nextPostedJobsPage.value = hasNextPage(postedResponse) ? postedResponse.current_page + 1 : null
+        nextAppliedJobsPage.value = hasNextPage(appliedResponse) ? appliedResponse.current_page + 1 : null
         manageJobsLoadedAt = Date.now()
       } catch (error) {
         manageJobsError.value = getDisplayErrorMessage(error, 'Unable to load your jobs.')
@@ -314,6 +328,32 @@ export const useJobsStore = defineStore('jobs', () => {
     return manageJobsRequest
   }
 
+  const loadMoreManageJobs = async (tab: 'posted' | 'applied') => {
+    const nextPage = tab === 'posted' ? nextPostedJobsPage.value : nextAppliedJobsPage.value
+    if (!nextPage || isLoadingManageJobs.value || isLoadingMoreManageJobs.value) return
+    isLoadingMoreManageJobs.value = true
+    try {
+      if (tab === 'posted') {
+        const response = await jobsService.listMyPostedJobs(
+          { page: nextPage, per_page: MANAGE_JOBS_PAGE_SIZE }, authStore.authToken,
+        )
+        postedJobs.value = mergeJobs(postedJobs.value, response.data)
+        nextPostedJobsPage.value = hasNextPage(response) ? response.current_page + 1 : null
+      } else {
+        const response = await jobsService.listMyJobApplications(
+          { page: nextPage, per_page: MANAGE_JOBS_PAGE_SIZE }, authStore.authToken,
+        )
+        const ids = new Set(appliedJobs.value.map((item) => item.id))
+        appliedJobs.value = [...appliedJobs.value, ...response.data.filter((item) => !ids.has(item.id))]
+        nextAppliedJobsPage.value = hasNextPage(response) ? response.current_page + 1 : null
+      }
+    } catch (error) {
+      manageJobsError.value = getDisplayErrorMessage(error, 'Unable to load more jobs.')
+    } finally {
+      isLoadingMoreManageJobs.value = false
+    }
+  }
+
   return {
     jobs,
     postedJobs,
@@ -322,10 +362,13 @@ export const useJobsStore = defineStore('jobs', () => {
     isLoadingJobs,
     isLoadingMoreJobs,
     isLoadingManageJobs,
+    isLoadingMoreManageJobs,
     isLoadingJob,
     jobsError,
     hasMoreJobs,
     manageJobsError,
+    nextPostedJobsPage,
+    nextAppliedJobsPage,
     jobError,
     loadJobs,
     loadMoreJobs,
@@ -334,5 +377,6 @@ export const useJobsStore = defineStore('jobs', () => {
     applyToCurrentJob,
     withdrawApplication,
     loadManageJobs,
+    loadMoreManageJobs,
   }
 })

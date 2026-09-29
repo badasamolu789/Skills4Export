@@ -410,6 +410,11 @@ const isDetailCommentFollowing = (comment: DetailComment | PostCommentThreadItem
     ? socialActionsStore.isFollowingUser(comment.authorUserId)
     : Boolean(comment.isFollowing)
 
+const canFollowComment = (comment: DetailComment | PostCommentThreadItem) => {
+  const targetUserId = comment.authorUserId || getPublicProfileIdFromRoute(comment.authorTo || '')
+  return Boolean(targetUserId && targetUserId !== authStore.userId)
+}
+
 const loadApiQuestion = async (id: string) => {
   const response = await questionsService.getQuestion(id, authStore.authToken, true)
   const userId = getQuestionUserId(response.data)
@@ -470,6 +475,13 @@ const author = computed(() => {
     avatarSrc: post.value.author.avatarSrc || null,
     eyebrow: post.value.author.tag || '',
   }
+})
+
+const authorDisplayTitle = computed(() => {
+  if (!post.value) return ''
+
+  const title = post.value.type === 'question' ? post.value.tag : post.value.author.tag
+  return title?.trim() || ''
 })
 
 const postContextLabel = computed(() => {
@@ -687,11 +699,14 @@ watch(
           ? communitiesService.getCommunity(response.data.community_id || response.data.communityId || '', authStore.authToken)
           : Promise.resolve(null),
       ])
-      const authorData = authorResponse?.data
-        ? authorResponse.data
-        : null
 
-      apiPost.value = mapApiPostToFeedPost(response.data, mediaResponse.data, authorData, communityResponse?.data?.name)
+      apiPost.value = mapApiPostToFeedPost(
+        response.data,
+        mediaResponse.data,
+        authorResponse?.data ?? null,
+        communityResponse?.data?.name,
+        response.data.page,
+      )
       await loadPostComments(response.data.id)
     } catch (error) {
       postError.value =
@@ -1438,22 +1453,19 @@ const submitAnswer = async () => {
           </RouterLink>
 
           <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-2 text-[0.82rem] text-[var(--text-secondary)]">
+            <div class="flex min-w-0 items-center gap-2">
               <RouterLink
                 v-if="author"
                 :to="author.to"
-                class="text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.16rem]"
+                class="min-w-0 shrink truncate text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.16rem]"
               >
                 {{ author.name }}
               </RouterLink>
-              <span>{{ post.time }}</span>
-              <template v-if="skillPills.length">
-                <span class="text-[var(--text-tertiary)]">-</span>
-                <span class="min-w-0 truncate font-semibold text-[var(--text-tertiary)]">
-                  {{ skillPills.join(' | ') }}
-                </span>
-              </template>
+              <span v-if="authorDisplayTitle" class="min-w-0 truncate text-[0.82rem] font-semibold text-[var(--text-tertiary)]" :title="authorDisplayTitle">
+                {{ authorDisplayTitle }}
+              </span>
             </div>
+            <p class="mt-1 text-[0.82rem] text-[var(--text-secondary)]">{{ post.time }}</p>
 
             <h1 class="mt-2 text-[1.45rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.9rem]">
               {{ post.title }}
@@ -1708,7 +1720,8 @@ const submitAnswer = async () => {
               v-model="commentInput"
               type="text"
               placeholder="Add a comment..."
-              class="h-10 min-w-0 flex-1 rounded-[0.8rem] bg-[var(--surface-secondary)] px-3 text-[0.86rem] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+              aria-label="Add a comment"
+              class="h-10 min-w-0 flex-1 rounded-[0.8rem] border border-[color:var(--border-soft)] bg-[var(--surface-muted)] px-3 text-[0.86rem] text-[var(--text-primary)] outline-none transition placeholder:text-[var(--text-tertiary)] focus:border-[color:var(--accent)] focus-visible:ring-2 focus-visible:ring-[color:var(--accent-soft)]"
               @keydown.enter.prevent="submitComment"
             />
             <button
@@ -1788,6 +1801,7 @@ const submitAnswer = async () => {
                       {{ comment.isReplying ? 'Cancel Reply' : 'Reply' }}
                     </button>
                     <button
+                      v-if="canFollowComment(comment)"
                       type="button"
                       class="inline-flex items-center gap-1 rounded-[0.7rem] border px-2 py-1.5 text-[0.76rem] font-medium transition"
                       :class="isDetailCommentFollowing(comment) ? activeActionClass : 'border-[color:var(--border-soft)] text-[var(--text-secondary)] hover:text-[var(--accent-strong)]'"

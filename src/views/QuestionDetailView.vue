@@ -989,10 +989,24 @@ onBeforeUnmount(() => {
 
 <template>
   <section v-if="isLoadingQuestion && !question" class="mx-auto w-full max-w-[44rem] space-y-4" aria-label="Loading question">
-    <article class="animate-pulse rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4">
-      <div class="h-7 w-4/5 rounded-full bg-[var(--surface-muted)]"></div>
-      <div class="mt-3 h-4 w-2/3 rounded-full bg-[var(--surface-muted)]"></div>
-      <div class="mt-5 h-28 rounded-xl bg-[var(--surface-muted)]"></div>
+    <article class="overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
+      <div class="animate-pulse space-y-4 border-b border-[color:var(--border-soft)] p-4 sm:p-5">
+        <div class="h-7 w-4/5 rounded-full bg-[var(--surface-muted)]" />
+        <div class="flex items-center gap-2">
+          <div class="h-8 w-8 rounded-full bg-[var(--surface-muted)]" />
+          <div class="h-3 w-28 rounded-full bg-[var(--surface-muted)]" />
+          <div class="h-3 w-16 rounded-full bg-[var(--surface-muted)]" />
+        </div>
+        <div class="space-y-2">
+          <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
+          <div class="h-3 w-5/6 rounded-full bg-[var(--surface-muted)]" />
+        </div>
+        <div class="h-10 w-28 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+      </div>
+      <div class="animate-pulse space-y-3 p-4 sm:p-5">
+        <div class="h-5 w-24 rounded-full bg-[var(--surface-muted)]" />
+        <div class="h-20 rounded-[0.85rem] bg-[var(--surface-muted)]" />
+      </div>
     </article>
   </section>
 

@@ -22,6 +22,7 @@ import {
 } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
 import ResponsiveOverlay from '@/components/ResponsiveOverlay.vue'
+import NotificationActorAvatar from '@/components/NotificationActorAvatar.vue'
 import type { NotificationItem } from '@/services/notifications'
 import { ApiError } from '@/lib/api'
 import { mediaService } from '@/services/media'
@@ -117,6 +118,12 @@ const postContent = ref('')
 const postFile = ref<File | null>(null)
 const postFileInput = ref<HTMLInputElement | null>(null)
 const postFilePreviewUrl = ref('')
+const postUploadProgress = ref(0)
+const postUploadError = ref('')
+const isUploadingPostMedia = ref(false)
+const uploadedPostMedia = ref<UploadedPostMedia | null>(null)
+let postUploadController: AbortController | null = null
+let postFileSelection = 0
 const agreedToPostTerms = ref(false)
 const isSubmittingQuestion = ref(false)
 const isSubmittingPost = ref(false)
@@ -146,13 +153,6 @@ const postFileSize = computed(() => {
 
   const sizeInMb = postFile.value.size / (1024 * 1024)
   return sizeInMb >= 1 ? `${sizeInMb.toFixed(1)} MB` : `${Math.max(1, Math.round(postFile.value.size / 1024))} KB`
-})
-const postFileRecommendation = computed(() => {
-  if (postFileKind.value !== 'image') {
-    return 'Video preview'
-  }
-
-  return 'Best: 1080 x 1350 portrait. Also supports square 1080 x 1080 and landscape 1200 x 627.'
 })
 const isJokesView = computed(() => route.name === 'jokes-community')
 const isHeadlinesComposer = computed(() => {
@@ -259,8 +259,15 @@ const submitSearch = async () => {
 }
 
 const handlePostFileChange = async (event: Event) => {
+  const selection = ++postFileSelection
   const target = event.target as HTMLInputElement
   const file = target.files?.[0] ?? null
+
+  postUploadController?.abort()
+  postUploadController = null
+  uploadedPostMedia.value = null
+  postUploadProgress.value = 0
+  postUploadError.value = ''
 
   if (!file) {
     postFile.value = null
@@ -269,51 +276,53 @@ const handlePostFileChange = async (event: Event) => {
 
   if (file?.type.startsWith('image/')) {
     if (!POST_IMAGE_ALLOWED_TYPES.has(file.type) && file.type !== 'image/webp') {
-      toast.error('Unsupported post image format', {
-        description: 'Use PNG, JPG, JPEG, WebP, or GIF for post images.',
-      })
+      postUploadError.value = 'Use PNG, JPG, JPEG, WebP, or GIF for post images.'
       target.value = ''
       postFile.value = null
       return
     }
 
     const uploadFile = file.type === 'image/gif' ? file : (await optimizeImageFile(file)).file
+    if (selection !== postFileSelection) return
 
     if (uploadFile.size > POST_IMAGE_MAX_BYTES) {
-      toast.error('Post image is too large', {
-        description: 'Post images must be 5 MB or smaller.',
-      })
+      postUploadError.value = 'Post images must be 5 MB or smaller.'
       target.value = ''
       postFile.value = null
       return
     }
 
     postFile.value = uploadFile
+    void uploadSelectedPostMedia(uploadFile)
     return
   }
 
   if (!file.type.startsWith('video/')) {
-    toast.error('Unsupported post media format', {
-      description: 'Use an image or video file for posts.',
-    })
+    postUploadError.value = 'Use an image or video file for posts.'
     target.value = ''
     postFile.value = null
     return
   }
 
   if (file.size > POST_VIDEO_MAX_BYTES) {
-    toast.error('Post video is too large', {
-      description: 'Post videos must be 100 MB or smaller.',
-    })
+    postUploadError.value = 'Post videos must be 100 MB or smaller.'
     target.value = ''
     postFile.value = null
     return
   }
 
   postFile.value = file
+  void uploadSelectedPostMedia(file)
 }
 
 const clearPostFile = () => {
+  postFileSelection += 1
+  postUploadController?.abort()
+  postUploadController = null
+  uploadedPostMedia.value = null
+  postUploadProgress.value = 0
+  postUploadError.value = ''
+  isUploadingPostMedia.value = false
   postFile.value = null
 
   if (postFileInput.value) {
@@ -546,31 +555,32 @@ type UploadedPostMedia = {
   mediaType?: string
 }
 
-const uploadSelectedPostMedia = async () => {
-  if (!postFile.value) {
-    return {
-      mediaAssetIds: [],
-    } satisfies UploadedPostMedia
+const uploadSelectedPostMedia = async (file: File) => {
+  const controller = new AbortController()
+  postUploadController = controller
+  isUploadingPostMedia.value = true
+  const mediaType = file.type.startsWith('video/') ? 'video' : 'image'
+  try {
+    const response = await mediaService.uploadMediaFile(file, {
+      kind: mediaType === 'video' ? 'video' : 'post_image',
+      title: file.name,
+      token: authStore.authToken,
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (postUploadController === controller) postUploadProgress.value = Math.min(95, progress)
+      },
+    })
+    if (postUploadController !== controller) return
+    const assetId = response.data.assetId || response.data.id
+    if (!assetId) throw new Error('Media upload completed without an asset ID.')
+    uploadedPostMedia.value = { mediaAssetIds: [assetId], uploadedUrl: response.data.url, mediaType }
+    postUploadProgress.value = 100
+  } catch (error) {
+    if (postUploadController !== controller || controller.signal.aborted) return
+    postUploadError.value = error instanceof Error ? error.message : 'Media upload failed. Please try again.'
+  } finally {
+    if (postUploadController === controller) isUploadingPostMedia.value = false
   }
-
-  const mediaType = postFile.value.type.startsWith('video/') ? 'video' : 'image'
-  const uploadResponse = await mediaService.uploadMediaFile(postFile.value, {
-    kind: mediaType === 'video' ? 'video' : 'post_image',
-    title: postFile.value.name,
-    token: authStore.authToken,
-  })
-  const assetId = uploadResponse.data.assetId || uploadResponse.data.id
-  const url = uploadResponse.data.url
-
-  if (assetId) {
-    return {
-      mediaAssetIds: [assetId],
-      uploadedUrl: url,
-      mediaType,
-    } satisfies UploadedPostMedia
-  }
-
-  throw new Error('Media upload completed without an asset ID.')
 }
 
 const submitPost = async () => {
@@ -616,19 +626,15 @@ const submitPost = async () => {
     return
   }
 
-  if (isSubmittingPost.value) {
+  if (isSubmittingPost.value || isUploadingPostMedia.value || (postFile.value && !uploadedPostMedia.value)) {
     return
   }
 
   isSubmittingPost.value = true
-  const loadingToastId = toast.loading(postFile.value ? 'Uploading media...' : 'Creating post...')
+  const loadingToastId = toast.loading('Creating post...')
 
   try {
-    const uploadedMedia = await uploadSelectedPostMedia()
-
-    if (uploadedMedia.mediaAssetIds.length > 0) {
-      toast.loading('Creating post...', { id: loadingToastId })
-    }
+    const uploadedMedia = uploadedPostMedia.value ?? { mediaAssetIds: [] }
 
     const selectedCommunityId = postAudienceId.value || null
     const selectedCommunity = communities.value.find((item) => item.id === selectedCommunityId)
@@ -730,6 +736,7 @@ watch(postFile, (file, previousFile) => {
 })
 
 onBeforeUnmount(() => {
+  postUploadController?.abort()
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   window.removeEventListener(OPEN_COMPOSER_EVENT, handleOpenComposerEvent)
 
@@ -745,7 +752,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="app-header sticky top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]/95 backdrop-blur">
+  <header class="app-header fixed inset-x-0 top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]/95 backdrop-blur">
     <div class="mx-auto w-full max-w-[86rem] px-3 py-2 sm:px-4 lg:px-6 xl:px-8">
       <div class="relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 md:hidden">
         <div class="flex min-w-0 items-center justify-self-start">
@@ -986,7 +993,7 @@ onMounted(() => {
                 aria-label="Loading notifications"
               >
                 <div v-for="item in 3" :key="item" class="flex animate-pulse gap-3 px-4 py-3">
-                  <div class="h-11 w-11 shrink-0 rounded-[0.75rem] bg-[var(--surface-muted)]" />
+                  <div class="h-11 w-11 shrink-0 rounded-full bg-[var(--surface-muted)]" />
                   <div class="min-w-0 flex-1 space-y-2">
                     <div class="h-3 w-4/5 rounded-full bg-[var(--surface-muted)]" />
                     <div class="h-3 w-1/2 rounded-full bg-[var(--surface-muted)]" />
@@ -1017,17 +1024,7 @@ onMounted(() => {
                   role="menuitem"
                   @click="openNotificationItem(item)"
                 >
-                  <span class="inline-flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[0.75rem] bg-[var(--surface-secondary)] text-[var(--accent-strong)]">
-                    <img
-                      v-if="item.actor?.avatar"
-                      loading="lazy"
-                      decoding="async"
-                      :src="item.actor.avatar"
-                      :alt="item.actor.name || item.title"
-                      class="h-full w-full object-cover object-center"
-                    />
-                    <Bell v-else class="h-5 w-5" />
-                  </span>
+                  <NotificationActorAvatar :item="item" compact />
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm font-semibold text-[var(--text-primary)]">{{ item.title }}</span>
                     <span class="mt-1 line-clamp-2 block text-xs leading-5 text-[var(--text-secondary)]">{{ richTextToPlainText(item.description) }}</span>
@@ -1155,7 +1152,7 @@ onMounted(() => {
       :model-value="activeComposer === 'ask'"
       label="Ask"
       title="Ask Question"
-      max-width-class="sm:max-w-2xl"
+      max-width-class="sm:max-w-xl"
       @update:model-value="(value) => { if (!value) closeComposer() }"
     >
       <div class="space-y-5">
@@ -1206,7 +1203,7 @@ onMounted(() => {
       :model-value="activeComposer === 'post'"
       :label="postComposerTitle"
       :title="postComposerTitle"
-      max-width-class="sm:max-w-4xl"
+      max-width-class="sm:max-w-2xl"
       @update:model-value="(value) => { if (!value) closeComposer() }"
     >
       <div class="space-y-5">
@@ -1292,9 +1289,13 @@ onMounted(() => {
         </label>
         <label class="block">
           <span class="text-sm font-semibold text-[var(--text-primary)]">Images or Video<span v-if="!isJokesView" class="text-[var(--danger)]">*</span></span>
-          <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
-            Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB. Videos up to 100 MB.
+          <span v-if="postUploadError" class="mt-1 block text-xs font-medium text-[var(--danger)]" role="alert">
+            {{ postUploadError }}
           </span>
+          <!-- Media requirements are shown only when validation fails. -->
+          <!-- <span class="mt-1 block text-xs font-medium text-[var(--text-tertiary)]">
+            Post image sizes: {{ postImageSizeReferences.join(' / ') }}. PNG, JPG, or GIF up to 5 MB. Videos up to 100 MB.
+          </span> -->
           <span
             v-if="!postFile"
             class="mt-2 flex min-h-28 cursor-pointer items-center justify-center rounded-[0.75rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-6 text-center text-sm font-medium text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
@@ -1308,7 +1309,7 @@ onMounted(() => {
             v-else
             class="mt-2 block overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
           >
-            <span class="block bg-[var(--surface-secondary)] p-3">
+            <span class="relative block bg-[var(--surface-secondary)] p-3">
               <img loading="lazy" decoding="async"
                 v-if="postFileKind === 'image'"
                 :src="postFilePreviewUrl"
@@ -1322,6 +1323,21 @@ onMounted(() => {
                 controls
                 playsinline
               />
+              <span
+                v-if="isUploadingPostMedia"
+                class="pointer-events-none absolute inset-3 rounded-[0.6rem] bg-[var(--surface-primary)]/70 transition-[clip-path] duration-150 ease-linear"
+                :style="{ clipPath: `inset(0 0 0 ${postUploadProgress}%)` }"
+                aria-hidden="true"
+              />
+              <button
+                type="button"
+                class="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-primary)] shadow-[var(--shadow-soft)]"
+                aria-label="Cancel media upload and remove file"
+                title="Remove media"
+                @click.prevent="clearPostFile"
+              >
+                <X class="h-4 w-4" />
+              </button>
             </span>
             <span class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <span class="min-w-0">
@@ -1333,40 +1349,31 @@ onMounted(() => {
                 <span class="mt-1 block text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
                   {{ postFileKind }} · {{ postFileSize }}
                 </span>
-                <span class="mt-1 block text-xs text-[var(--text-tertiary)]">
-                  {{ postFileRecommendation }}
-                </span>
+                <span v-if="isUploadingPostMedia" class="mt-1 block text-xs text-[var(--text-secondary)]" role="status">Uploading {{ postUploadProgress }}%</span>
+                <span v-else-if="uploadedPostMedia" class="mt-1 block text-xs font-semibold text-green-600 dark:text-green-400">Ready</span>
               </span>
               <span class="flex shrink-0 items-center gap-2">
                 <span class="inline-flex h-10 cursor-pointer items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]">
                   Change
                 </span>
-                <button
-                  type="button"
-                  class="inline-flex h-10 items-center justify-center gap-2 rounded-[0.65rem] border border-[color:var(--border-soft)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--danger)] hover:text-[var(--danger)]"
-                  @click.prevent="clearPostFile"
-                >
-                  <X class="h-4 w-4" />
-                  Remove
-                </button>
               </span>
             </span>
           </span>
           <input ref="postFileInput" type="file" accept="image/*,video/*" class="sr-only" :required="!isJokesView" @change="handlePostFileChange" />
         </label>
+        <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
+          <input v-model="agreedToPostTerms" type="checkbox" required class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
+          <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
+        </label>
         <button
           type="button"
           class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-[0.75rem] bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
-          :disabled="isSubmittingPost"
+          :disabled="isSubmittingPost || isUploadingPostMedia || Boolean(postFile && !uploadedPostMedia)"
           @click="submitPost"
         >
           {{ postSubmitLabel }}
           <ArrowRight class="h-4 w-4" />
         </button>
-        <label class="flex items-start gap-2 text-sm text-[var(--text-secondary)]">
-          <input v-model="agreedToPostTerms" type="checkbox" required class="mt-1 h-4 w-4 rounded border-[color:var(--border-soft)]" />
-          <span>By posting, you agreed to the <RouterLink to="/terms-and-conditions" class="text-[var(--accent-strong)]">Terms of Service</RouterLink> and <RouterLink to="/privacy-policy" class="text-[var(--accent-strong)]">Privacy Policy</RouterLink>.</span>
-        </label>
       </div>
     </ResponsiveOverlay>
 

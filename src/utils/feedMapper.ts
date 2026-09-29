@@ -4,7 +4,7 @@ import type { CompactFeedMedia, CompactFeedRecord } from '@/services/feeds'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { readBooleanFlag, readFollowState } from '@/utils/followState'
 import { getOptionalCount, isVideoPostMedia } from '@/utils/postMapper'
-import { getProfileDisplayTitle } from '@/utils/profileContextTag'
+import { getDirectProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -57,8 +57,7 @@ const getInitials = (value: string) =>
     .slice(0, 2)
     .toUpperCase()
 
-const getAuthorDisplayTitle = (author: unknown, item?: unknown) =>
-  getProfileDisplayTitle(author) || getProfileDisplayTitle(item)
+const getAuthorDisplayTitle = (author: unknown) => getDirectProfileDisplayTitle(author)
 
 const normalizeMediaItem = (
   value: CompactFeedMedia,
@@ -91,7 +90,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
   const updatedAt = item.updatedAt || item.updated_at || createdAt
   const author = item.author || item.user || null
   const viewerState = item.viewerState || item.viewer_state || null
-  const userId = item.userId || item.user_id || author?.id || ''
+  const userId = item.userId || item.user_id || item.user?.id || author?.id || ''
   const originalPostId =
     item.originalPostId ||
     item.original_post_id ||
@@ -133,7 +132,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       authorName,
       authorTo: userId ? `/profile/view/${userId}` : '/profile',
       authorAvatarSrc: readString(author, ['avatar', 'avatarUrl', 'avatar_url']) || null,
-      tag: getAuthorDisplayTitle(author, item),
+      tag: getAuthorDisplayTitle(author),
       answers: getOptionalCount(item.answersCount, item.answers_count, item.answer_count),
       score: getOptionalCount(item.score),
       ...(readFollowState(viewerState, item, author) !== undefined
@@ -170,7 +169,9 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       to: pageId ? `/pages/${item.page?.slug || pageId}/public` : `/profile/view/${userId}`,
       avatarText: getInitials(authorName || 'Community member'),
       avatarSrc,
-      tag: pageId ? getProfileDisplayTitle(item.page) : getAuthorDisplayTitle(author, item),
+      tag: pageId
+        ? getDirectProfileDisplayTitle(item.user)
+        : getDirectProfileDisplayTitle(item.user) || getDirectProfileDisplayTitle(item.author),
     },
     time: formatFeedTime(createdAt),
     title,

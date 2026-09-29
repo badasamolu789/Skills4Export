@@ -108,7 +108,7 @@ const showRightRail = computed(
 const workspaceShellClasses = computed(() =>
   showWorkspaceShell.value
     ? [
-        'flex flex-col gap-4 lg:h-[calc(100vh-theme(spacing.14))] lg:min-h-0 lg:overflow-hidden lg:grid lg:gap-4 xl:gap-5',
+        'flex flex-col gap-4 lg:h-full lg:min-h-0 lg:overflow-hidden lg:grid lg:gap-4 xl:gap-5',
         showSidebar.value && showRightRail.value
           ? 'lg:grid-cols-[17.5rem_minmax(0,1fr)_17.5rem]'
           : showSidebar.value
@@ -426,7 +426,9 @@ const handleMenuAction = async (action: 'logout') => {
       :user-menu="userMenu"
     />
 
-    <main :class="[mainClasses, showHeader ? 'app-main' : 'public-main', showWorkspaceShell ? 'lg:overflow-hidden' : '']">
+    <div v-if="showHeader" class="app-header-spacer shrink-0" aria-hidden="true" />
+
+    <main :class="[mainClasses, showHeader ? 'app-main' : 'public-main', showWorkspaceShell ? 'lg:min-h-0 lg:overflow-hidden' : '']">
       <div
         v-if="showHeader"
         :class="workspaceShellClasses"

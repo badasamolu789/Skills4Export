@@ -6,11 +6,27 @@ import JobCard from '@/components/JobCard.vue'
 import { ApiError } from '@/lib/api'
 import type { JobApplicationRecord } from '@/services/jobs'
 import { useJobsStore } from '@/stores/jobs'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 
 const jobsStore = useJobsStore()
 const searchQuery = ref('')
 const activeTab = ref<'posted' | 'applied'>('posted')
 const withdrawingApplicationId = ref('')
+const postedMarker = ref<HTMLElement | null>(null)
+const appliedMarker = ref<HTMLElement | null>(null)
+
+useInfiniteScroll(
+  postedMarker,
+  () => activeTab.value === 'posted' && !searchQuery.value && Boolean(jobsStore.nextPostedJobsPage) && !jobsStore.isLoadingMoreManageJobs,
+  () => { void jobsStore.loadMoreManageJobs('posted') },
+  () => jobsStore.postedJobs.length,
+)
+useInfiniteScroll(
+  appliedMarker,
+  () => activeTab.value === 'applied' && !searchQuery.value && Boolean(jobsStore.nextAppliedJobsPage) && !jobsStore.isLoadingMoreManageJobs,
+  () => { void jobsStore.loadMoreManageJobs('applied') },
+  () => jobsStore.appliedJobs.length,
+)
 
 const withdrawApplication = async (application: JobApplicationRecord) => {
   if (withdrawingApplicationId.value || !window.confirm('Withdraw this job application?')) {
@@ -192,6 +208,8 @@ onMounted(() => {
           :status-label="job.status || 'draft'"
           :footer-label="`${job.applicantCount || 0} applicants · Posted ${formatDate(job.createdAt || job.updatedAt)}`"
         />
+        <div v-if="jobsStore.nextPostedJobsPage" ref="postedMarker" class="h-1" aria-hidden="true" />
+        <p v-if="jobsStore.isLoadingMoreManageJobs" class="text-center text-sm text-[var(--text-secondary)]">Loading more jobs...</p>
 
         <article
           v-if="!jobsStore.isLoadingManageJobs && filteredPostedJobs.length === 0"
@@ -241,6 +259,8 @@ onMounted(() => {
             </div>
           </div>
         </template>
+        <div v-if="jobsStore.nextAppliedJobsPage" ref="appliedMarker" class="h-1" aria-hidden="true" />
+        <p v-if="jobsStore.isLoadingMoreManageJobs" class="text-center text-sm text-[var(--text-secondary)]">Loading more applications...</p>
 
         <article
           v-if="!jobsStore.isLoadingManageJobs && filteredAppliedJobs.length === 0"

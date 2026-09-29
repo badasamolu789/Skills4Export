@@ -1,4 +1,4 @@
-import { api } from '@/lib/api'
+import { api, ApiError, buildUrl } from '@/lib/api'
 import { optimizeImageFile } from '@/utils/imageOptimization'
 
 // ============================================================================
@@ -371,6 +371,8 @@ export const mediaService = {
             title?: string
             token?: string | null
             timeoutMs?: number
+            onProgress?: (progress: number) => void
+            signal?: AbortSignal
         },
     ) => {
         const uploadFile = file.type.startsWith('image/')
@@ -385,6 +387,40 @@ export const mediaService = {
 
         if (options?.title) {
             formData.append('title', options.title)
+        }
+
+        if (options?.onProgress) {
+            return new Promise<MediaUploadFileResponse>((resolve, reject) => {
+                const request = new XMLHttpRequest()
+                const abort = () => request.abort()
+                request.open('POST', buildUrl('/media/upload'))
+                request.timeout = options.timeoutMs ?? (uploadFile.type.startsWith('video/') ? 600000 : 180000)
+                request.setRequestHeader('Accept', 'application/json')
+                if (options.token) request.setRequestHeader('Authorization', `Bearer ${options.token}`)
+                request.upload.onprogress = (event) => {
+                    if (event.lengthComputable) options.onProgress?.(Math.round(event.loaded / event.total * 100))
+                }
+                request.onload = () => {
+                    let payload: MediaUploadFileResponse | { message?: string }
+                    try {
+                        payload = JSON.parse(request.responseText)
+                    } catch {
+                        reject(new Error('The media upload could not be completed.'))
+                        return
+                    }
+                    if (request.status < 200 || request.status >= 300) {
+                        reject(new ApiError(payload.message || 'The media upload failed.', request.status))
+                        return
+                    }
+                    resolve(payload as MediaUploadFileResponse)
+                }
+                request.onerror = () => reject(new Error('The media upload failed. Please try again.'))
+                request.ontimeout = () => reject(new Error('The media upload took too long. Please try again.'))
+                request.onabort = () => reject(new DOMException('Upload cancelled.', 'AbortError'))
+                options.signal?.addEventListener('abort', abort, { once: true })
+                if (options.signal?.aborted) abort()
+                else request.send(formData)
+            })
         }
 
         return api.post<MediaUploadFileResponse>('/media/upload', formData, {

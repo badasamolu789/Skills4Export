@@ -210,7 +210,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
         const response = await notificationsService.listNotifications(
           {
             page,
-            per_page: options?.perPage ?? 10,
+            per_page: options?.perPage ?? 5,
             sort: '-createdAt',
           },
           token,
@@ -256,7 +256,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
   }
 
   const refresh = async (token?: string | null, background = true) => {
-    await loadNotifications({ token, page: 1, perPage: 10, background })
+    await loadNotifications({ token, page: 1, perPage: 5, background })
   }
 
   const loadMore = async (token?: string | null) => {
@@ -267,7 +267,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
     await loadNotifications({
       token,
       page: currentPage.value + 1,
-      perPage: 10,
+      perPage: 5,
       append: true,
     })
   }

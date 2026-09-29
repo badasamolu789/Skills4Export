@@ -2604,6 +2604,7 @@ const editModalTitle = computed(() => {
               <p class="truncate text-sm font-semibold text-[var(--text-primary)]">{{ account.name }}</p>
             </RouterLink>
             <button
+              v-if="account.id !== authStore.userId"
               type="button"
               :disabled="followToggles[account.id]"
               class="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-red-200 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"

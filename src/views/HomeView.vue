@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppFeedPost from '@/components/AppFeedPost.vue'
+import FeedCardSkeleton from '@/components/FeedCardSkeleton.vue'
 import FeedAdvertCard from '@/components/FeedAdvertCard.vue'
 import type { FeedPost } from '@/data/feedPosts'
 import { ApiError } from '@/lib/api'
@@ -30,12 +31,12 @@ type FeedRenderItem =
     }
   | FeedAdvertItem
 
-const INITIAL_POST_COUNT = 4
-const LOAD_BATCH_SIZE = 3
-const FEED_PAGE_SIZE = 10
+const INITIAL_POST_COUNT = 5
+const LOAD_BATCH_SIZE = 5
+const FEED_PAGE_SIZE = 5
 const MAX_RESTORED_POST_COUNT = FEED_PAGE_SIZE
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000
-const FEED_CACHE_VERSION = 2
+const FEED_CACHE_VERSION = 5
 const POST_CREATED_EVENT = 'skills4export:post-created'
 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
@@ -131,8 +132,8 @@ const getFeedSignature = (items: FeedPost[]) =>
             .map((media) => `${media.url}:${media.thumbnailUrl || ''}:${media.mediaType || ''}`)
             .join(',')
       const authorSignature = item.type === 'question'
-        ? `${item.authorName}:${item.authorAvatarSrc || ''}`
-        : `${item.author.name}:${item.author.avatarSrc || ''}`
+        ? `${item.authorName}:${item.authorAvatarSrc || ''}:${item.tag}`
+        : `${item.author.name}:${item.author.avatarSrc || ''}:${item.author.tag}`
 
       return [
         item.type,
@@ -491,25 +492,7 @@ onBeforeUnmount(() => {
       class="space-y-6"
       aria-label="Loading posts"
     >
-      <article
-        v-for="item in INITIAL_POST_COUNT"
-        :key="item"
-        class="animate-pulse rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-4"
-      >
-        <div class="flex items-start gap-4">
-          <div class="h-16 w-16 rounded-full bg-[var(--surface-muted)]" />
-          <div class="min-w-0 flex-1 space-y-3">
-            <div class="h-4 w-44 rounded-full bg-[var(--surface-muted)]" />
-            <div class="h-3 w-28 rounded-full bg-[var(--surface-muted)]" />
-          </div>
-        </div>
-        <div class="mt-5 space-y-2">
-          <div class="h-4 w-3/4 rounded-full bg-[var(--surface-muted)]" />
-          <div class="h-3 w-full rounded-full bg-[var(--surface-muted)]" />
-          <div class="h-3 w-2/3 rounded-full bg-[var(--surface-muted)]" />
-        </div>
-        <div class="mt-4 h-56 rounded-[0.8rem] bg-[var(--surface-muted)]" />
-      </article>
+      <FeedCardSkeleton v-for="item in INITIAL_POST_COUNT" :key="item" kind="mixed" />
     </div>
 
     <div

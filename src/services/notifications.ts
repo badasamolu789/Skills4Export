@@ -229,6 +229,9 @@ export const normalizeNotification = (record: Record<string, unknown>): Notifica
   const actorAvatar = getString(actor ?? {}, ['avatar', 'avatarUrl', 'avatar_url', 'image', 'imageUrl']) ||
     getString(record, ['actorAvatar', 'actor_avatar', 'senderAvatar', 'sender_avatar']) ||
     getString(data ?? {}, ['actorAvatar', 'actor_avatar', 'senderAvatar', 'sender_avatar'])
+  const actorId = getString(actor ?? {}, ['id', 'userId', 'user_id']) ||
+    getString(record, ['actorId', 'actor_id', 'senderId', 'sender_id']) ||
+    getString(data ?? {}, ['actorId', 'actor_id', 'senderId', 'sender_id'])
   const id = getString(record, ['id', 'notificationId', 'notification_id', 'uuid']) || getString(data ?? {}, ['id'])
   const rawTitle =
     getString(record, ['title', 'subject', 'heading']) ||
@@ -267,9 +270,9 @@ export const normalizeNotification = (record: Record<string, unknown>): Notifica
     createdAt,
     unread: explicitUnread ?? (explicitRead !== null ? !explicitRead : !readAt),
     type,
-    actor: actor
+    actor: actor || actorId
       ? {
-          id: getString(actor, ['id', 'userId', 'user_id']),
+          id: actorId,
           name: actorName,
           avatar: actorAvatar || null,
         }

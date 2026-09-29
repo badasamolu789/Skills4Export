@@ -362,11 +362,19 @@ textarea[data-state='success'],
   }
 }
 
-@media (max-width: 767px) {
-  .app-header {
-    position: sticky;
-    top: 0;
-    z-index: 60;
+.app-header-spacer {
+  height: 6.6rem;
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .app-header-spacer {
+    height: 7.1rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-header-spacer {
+    height: 4.1rem;
   }
 }
 

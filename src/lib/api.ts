@@ -113,7 +113,7 @@ const getAbsoluteBaseUrl = () => {
   }
 }
 
-const buildUrl = (path: string) => {
+export const buildUrl = (path: string) => {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   const baseUrl = getApiBaseUrl()
 
