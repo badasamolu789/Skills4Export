@@ -120,7 +120,7 @@ const verifyOtp = async () => {
     const studentDisplayTitle = [
       authStore.signUpDraft.courseOfStudy,
       authStore.signUpDraft.university,
-    ].map((item) => item.trim()).filter(Boolean).join(' | ')
+    ].map((item) => item.trim()).filter(Boolean).join(' at ')
     const professionalDisplayTitle =
       authStore.signUpDraft.jobTitle.trim() && authStore.signUpDraft.workplace.trim()
         ? `${authStore.signUpDraft.jobTitle.trim()} at ${authStore.signUpDraft.workplace.trim()}`

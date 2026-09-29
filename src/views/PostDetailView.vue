@@ -36,7 +36,7 @@ import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMapper'
 import { getDisplayName } from '@/utils/displayName'
-import { getProfileDisplayTitle } from '@/utils/profileContextTag'
+import { getAuthorProfileDisplayTitle } from '@/utils/profileContextTag'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 
 const route = useRoute()
@@ -271,7 +271,7 @@ const mapAnswerItem = (answer: QuestionAnswerRecord): QuestionAnswerItem => {
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
     avatarSrc: isCurrentUser ? currentUser.avatarSrc.value || null : getEmbeddedAvatar(answer),
     avatarText: getInitials(isCurrentUser ? currentUser.displayName.value : embeddedName),
-    authorMeta: (getProfileDisplayTitle(embeddedProfile) || '').split('|').map((item) => item.trim()).filter(Boolean),
+    authorMeta: [],
     time: formatCommentTime(answer.createdAt || answer.created_at || ''),
     content: mapAnswerBody(answer),
     score: getOptionalCount(
@@ -326,7 +326,7 @@ const resolveCommentAuthor = async (comment: PostCommentRecord) => {
     name,
     to: comment.user_id ? `/profile/view/${comment.user_id}` : '/profile',
     avatarSrc: profile?.profile?.avatar || getEmbeddedAvatar(comment),
-    tag: getProfileDisplayTitle(profile) || getProfileDisplayTitle(embeddedProfile),
+    tag: getAuthorProfileDisplayTitle(profile),
   }
 }
 
@@ -433,7 +433,7 @@ const loadApiQuestion = async (id: string) => {
     authorResponse?.data
       ? authorResponse.data
       : (userId && userId === authStore.userId
-      ? currentUser.profileData.value
+      ? { user: currentUser.profileData.value.user, profile: authStore.userProfile }
       : null)
 
   apiPost.value = mapApiQuestionToFeedPost(
@@ -1305,7 +1305,7 @@ const submitAnswer = async () => {
         authorTo: currentUser.profilePath.value,
         avatarSrc: currentUser.avatarSrc.value || null,
         avatarText: currentUser.initials.value,
-        authorMeta: skillPills.value.slice(0, 3),
+        authorMeta: currentUser.displayTitle.value ? [currentUser.displayTitle.value] : [],
         time: 'Just now',
         content: mapAnswerBody(answer) || value,
         isScored: false,
@@ -1335,7 +1335,7 @@ const submitAnswer = async () => {
     authorTo: currentUser.profilePath.value,
     avatarSrc: currentUser.avatarSrc.value || null,
     avatarText: currentUser.initials.value,
-    authorMeta: skillPills.value.slice(0, 3),
+    authorMeta: currentUser.displayTitle.value ? [currentUser.displayTitle.value] : [],
     time: 'Just now',
     content: value,
     score: 0,

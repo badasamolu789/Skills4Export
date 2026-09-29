@@ -21,6 +21,7 @@ import { getQuestionUserId, mapApiQuestionToFeedPost } from '@/utils/questionMap
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { loadQuestionAuthorProfile } from '@/utils/questionAuthor'
+import { getAuthorProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const route = useRoute()
 const router = useRouter()
@@ -126,7 +127,7 @@ const currentAnswerAuthor = () => {
     name: currentUser.displayName.value,
     to: currentUser.profilePath.value,
     avatarSrc: currentUser.avatarSrc.value || null,
-    skills: currentUser.skills.value,
+    title: currentUser.displayTitle.value,
   }
 }
 
@@ -383,20 +384,20 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
                 name,
                 to: `/profile/view/${userId}`,
                 avatarSrc: profile?.profile?.avatar || getEmbeddedAvatar(answer),
-                skills: getProfileSkills(profile),
+                title: getAuthorProfileDisplayTitle(profile),
               }
             })
             .catch(() => ({
               name: getProfileNameWithoutEmail(embeddedProfile),
               to: `/profile/view/${userId}`,
               avatarSrc: getEmbeddedAvatar(answer),
-              skills: [] as string[],
+              title: '',
             }))
         : {
             name: getProfileNameWithoutEmail(embeddedProfile),
             to: '/profile',
             avatarSrc: getEmbeddedAvatar(answer),
-            skills: [] as string[],
+            title: '',
           }
 
   const media = getAnswerEmbeddedMedia(answer)
@@ -417,7 +418,7 @@ const mapAnswerItem = async (answer: QuestionAnswerRecord): Promise<AnswerItem> 
     authorTo: author.to,
     avatarSrc: author.avatarSrc,
     avatarText: getInitials(author.name),
-    authorMeta: author.skills,
+    authorMeta: author.title ? [author.title] : [],
     time: formatTime(answer.createdAt || answer.created_at),
     content: mapAnswerContent(answer),
     score: getOptionalCount(
@@ -500,7 +501,7 @@ const loadQuestion = async (id: string, options: { background?: boolean } = {}) 
     const communityId = response.data.communityId || response.data.community_id || ''
     const [authorData, answersResponse, communityResponse] = await Promise.all([
       userId
-        ? loadQuestionAuthorProfile(userId, authStore.userId, currentUser.profileData.value, authStore.authToken)
+        ? loadQuestionAuthorProfile(userId, authStore.userId, { user: currentUser.profileData.value.user, profile: authStore.userProfile }, authStore.authToken)
         : Promise.resolve(null),
       questionsService.listAnswers(response.data.id, authStore.authToken),
       communityId ? communitiesService.getCommunity(communityId, authStore.authToken) : Promise.resolve(null),
@@ -632,7 +633,7 @@ const submitAnswer = async () => {
         authorTo: answererProfilePath.value,
         avatarSrc: answererAvatar.value || null,
         avatarText: answererInitials.value,
-        authorMeta: answererSkills.value,
+        authorMeta: currentUser.displayTitle.value ? [currentUser.displayTitle.value] : [],
         time: 'Just now',
         content: mapAnswerContent(answer) || value,
         isSaved: false,

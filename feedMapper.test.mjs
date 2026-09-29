@@ -13,8 +13,9 @@ registerHooks({
 })
 
 const { mapCompactFeedItemToFeedPost } = await import('./src/utils/feedMapper.ts')
+const { mapApiPostToFeedPost } = await import('./src/utils/postMapper.ts')
 
-test('page posts use the posting user title, not page or author metadata', () => {
+test('page posts do not use embedded user, page, or author title', () => {
   const post = mapCompactFeedItemToFeedPost({
     id: 'post-1',
     type: 'POST',
@@ -27,7 +28,7 @@ test('page posts use the posting user title, not page or author metadata', () =>
   })
 
   assert.equal(post.author.name, 'Garden Page')
-  assert.equal(post.author.tag, 'Agronomy at Lagos University')
+  assert.equal(post.author.tag, '')
   assert.equal(post.userId, 'user-1')
 })
 
@@ -46,7 +47,7 @@ test('a page title is never substituted for a missing user display title', () =>
   assert.equal(post.author.tag, '')
 })
 
-test('personal posts retain the professional user display title', () => {
+test('personal posts wait for the author profile title', () => {
   const post = mapCompactFeedItemToFeedPost({
     id: 'post-3',
     type: 'POST',
@@ -55,10 +56,10 @@ test('personal posts retain the professional user display title', () => {
     media: [],
   })
 
-  assert.equal(post.author.tag, 'Engineer at Acme')
+  assert.equal(post.author.tag, '')
 })
 
-test('community posts use the member title instead of community data', () => {
+test('community posts wait for the author profile title', () => {
   const post = mapCompactFeedItemToFeedPost({
     id: 'post-4',
     type: 'POST',
@@ -69,5 +70,25 @@ test('community posts use the member title instead of community data', () => {
     media: [],
   })
 
-  assert.equal(post.author.tag, 'Researcher at Field Labs')
+  assert.equal(post.author.tag, '')
+})
+
+test('post detail uses only the author profile display title', () => {
+  const record = {
+    id: 'post-5',
+    title: 'Solar Power',
+    content: 'A guide',
+    user_id: 'user-4',
+    community_id: null,
+    page_id: null,
+    created_at: '2026-09-29T08:06:33.000Z',
+    updated_at: '2026-09-29T08:06:33.000Z',
+    user: { id: 'user-4', name: 'Bada Samuel', display_title: 'Metrulugical Engineering' },
+  }
+
+  assert.equal(mapApiPostToFeedPost(record, [], { profile: { display_title: null } }).author.tag, '')
+  assert.equal(
+    mapApiPostToFeedPost(record, [], { profile: { display_title: 'Product Designer at Google' } }).author.tag,
+    'Product Designer at Google',
+  )
 })

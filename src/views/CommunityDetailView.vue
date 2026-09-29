@@ -202,7 +202,7 @@ const loadCommunityFeed = async (communityId: string, append = false) => {
         ...mapApiPostToFeedPost(
           item.post,
           item.media ?? [],
-          currentUser.profileData.value,
+          { user: currentUser.profileData.value.user, profile: authStore.userProfile },
           community.value?.name || 'Community post',
         ),
         communityName: community.value?.name || 'Community post',

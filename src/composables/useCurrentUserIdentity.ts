@@ -132,22 +132,9 @@ export const useCurrentUserIdentity = () => {
     ), { keepSmallWords: true }),
   )
   const explicitDisplayTitle = computed(() =>
-    getFirstFilled(
-      getRecordString(authStore.userProfile, ['displayTitle', 'display_title']),
-      getRecordString(authStore.currentUser, ['displayTitle', 'display_title']),
-    ),
+    getRecordString(authStore.userProfile, ['display_title']),
   )
-  const displayTitle = computed(() => {
-    if (explicitDisplayTitle.value) {
-      return explicitDisplayTitle.value
-    }
-
-    return isStudent.value
-      ? [courseOfStudy.value, studentInstitution.value].filter(Boolean).join(' | ')
-      : currentTitle.value && currentWorkplace.value
-        ? `${currentTitle.value} at ${currentWorkplace.value}`
-        : [currentTitle.value, currentWorkplace.value].filter(Boolean).join('')
-  })
+  const displayTitle = computed(() => explicitDisplayTitle.value)
   const role = computed(() => displayTitle.value)
   const profilePath = computed(() => (authStore.userId ? `/profile/view/${authStore.userId}` : '/profile'))
   const skills = computed(() => authStore.signUpDraft.interests.slice(0, 3))

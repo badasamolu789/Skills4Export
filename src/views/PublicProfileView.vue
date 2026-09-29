@@ -378,12 +378,9 @@ const profile = computed(() => {
   }
 })
 
-const featuredExperience = computed(() => experiences.value[0] ?? null)
-const featuredSkill = computed(() => displaySkills.value[0]?.name || '')
 const profileMetaItems = computed(() =>
   [
-    featuredSkill.value,
-    featuredExperience.value?.company,
+    userProfile.value?.display_title,
     profile.value.location,
   ].filter((item): item is string => Boolean(item && item.trim())),
 )

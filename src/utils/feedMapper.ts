@@ -4,7 +4,6 @@ import type { CompactFeedMedia, CompactFeedRecord } from '@/services/feeds'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
 import { readBooleanFlag, readFollowState } from '@/utils/followState'
 import { getOptionalCount, isVideoPostMedia } from '@/utils/postMapper'
-import { getDirectProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -57,7 +56,6 @@ const getInitials = (value: string) =>
     .slice(0, 2)
     .toUpperCase()
 
-const getAuthorDisplayTitle = (author: unknown) => getDirectProfileDisplayTitle(author)
 
 const normalizeMediaItem = (
   value: CompactFeedMedia,
@@ -132,7 +130,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       authorName,
       authorTo: userId ? `/profile/view/${userId}` : '/profile',
       authorAvatarSrc: readString(author, ['avatar', 'avatarUrl', 'avatar_url']) || null,
-      tag: getAuthorDisplayTitle(author),
+      tag: '',
       answers: getOptionalCount(item.answersCount, item.answers_count, item.answer_count),
       score: getOptionalCount(item.score),
       ...(readFollowState(viewerState, item, author) !== undefined
@@ -169,9 +167,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       to: pageId ? `/pages/${item.page?.slug || pageId}/public` : `/profile/view/${userId}`,
       avatarText: getInitials(authorName || 'Community member'),
       avatarSrc,
-      tag: pageId
-        ? getDirectProfileDisplayTitle(item.user)
-        : getDirectProfileDisplayTitle(item.user) || getDirectProfileDisplayTitle(item.author),
+      tag: '',
     },
     time: formatFeedTime(createdAt),
     title,

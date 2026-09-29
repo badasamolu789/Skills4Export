@@ -527,7 +527,7 @@ const submitQuestion = async () => {
     socialActionsStore.upsertFeedItem(
       mapApiQuestionToFeedPost(
         question,
-        currentUser.profileData.value,
+        { user: currentUser.profileData.value.user, profile: authStore.userProfile },
         community?.name,
         community,
       ),
@@ -692,7 +692,7 @@ const submitPost = async () => {
       mapApiPostToFeedPost(
         createdPost,
         immediateMedia,
-        currentUser.profileData.value,
+        { user: currentUser.profileData.value.user, profile: authStore.userProfile },
         selectedCommunity?.name,
       ),
     )

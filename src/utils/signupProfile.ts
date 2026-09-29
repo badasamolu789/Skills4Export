@@ -53,7 +53,7 @@ export const syncSignUpDetailsToProfile = async (authStore: AuthStore) => {
     ? draft.courseOfStudy.trim()
     : draft.jobTitle.trim()
   const displayTitle = draft.accountType === 'student'
-    ? [draft.courseOfStudy.trim(), draft.university.trim()].filter(Boolean).join(' | ')
+    ? [draft.courseOfStudy.trim(), draft.university.trim()].filter(Boolean).join(' at ')
     : draft.jobTitle.trim() && draft.workplace.trim()
       ? `${draft.jobTitle.trim()} at ${draft.workplace.trim()}`
       : [draft.jobTitle.trim(), draft.workplace.trim()].filter(Boolean).join('')

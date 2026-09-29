@@ -39,7 +39,6 @@ import { getDisplayName, getInitialsFromName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { optimizeImageFile, optimizePageAvatarFile } from '@/utils/imageOptimization'
 import { getOptionalCount, getPostUserId } from '@/utils/postMapper'
-import { getDirectProfileDisplayTitle } from '@/utils/profileContextTag'
 import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 
 type PageTab = 'about' | 'posts' | 'photos' | 'jobs' | 'dates'
@@ -329,7 +328,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
         to: publicDisplayTarget.value,
         avatarText: pageInitials.value,
         avatarSrc: pageImage.value || null,
-        tag: getDirectProfileDisplayTitle(item.record.user),
+        tag: '',
       },
       time: formatPostTime(item.record.created_at),
       title: item.record.title,

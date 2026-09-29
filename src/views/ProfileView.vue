@@ -13,6 +13,8 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 import { optimizeImageFile } from '@/utils/imageOptimization'
 import { richTextToPlainText } from '@/utils/richText'
+import { publishAuthorProfileTitle } from '@/utils/authorProfileTitle'
+import { buildDisplayTitle, getCourseFromDisplayTitle } from '@/utils/displayTitle'
 import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower, UserProfile } from '@/services/users'
 
 type ProfileUploadItem = {
@@ -762,14 +764,19 @@ const isStudentProfile = computed(() => {
 
   const education = getPrimaryEducation(profileResponseData.value)
   const displayTitle = getStudentProfileField(profileData, profileResponseData.value, ['displayTitle', 'display_title'])
+  const studentTitles = [
+    buildStudentDisplayTitle(education?.school || '', education?.field || ''),
+    [education?.field, education?.school].filter(Boolean).join(' | '),
+  ]
   return Boolean(
     education?.field && education.school &&
-    displayTitle.toLowerCase() === buildStudentDisplayTitle(education.school, education.field).toLowerCase(),
+    (studentTitles.some((title) => displayTitle.toLowerCase() === title.toLowerCase()) ||
+      Boolean(getCourseFromDisplayTitle(displayTitle, education.school))),
   )
 })
 
 const buildStudentDisplayTitle = (institution: string, course: string) =>
-  [course, institution].filter(Boolean).join(' | ')
+  buildDisplayTitle(course, institution)
 
 const loadProfile = async () => {
   if (!authStore.isAuthenticated) {
@@ -846,8 +853,8 @@ const loadProfile = async () => {
 
     experiences.value = sourceExperiences
     const currentExperience = sourceExperiences.find((experience) => Boolean(experience.isCurrent)) || sourceExperiences[0]
-    const currentTitle = currentExperience?.title?.trim()
-    const currentWorkplace = currentExperience?.company?.trim()
+    const currentTitle = profileData?.profile?.currentJobTitle || profileData?.profile?.current_job_title || profileData?.current_job_title || currentExperience?.title?.trim()
+    const currentWorkplace = profileData?.profile?.currentWorkspace || profileData?.profile?.current_workspace || profileData?.current_workspace || currentExperience?.company?.trim()
 
     if (currentTitle) {
       authStore.signUpDraft.jobTitle = currentTitle
@@ -1011,9 +1018,9 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
   const userData = data?.user ?? authStore.currentUser
   const education = getPrimaryEducation(data)
   const institutionOfStudy = toInitialCaps(
-    authStore.signUpDraft.university ||
-      getStudentProfileField(profileData, data, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
+    getStudentProfileField(profileData, data, ['institutionOfStudy', 'institution_of_study', 'institution', 'institutionName', 'institution_name', 'university', 'school']) ||
       education?.school ||
+      authStore.signUpDraft.university ||
       '',
     { keepSmallWords: true },
   )
@@ -1024,9 +1031,10 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
       ''
   ).slice(0, 4)
   const courseOfStudy = toInitialCaps(
-    authStore.signUpDraft.courseOfStudy ||
-      getStudentProfileField(profileData, data, ['courseOfStudy', 'course_of_study', 'field']) ||
+    getStudentProfileField(profileData, data, ['courseOfStudy', 'course_of_study', 'courseName', 'course_name', 'field']) ||
+      getCourseFromDisplayTitle(getStudentProfileField(profileData, data, ['display_title', 'displayTitle']), institutionOfStudy) ||
       education?.field ||
+      authStore.signUpDraft.courseOfStudy ||
       '',
     { keepSmallWords: true },
   )
@@ -1036,19 +1044,20 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
     featuredExperience.value
 
   const currentWorkplace = toInitialCaps(
-    currentExperience?.company ||
-      profileData?.currentWorkspace ||
+    profileData?.currentWorkspace ||
       profileData?.current_workspace ||
+      data?.current_workspace ||
+      currentExperience?.company ||
       authStore.signUpDraft.workplace ||
       '',
     { keepSmallWords: true },
   )
   const currentJobTitle = toInitialCaps(
-    currentExperience?.title ||
-      profileData?.currentJobTitle ||
+    profileData?.currentJobTitle ||
       profileData?.current_job_title ||
+      data?.current_job_title ||
+      currentExperience?.title ||
       authStore.signUpDraft.jobTitle ||
-      authStore.signUpDraft.courseOfStudy ||
       '',
     { keepSmallWords: true },
   )
@@ -1063,7 +1072,7 @@ const prefillProfileDetailsForm = (data?: MyProfileData | null) => {
       )),
     displayTitle: isStudentProfile.value
       ? buildStudentDisplayTitle(institutionOfStudy, courseOfStudy)
-      : [currentJobTitle, currentWorkplace].filter(Boolean).join(' at '),
+      : buildDisplayTitle(currentJobTitle, currentWorkplace),
     location: toInitialCaps(profileData?.location || authStore.signUpDraft.location || ''),
     currentWorkplace,
     currentJobTitle,
@@ -1082,7 +1091,7 @@ watch(
 
     const title = toInitialCaps(currentJobTitle, { keepSmallWords: true })
     const workplace = toInitialCaps(currentWorkplace, { keepSmallWords: true })
-    profileDetailsForm.value.displayTitle = [title, workplace].filter(Boolean).join(' at ')
+    profileDetailsForm.value.displayTitle = buildDisplayTitle(title, workplace)
   },
 )
 
@@ -1152,7 +1161,18 @@ const upsertCurrentExperience = async () => {
     throw new Error('Current work place and current job title are required together.')
   }
 
-  const existingExperience = featuredExperience.value
+  const profileTitle = authStore.userProfile?.currentJobTitle || authStore.userProfile?.current_job_title || ''
+  const profileWorkplace = authStore.userProfile?.currentWorkspace || authStore.userProfile?.current_workspace || ''
+  const existingExperience = experiences.value.find((experience) =>
+      experience.title?.trim().toLowerCase() === profileTitle.trim().toLowerCase() &&
+      experience.company?.trim().toLowerCase() === profileWorkplace.trim().toLowerCase(),
+    ) ||
+    experiences.value.find((experience) => Boolean(experience.isCurrent)) ||
+    featuredExperience.value
+
+  if (existingExperience?.title?.trim() === title && existingExperience.company?.trim() === company) {
+    return
+  }
   const payload = {
     company,
     title,
@@ -1205,6 +1225,17 @@ const saveProfileDetails = async () => {
     const institutionOfStudy = toInitialCaps(profileDetailsForm.value.institutionOfStudy, { keepSmallWords: true })
     const graduationYear = profileDetailsForm.value.graduationYear.trim()
     const courseOfStudy = toInitialCaps(profileDetailsForm.value.courseOfStudy, { keepSmallWords: true })
+    const displayTitle = isStudent
+      ? buildStudentDisplayTitle(institutionOfStudy, courseOfStudy)
+      : buildDisplayTitle(currentJobTitle, currentWorkspace)
+
+    if (!displayTitle) {
+      toast.error(isStudent
+        ? 'Add both your course of study and institution.'
+        : 'Add both your current job title and workplace.')
+      return
+    }
+
     const profilePayload = {
       username: authStore.userProfile?.username || authStore.signUpDraft.username,
       displayName,
@@ -1213,6 +1244,8 @@ const saveProfileDetails = async () => {
       website: authStore.userProfile?.website || authStore.signUpDraft.website || '',
       linkedin: authStore.userProfile?.linkedin || authStore.signUpDraft.linkedin || '',
       github: authStore.userProfile?.github || authStore.signUpDraft.github || '',
+      displayTitle,
+      display_title: displayTitle,
       ...(isStudent
         ? {
             accountType: 'student',
@@ -1284,6 +1317,10 @@ const saveProfileDetails = async () => {
     authStore.signUpDraft.name = displayName
     authStore.signUpDraft.headline = bio
     authStore.signUpDraft.location = location
+    if (!isStudent) {
+      authStore.signUpDraft.jobTitle = currentJobTitle
+      authStore.signUpDraft.workplace = currentWorkspace
+    }
     authStore.setAccountType(isStudent ? 'student' : 'default')
     if (isStudent) {
       authStore.signUpDraft.accountType = 'student'
@@ -1297,6 +1334,8 @@ const saveProfileDetails = async () => {
     authStore.setUserProfileOverride({
       ...(userResponse?.data?.profile ?? savedProfile ?? {}),
       displayName,
+      displayTitle,
+      display_title: displayTitle,
       bio,
       location,
       ...(isStudent
@@ -1318,6 +1357,8 @@ const saveProfileDetails = async () => {
             ...(currentWorkspace ? { currentWorkspace } : {}),
           }),
     })
+
+    publishAuthorProfileTitle(authStore.userId, displayTitle)
 
     isProfileDetailsModalOpen.value = false
   } catch (error) {
@@ -1528,37 +1569,13 @@ const profile = computed(() => {
 })
 
 const featuredExperience = computed(() => experiences.value[0] ?? null)
-const featuredEducation = computed(() => getPrimaryEducation(profileResponseData.value))
-
-const featuredSkill = computed(() => skills.value[0]?.name || '')
-
-const profileSkillLabel = computed(() => toInitialCaps(
-  isStudentProfile.value
-    ? authStore.signUpDraft.courseOfStudy ||
-      getStudentProfileField(authStore.userProfile, profileResponseData.value, ['courseOfStudy', 'course_of_study', 'field']) ||
-      featuredEducation.value?.field ||
-      featuredSkill.value ||
-      ''
-    : featuredExperience.value?.title ||
-      authStore.signUpDraft.jobTitle ||
-      featuredSkill.value ||
-      '',
-  { keepSmallWords: true },
-))
-const profileCompanyLabel = computed(() => toInitialCaps(
-  isStudentProfile.value
-    ? authStore.signUpDraft.university ||
-      getStudentProfileField(authStore.userProfile, profileResponseData.value, ['institutionOfStudy', 'institution_of_study', 'university', 'school']) ||
-      featuredEducation.value?.school ||
-      ''
-    : featuredExperience.value?.company ||
-      authStore.signUpDraft.workplace ||
-      '',
-  { keepSmallWords: true },
-))
+const profileDisplayTitle = computed(() =>
+  getStringField(profileResponseData.value?.profile, ['display_title']) ||
+  getStringField(authStore.userProfile, ['display_title']),
+)
 const profileCountryLabel = computed(() => toInitialCaps(profile.value.location || ''))
 const profileHeadlineParts = computed(() =>
-  [profileSkillLabel.value, profileCompanyLabel.value, profileCountryLabel.value].filter(Boolean),
+  [profileDisplayTitle.value, profileCountryLabel.value].filter(Boolean),
 )
 
 const totalTScore = computed(() =>
