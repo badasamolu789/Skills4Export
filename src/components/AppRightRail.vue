@@ -85,7 +85,7 @@ const trendingQuestions = computed<TrendingQuestion[]>(() => {
     .sort((first, second) => {
       return new Date(getQuestionTimestamp(second)).getTime() - new Date(getQuestionTimestamp(first)).getTime()
     })
-    .slice(0, 4)
+    .slice(0, 5)
     .map((question) => ({
       id: question.id,
       title: question.title,
@@ -125,7 +125,7 @@ const loadTrendingQuestions = async (options: { background?: boolean } = {}) => 
 
   try {
     const response = await questionsService.listQuestions(
-      { page: 1, per_page: 4, 'sort[field]': 'created_at', 'sort[direction]': 'desc' },
+      { page: 1, per_page: 5, 'sort[field]': 'created_at', 'sort[direction]': 'desc' },
       authStore.authToken,
       { force: true },
     )
@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
           aria-label="Loading trending questions"
         >
           <div
-            v-for="item in 4"
+            v-for="item in 5"
             :key="item"
             class="animate-pulse rounded-lg bg-[var(--surface-secondary)] p-3"
           >
