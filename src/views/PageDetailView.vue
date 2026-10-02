@@ -16,7 +16,6 @@ import {
   UserCheck,
   UserPlus,
   Users,
-  Video,
   X,
 } from 'lucide-vue-next'
 import AppFeedPost from '@/components/AppFeedPost.vue'
@@ -2088,10 +2087,7 @@ watch(pagePostFile, (file, previousFile) => {
             Click to upload images or videos.
           </span>
         </button>
-        <span
-          v-else
-          class="mt-2 block overflow-hidden rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]"
-        >
+        <span v-else class="mt-2 block">
           <span class="relative block bg-[var(--surface-secondary)] p-3">
             <img loading="lazy" decoding="async"
               v-if="pagePostFileKind === 'image'"
@@ -2115,34 +2111,22 @@ watch(pagePostFile, (file, previousFile) => {
             />
             <button
               type="button"
+              class="absolute left-5 top-5 rounded bg-[var(--surface-primary)] px-2 py-1 text-sm font-semibold text-[var(--text-primary)] underline underline-offset-2 shadow-[var(--shadow-soft)]"
+              @click.stop.prevent="pagePostFileInput?.click()"
+            >Change</button>
+            <button
+              type="button"
               class="absolute right-5 top-5 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--surface-primary)] text-[var(--text-primary)] shadow-[var(--shadow-soft)]"
               aria-label="Cancel media upload and remove file"
               title="Remove media"
               @click.prevent="clearPagePostFile"
             ><X class="h-4 w-4" /></button>
           </span>
-          <span class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <span class="min-w-0">
-              <span class="flex items-center gap-2 text-sm font-semibold text-[var(--text-primary)]">
-                <ImageIcon v-if="pagePostFileKind === 'image'" class="h-4 w-4 text-[var(--accent-strong)]" />
-                <Video v-else class="h-4 w-4 text-[var(--accent-strong)]" />
-                <span class="truncate">{{ pagePostFile.name }}</span>
-              </span>
-              <span class="mt-1 block text-xs font-medium uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
-                {{ pagePostFileKind }} · {{ pagePostFileSize }}
-              </span>
-              <span v-if="isUploadingPagePostMedia" class="mt-1 block text-xs text-[var(--text-secondary)]" role="status">Uploading {{ pagePostUploadProgress }}%</span>
-              <span v-else-if="uploadedPagePostMedia" class="mt-1 block text-xs font-semibold text-green-600 dark:text-green-400">Ready</span>
-            </span>
-            <span class="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                class="inline-flex h-10 items-center justify-center rounded-[0.65rem] border border-[color:var(--border-soft)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
-                @click="pagePostFileInput?.click()"
-              >
-                Change
-              </button>
-            </span>
+          <span class="mt-2 flex min-w-0 items-center gap-2 rounded-[0.5rem] bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            <span class="min-w-0 truncate font-medium text-[var(--text-primary)]" :title="pagePostFile.name">{{ pagePostFile.name }}</span>
+            <span class="shrink-0">{{ pagePostFileSize }}</span>
+            <span v-if="isUploadingPagePostMedia" class="ml-auto shrink-0" role="status">Uploading {{ pagePostUploadProgress }}%</span>
+            <span v-else-if="uploadedPagePostMedia" class="ml-auto shrink-0 font-semibold text-green-600 dark:text-green-400" role="status">Ready</span>
           </span>
         </span>
         <input ref="pagePostFileInput" type="file" accept="image/*,video/*" class="sr-only" required @change="handlePagePostFileChange" />
