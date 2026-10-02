@@ -54,7 +54,7 @@ const copyReferralLink = async () => {
 </script>
 
 <template>
-  <section class="px-1 py-2 sm:px-2">
+  <section class="py-2 sm:px-2">
     <div class="mx-auto max-w-6xl rounded-[2rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 shadow-[var(--shadow-elevated)] sm:p-8 lg:p-12">
       <div class="max-w-4xl">
         <h1 class="text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-[var(--text-primary)] sm:text-[2.75rem] lg:text-[3.25rem]">

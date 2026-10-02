@@ -881,7 +881,7 @@ const clearPassportUpload = () => {
 
 <template>
   <section class="space-y-6">
-    <div class="space-y-5 px-1">
+    <div class="space-y-5 sm:px-1">
       <div class="max-w-3xl">
         <h1 class="text-[1.9rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[2.3rem]">
           Freelancers

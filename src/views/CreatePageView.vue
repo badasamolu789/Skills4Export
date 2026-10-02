@@ -679,15 +679,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="min-h-[calc(100vh-6rem)] px-1 py-6 sm:py-8">
+  <section class="min-h-[calc(100vh-6rem)] py-6 sm:py-8">
     <div v-if="!selectedPageType" class="mx-auto flex min-h-[calc(100vh-9rem)] max-w-6xl flex-col items-center justify-center">
       <div class="w-full space-y-10">
         <div class="text-center">
-          <div class="mx-auto mb-4 flex flex-wrap items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
+          <!-- <div class="mx-auto mb-4 flex flex-wrap items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
             <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
             <span>/</span>
             <span class="font-medium text-[var(--accent-strong)]">Create page options</span>
-          </div>
+          </div> -->
           <h1 class="text-[2rem] font-semibold leading-tight tracking-[-0.03em] text-[var(--text-primary)] sm:text-[2.7rem]">
             Choose a Page Category
           </h1>

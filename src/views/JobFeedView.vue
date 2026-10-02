@@ -88,12 +88,12 @@ onMounted(() => void jobsStore.loadJobs())
 
 <template>
   <section class="space-y-5">
-    <div class="space-y-4 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+    <div class="space-y-4 sm:px-1">
+      <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
         <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>
         <span class="font-medium text-[var(--accent-strong)]">Jobs</span>
-      </div>
+      </div> -->
       <h1 class="text-[1.25rem] font-semibold text-[var(--text-primary)]">Jobs</h1>
 
       <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">

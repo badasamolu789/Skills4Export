@@ -110,7 +110,7 @@ watch(loadMoreTarget, (target, previous) => {
 </script>
 
 <template>
-  <section class="mx-auto w-full max-w-[44rem] space-y-7 px-3 py-6 sm:px-4 lg:max-w-[46rem] lg:px-0">
+  <section class="mx-auto w-full max-w-[44rem] space-y-7 py-6 sm:px-4 lg:max-w-[46rem] lg:px-0">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex items-center gap-4">
         <div>

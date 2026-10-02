@@ -1360,7 +1360,10 @@ watch(pagePostFile, (file, previousFile) => {
               </p>
             </div>
           </div>
-          <div class="grid w-full gap-3 sm:w-auto sm:grid-cols-2 md:justify-end">
+          <div
+            class="grid w-full gap-3 sm:w-max md:justify-end"
+            :class="isPageOwner && !isPublicView ? 'sm:grid-cols-2' : 'sm:grid-cols-1'"
+          >
             <RouterLink
               v-if="isPageOwner && !isPublicView"
               :to="publicDisplayTarget"
@@ -1381,7 +1384,7 @@ watch(pagePostFile, (file, previousFile) => {
             <RouterLink
               v-if="isPageOwner && isPublicView"
               :to="managementDisplayTarget"
-              class="inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-center text-sm font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
+              class="inline-flex h-11 min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 text-center text-sm font-semibold text-[var(--text-secondary)] shadow-[var(--shadow-soft)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
             >
               Back to manage page
             </RouterLink>

@@ -751,30 +751,30 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="app-header fixed inset-x-0 top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]/95 backdrop-blur">
+  <header class="app-header fixed inset-x-0 top-0 z-50 border-b border-[color:var(--border-soft)] bg-[var(--header-bg)]">
     <div class="mx-auto w-full max-w-[86rem] px-3 py-2 sm:px-4 lg:px-6 xl:px-8">
-      <div class="relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 md:hidden">
+      <div class="relative grid grid-cols-[2.25rem_minmax(0,1fr)_5.375rem] items-center gap-2 md:hidden">
         <div class="flex min-w-0 items-center justify-self-start">
           <button
             type="button"
-            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open menu"
             title="Open menu"
             @click="openMobileMenu"
           >
-            <Menu class="h-4 w-4" />
+            <Menu class="h-5 w-5" />
           </button>
         </div>
 
-          <RouterLink to="/feed" class="flex min-w-0 items-center justify-center justify-self-center">
+        <RouterLink to="/feed" class="flex w-full min-w-0 items-center justify-center">
           <img loading="lazy" decoding="async"
             :src="logoSrc"
             :alt="logoAlt"
-            class="h-10 w-auto object-contain sm:h-12"
+            class="h-10 w-full object-contain sm:h-12"
           />
         </RouterLink>
 
-        <div class="flex items-center gap-1.5 justify-self-end">
+        <div class="flex w-full items-center justify-end gap-1.5">
           <RouterLink
             to="/notifications"
             class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -803,7 +803,7 @@ onMounted(() => {
 
           <RouterLink
             to="/mobile/account"
-            class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--surface-secondary)] text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             aria-label="Open account menu"
             title="Open account menu"
           >
@@ -841,7 +841,7 @@ onMounted(() => {
           <button
             v-if="link.action"
             type="button"
-            class="flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--surface-secondary)] px-2 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--surface-secondary)] px-1 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             :aria-label="link.label"
             :title="link.label"
             @click="handleHeaderLinkAction(link)"
@@ -849,21 +849,22 @@ onMounted(() => {
             <i
               v-if="getLineAwesomeIconClass(link)"
               :class="getLineAwesomeIconClass(link)"
-              class="text-[1rem] leading-none"
+              class="text-[1.2rem] leading-none"
               aria-hidden="true"
             />
             <component
               :is="iconByLink[link.label as keyof typeof iconByLink] || LayoutGrid"
               v-else
-              class="h-4 w-4 stroke-[2]"
+              class="h-5 w-5 stroke-[2]"
             />
+            <span class="text-[0.65rem] font-medium leading-none">{{ link.label }}</span>
           </button>
           <RouterLink
             v-else
             :to="link.to || '/'"
             :target="link.target"
             :rel="link.target === '_blank' ? 'noopener noreferrer' : undefined"
-            class="flex h-10 items-center justify-center rounded-[0.8rem] bg-[var(--surface-secondary)] px-2 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
+            class="flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl bg-[var(--surface-secondary)] px-1 text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
             :aria-label="link.label"
             :title="link.label"
           >
@@ -876,8 +877,9 @@ onMounted(() => {
             <component
               :is="iconByLink[link.label as keyof typeof iconByLink] || LayoutGrid"
               v-else
-              class="h-4 w-4 stroke-[2]"
+              class="h-5 w-5 stroke-[2]"
             />
+            <span class="text-[0.65rem] font-medium leading-none">{{ link.label }}</span>
           </RouterLink>
         </template>
       </div>

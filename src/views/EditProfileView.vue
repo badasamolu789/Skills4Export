@@ -1573,15 +1573,15 @@ const addExperienceFromModal = async () => {
 </script>
 
 <template>
-  <section class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-    <div class="space-y-3 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-(--text-secondary)">
+  <section class="max-w-4xl mx-auto sm:px-6 lg:px-8 space-y-6">
+    <div class="space-y-3">
+      <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-(--text-secondary)">
         <RouterLink to="/feed" class="transition hover:text-(--accent-strong)">Home</RouterLink>
         <span>/</span>
         <RouterLink to="/profile" class="transition hover:text-(--accent-strong)">Profile</RouterLink>
         <span>/</span>
         <span class="font-medium text-(--accent-strong)">Edit Profile</span>
-      </div>
+      </div> -->
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 class="text-[1.65rem] font-semibold leading-tight text-(--text-primary) sm:text-[1.95rem] lg:text-[2.1rem]">

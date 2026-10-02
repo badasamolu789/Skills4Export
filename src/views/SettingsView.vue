@@ -455,7 +455,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-8 px-3 py-6 sm:px-4 lg:px-6">
+  <section class="mx-auto max-w-7xl space-y-8 py-6 sm:px-4 lg:px-6">
     <header class="space-y-6">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex items-center gap-4">

@@ -1429,11 +1429,11 @@ const submitAnswer = async () => {
       {{ postError }}
     </div>
 
-    <div class="flex flex-wrap items-center gap-2 px-1 text-[0.82rem] text-[var(--text-secondary)]">
+    <!-- <div class="flex flex-wrap items-center gap-2 px-1 text-[0.82rem] text-[var(--text-secondary)]">
       <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
       <span>/</span>
       <span class="font-medium text-[var(--accent-strong)]">Post Details</span>
-    </div>
+    </div> -->
 
     <article class="overflow-hidden rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <div class="space-y-5 border-b border-[color:var(--border-soft)] p-4 sm:p-5">

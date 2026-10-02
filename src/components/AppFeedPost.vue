@@ -1661,7 +1661,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
           <div ref="postMenuRoot" class="relative shrink-0">
             <button
               type="button"
-              class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--border-soft)] text-[var(--text-secondary)] transition hover:border-[color:var(--accent-soft)] hover:text-[var(--accent-strong)]"
+              class="inline-flex h-9 w-9 items-center justify-center text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)] sm:rounded-full sm:border sm:border-[color:var(--border-soft)] sm:hover:border-[color:var(--accent-soft)]"
               aria-label="Question actions"
               @click="togglePostMenu"
             >
@@ -1746,23 +1746,23 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
 
           <div class="min-w-0 flex-1">
             <div class="min-w-0">
-              <div class="flex items-start gap-2">
-                <div class="min-w-0 flex flex-1 items-center gap-1.5">
+              <div class="relative flex items-start gap-2">
+                <div class="min-w-0 flex flex-1 flex-col items-start gap-0.5 pr-8 sm:flex-row sm:items-center sm:gap-1.5 sm:pr-0">
                   <RouterLink
                     :to="authorRoute"
-                    class="min-w-0 shrink truncate text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:text-[1.16rem]"
+                    class="block max-w-full min-w-0 truncate text-[1.08rem] font-semibold text-[var(--text-primary)] transition hover:text-[var(--accent-strong)] sm:shrink sm:text-[1.16rem]"
                   >
                     {{ authorName }}
                   </RouterLink>
                   <span
                     v-if="authorMetaItems.length"
-                    class="min-w-0 truncate text-[0.92rem] font-semibold text-[var(--text-tertiary)]"
+                    class="block max-w-full min-w-0 truncate text-[0.78rem] font-semibold text-[var(--text-tertiary)] sm:text-[0.92rem]"
                   >
                     {{ authorMetaItems.join(' | ') }}
                   </span>
                 </div>
 
-                <div ref="postMenuRoot" class="relative ml-auto sm:hidden">
+                <div ref="postMenuRoot" class="absolute right-0 top-0 sm:hidden">
                   <button
                     type="button"
                     class="inline-flex h-8 w-8 items-center justify-center text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"
@@ -1776,15 +1776,6 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     v-if="isPostMenuOpen"
                     class="absolute right-0 top-[calc(100%+0.5rem)] z-20 min-w-[9rem] rounded-[1rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-2 shadow-[var(--shadow-elevated)]"
                   >
-                    <RouterLink
-                      v-if="pagePostRoute && !props.hideViewPage"
-                      :to="pagePostRoute"
-                      class="flex w-full items-center gap-2 rounded-[0.8rem] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] transition hover:bg-[var(--surface-secondary)] hover:text-[var(--accent-strong)]"
-                      @click="closePostMenu"
-                    >
-                      <UserRound class="h-4 w-4" />
-                      View Page
-                    </RouterLink>
                     <button
                       v-if="canEditPost"
                       type="button"
@@ -1823,8 +1814,8 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                 </div>
               </div>
 
-              <div class="mt-1 flex items-center gap-1.5 text-xs leading-none text-[var(--text-secondary)] sm:mt-2 sm:gap-2 sm:text-sm">
-                <div class="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+              <div class="flex items-center gap-1.5 text-xs leading-none text-[var(--text-secondary)] sm:mt-2 sm:gap-2 sm:text-sm">
+                <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 sm:gap-2">
                   <button
                     v-if="showFollowAction"
                     type="button"
@@ -1847,6 +1838,14 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                     <span class="truncate">re-shared {{ post.time }}</span>
                   </span>
                   <span v-else class="truncate">{{ post.time }}</span>
+                  <RouterLink
+                    v-if="pagePostRoute && !props.hideViewPage"
+                    :to="pagePostRoute"
+                    class="shrink-0 whitespace-nowrap font-semibold underline underline-offset-2 sm:hidden"
+                    style="color: var(--accent-strong)"
+                  >
+                    View Page
+                  </RouterLink>
                   <!-- Community name is intentionally hidden on feed cards for now.
                   <span v-if="feedPostContextDetail && !props.hideCommunityContext" class="hidden truncate text-[0.78rem] text-[var(--text-tertiary)] sm:inline">
                     {{ feedPostContextDetail }}
@@ -1854,7 +1853,7 @@ const submitCommentReply = async (comment: PostCommentThreadItem) => {
                   -->
                 </div>
 
-                <div class="ml-auto flex items-center gap-2 self-start">
+                <div class="ml-auto hidden items-center gap-2 self-start sm:flex">
                   <RouterLink
                     v-if="pagePostRoute && !props.hideViewPage"
                     :to="pagePostRoute"

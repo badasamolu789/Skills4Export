@@ -78,14 +78,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="min-h-[calc(100vh-6rem)] px-4 py-10 sm:px-6 lg:px-8">
+  <section class="min-h-[calc(100vh-6rem)] py-10 sm:px-6 lg:px-8">
     <div class="mx-auto max-w-5xl space-y-8">
-      <div class="space-y-4 px-1">
-        <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+      <div class="space-y-4 sm:px-1">
+        <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
           <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
           <span>/</span>
           <span class="font-medium text-[var(--accent-strong)]">Explore Communities</span>
-        </div>
+        </div> -->
 
         <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-end">
           <div>

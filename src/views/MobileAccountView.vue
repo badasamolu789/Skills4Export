@@ -25,7 +25,7 @@ const profileImage = currentUser.avatarSrc
 const userMenu = computed<MenuItem[]>(() => [
   { label: 'Profile', to: '/profile' },
   { label: 'Create Alerts', to: '/jobs/alerts' },
-  { label: 'Manage activities', to: '/' },
+  { label: 'Manage activities', to: '/activities' },
   { label: 'Manage Jobs', to: '/jobs' },
   { label: 'Referrals', to: '/referrals' },
   ...(authStore.isAuthenticated
@@ -71,7 +71,7 @@ const handleItemClick = async (item: MenuItem) => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+  <section class="mx-auto max-w-3xl py-6 sm:px-6">
     <div class="rounded-[1.5rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
       <div class="border-b border-[color:var(--border-soft)] px-5 py-5">
         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">

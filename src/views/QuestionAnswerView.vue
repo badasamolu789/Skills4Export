@@ -140,7 +140,7 @@ onMounted(() => {
 
 <template>
   <section class="space-y-5">
-    <div class="space-y-3 px-1">
+    <div class="space-y-3 sm:px-1">
       <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
         <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>

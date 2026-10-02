@@ -98,7 +98,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
   const communityId = item.communityId || item.community_id || item.community?.id || null
   const pageId = item.pageId || item.page_id || item.page?.id || null
   const userTitle = readString(item.user, ['display_title', 'displayTitle']) ||
-    (!pageId && (!author?.id || author.id === userId)
+    (author?.id && author.id === userId
       ? readString(author, ['display_title', 'displayTitle'])
       : '')
   const title = item.title || ''

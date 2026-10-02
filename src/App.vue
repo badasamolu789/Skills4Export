@@ -122,7 +122,7 @@ const workspaceShellClasses = computed(() =>
 const mainClasses = computed(() =>
   showHeader.value
     ? [
-        'mx-auto w-full max-w-[86rem] flex-1 px-3 py-4 sm:px-4 sm:py-5 xl:px-8',
+        'mx-auto w-full max-w-[86rem] flex-1 px-2 py-4 sm:px-4 sm:py-5 xl:px-8',
         showWorkspaceShell.value ? 'lg:px-5 lg:pt-0 lg:pb-5' : 'lg:px-6 lg:py-6',
       ].join(' ')
     : route.name === 'landing'
@@ -405,8 +405,9 @@ const handleMenuAction = async (action: 'logout') => {
 
 <template>
   <div
+    style="background: var(--app-bg); background-attachment: fixed"
     :class="[
-      'flex min-h-screen flex-col bg-(--app-bg) text-(--text-primary) transition-colors duration-300',
+      'flex min-h-screen flex-col text-(--text-primary) transition-colors duration-300',
       showWorkspaceShell ? 'lg:h-screen lg:overflow-hidden' : '',
     ]"
   >
@@ -448,7 +449,7 @@ const handleMenuAction = async (action: 'logout') => {
         <div
           :class="
             showWorkspaceShell
-              ? 'min-w-0 max-w-full overflow-x-hidden lg:app-scroll lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain'
+              ? 'min-w-0 max-w-full overflow-x-clip lg:app-scroll lg:h-full lg:min-h-0 lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain'
               : 'min-w-0 w-full'
           "
         >

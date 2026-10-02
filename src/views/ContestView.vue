@@ -25,11 +25,11 @@ const toggleFollow = () => {
       </div>
 
       <div class="relative space-y-4">
-        <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+        <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
           <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
           <span>/</span>
           <span class="font-medium text-[var(--accent-strong)]">Contest</span>
-        </div>
+        </div> -->
 
         <h1 class="text-[2rem] font-semibold leading-tight tracking-normal text-[var(--text-primary)] sm:text-[2.4rem]">
           Contest

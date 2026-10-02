@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/api'
 import { getErrorMessage } from '@/lib/errors'
 import { normalizeUserSkills, usersService } from '@/services/users'
 import { mediaService } from '@/services/media'
+import { pagesService } from '@/services/pages'
 import { useAuthStore } from '@/stores/auth'
 import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
@@ -50,6 +51,13 @@ const profileResponseData = ref<MyProfileData | null>(null)
 const following = ref<Array<{
   id: string
   name: string
+  avatar: string
+  initials: string
+}>>([])
+const followedPages = ref<Array<{
+  id: string
+  name: string
+  slug: string
   avatar: string
   initials: string
 }>>([])
@@ -324,6 +332,28 @@ const getFollowingUsers = (data: MyProfileData | null | undefined): UserFollower
   }
 
   return Array.isArray(followingValue?.users) ? followingValue.users : []
+}
+
+const getFollowingPages = (data: MyProfileData | null | undefined) => {
+  const value = data?.following
+  if (!value || Array.isArray(value) || !Array.isArray(value.pages)) return []
+
+  return value.pages
+    .map((item) => {
+      const record = asRecord(item)
+      const page = asRecord(record?.page) || record
+      const id = getStringField(page, ['id']) || getStringField(record, ['pageId', 'page_id'])
+      const name = getStringField(page, ['name'])
+      const slug = getStringField(page, ['slug']) || id
+      return {
+        id,
+        name,
+        slug,
+        avatar: getStringField(page, ['avatar', 'avatarUrl', 'avatar_url']),
+        initials: getAccountInitials(name),
+      }
+    })
+    .filter((page) => page.id && page.name)
 }
 
 const getFollowingAccount = (value: unknown) => {
@@ -855,10 +885,12 @@ const loadProfile = async () => {
     const nextFollowing = getFollowingUsers(profileData)
       .map(getFollowingAccount)
       .filter((account) => account.id && account.id !== authStore.userId)
+    const nextFollowedPages = getFollowingPages(profileData)
     const nextFollowingIds = new Set(nextFollowing.map((account) => account.id))
 
     followers.value = nextFollowers
     following.value = nextFollowing
+    followedPages.value = nextFollowedPages
     const nextFollowStates = { ...followStates.value }
 
     for (const account of nextFollowing) {
@@ -887,7 +919,7 @@ const loadProfile = async () => {
     if (loadedUserId) {
       socialActionsStore.setProfileStats(loadedUserId, {
         followers: profileData?.followerCount ?? nextFollowers.length,
-        following: profileData?.followingCount ?? nextFollowing.length,
+        following: nextFollowing.length + nextFollowedPages.length,
         score: getProfileScoreTotal(profileData),
       })
     }
@@ -997,6 +1029,21 @@ const toggleFollowFromModal = async (targetUserId: string) => {
     toast.error('Follow action failed', { description: message })
   } finally {
     followToggles.value[targetUserId] = false
+  }
+}
+
+const unfollowPageFromModal = async (pageId: string) => {
+  if (!pageId || followToggles.value[pageId]) return
+  followToggles.value[pageId] = true
+
+  try {
+    await pagesService.unfollowPage(pageId, authStore.authToken)
+    followedPages.value = followedPages.value.filter((page) => page.id !== pageId)
+    socialActionsStore.hydratePageFollowingState(pageId, false)
+  } catch (error) {
+    toast.error('Unfollow failed', { description: getErrorMessage(error, 'Please try again.') })
+  } finally {
+    followToggles.value[pageId] = false
   }
 }
 
@@ -1553,11 +1600,7 @@ const globalFollowerCount = computed(() =>
     : stats.value.followers,
 )
 
-const globalFollowingCount = computed(() =>
-  authStore.userId
-    ? socialActionsStore.getProfileStats(authStore.userId).following
-    : following.value.length,
-)
+const globalFollowingCount = computed(() => following.value.length + followedPages.value.length)
 
 const summaryCards = computed(() => [
   {
@@ -1616,7 +1659,7 @@ const editModalTitle = computed(() => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
+  <section class="w-full space-y-6 pt-4 sm:mx-auto sm:max-w-6xl sm:px-6 sm:pt-0 lg:px-8">
     <section class="overflow-hidden rounded-[1.6rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] shadow-[var(--shadow-elevated)]">
       <!-- Banner hidden for now until live banner data is ready for display. -->
       <div v-if="false" class="relative aspect-[4/1] min-h-36 overflow-hidden bg-[var(--surface-secondary)]">
@@ -1635,7 +1678,7 @@ const editModalTitle = computed(() => {
         <div class="absolute inset-0 bg-[linear-gradient(180deg,rgba(12,12,27,0.04),rgba(12,12,27,0.28))]" />
       </div>
 
-      <div class="relative border-b border-[color:var(--border-soft)] px-5 pb-6 pt-4 sm:px-7 lg:px-9 lg:pb-7 lg:pt-5">
+      <div class="relative border-b border-[color:var(--border-soft)] px-2 pb-6 pt-4 sm:px-7 lg:px-9 lg:pb-7 lg:pt-5">
         <div class="absolute right-0 top-0 hidden h-full w-48 lg:block">
           <div class="absolute right-10 top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
           <div class="absolute right-20 top-0 h-full w-px bg-[var(--accent-soft)] rotate-[-32deg]" />
@@ -1735,7 +1778,7 @@ const editModalTitle = computed(() => {
         </div>
       </div>
 
-      <div class="space-y-8 px-5 py-7 sm:px-7 lg:px-9 lg:py-9">
+      <div class="space-y-6 px-2 py-6 sm:space-y-8 sm:px-7 sm:py-7 lg:px-9 lg:py-9">
         <div class="max-w-5xl space-y-5 text-sm leading-7 text-[var(--text-secondary)] sm:text-[0.95rem]">
           <p v-if="profile.bio" class="whitespace-pre-line">
             {{ richTextToPlainText(profile.bio) }}
@@ -1748,23 +1791,23 @@ const editModalTitle = computed(() => {
           <p v-else>No about information added yet.</p>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
           <article
             v-for="card in summaryCards"
             :key="card.label"
-            class="flex items-center gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-5 shadow-[var(--shadow-soft)]"
+            class="flex min-w-0 flex-col items-center gap-1.5 rounded-lg border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-1 py-2 text-center shadow-[var(--shadow-soft)] sm:flex-row sm:gap-4 sm:rounded-[1.15rem] sm:px-5 sm:py-5 sm:text-left"
           >
             <div
-              class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[0.75rem]"
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.5rem] sm:h-12 sm:w-12 sm:rounded-[0.75rem]"
               :class="card.accentClass"
             >
-              <component :is="card.icon" class="h-5 w-5" />
+              <component :is="card.icon" class="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <p class="text-[1.55rem] font-semibold leading-none text-[var(--text-primary)]">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold leading-none text-[var(--text-primary)] sm:text-[1.55rem]">
                 {{ card.value }}
               </p>
-              <p class="mt-1.5 text-sm font-medium text-[var(--text-secondary)] sm:text-[1rem]">
+              <p class="mt-1 text-[0.6rem] font-medium leading-tight text-[var(--text-secondary)] sm:mt-1.5 sm:text-[1rem]">
                 {{ card.label }}
               </p>
             </div>
@@ -2596,7 +2639,33 @@ const editModalTitle = computed(() => {
             </button>
           </div>
           <div
-            v-if="following.length === 0"
+            v-for="page in followedPages"
+            :key="`page-${page.id}`"
+            class="flex items-center justify-between gap-4 rounded-[1.15rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] p-4"
+          >
+            <RouterLink :to="`/pages/${page.slug}/public`" class="flex min-w-0 items-center gap-3" @click="closeProfileModal">
+              <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[color:color-mix(in_srgb,var(--accent)_16%,white)]">
+                <img v-if="page.avatar" loading="lazy" decoding="async" :src="page.avatar" :alt="`${page.name} page image`" class="h-full w-full object-cover" />
+                <span v-else class="flex h-full w-full items-center justify-center text-sm font-semibold text-[var(--accent-strong)]">{{ page.initials }}</span>
+              </div>
+              <span class="min-w-0">
+                <span class="block truncate text-sm font-semibold text-[var(--text-primary)]">{{ page.name }}</span>
+                <span class="block text-xs text-[var(--text-secondary)]">Page</span>
+              </span>
+            </RouterLink>
+            <button
+              type="button"
+              :disabled="followToggles[page.id]"
+              class="inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm font-semibold text-[var(--text-primary)] transition hover:border-red-200 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+              title="Unfollow page"
+              @click="unfollowPageFromModal(page.id)"
+            >
+              <UserCheck class="h-4 w-4" />
+              Unfollow
+            </button>
+          </div>
+          <div
+            v-if="following.length === 0 && followedPages.length === 0"
             class="flex min-h-36 flex-col items-center justify-center rounded-[1.15rem] border border-dashed border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-4 py-8 text-center"
           >
             <span class="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--accent-strong)]">

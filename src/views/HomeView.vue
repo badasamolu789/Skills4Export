@@ -481,7 +481,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="space-y-6">
+  <section class="space-y-6 pt-4 sm:pt-0">
     <div
       v-if="feedError"
       class="rounded-[0.85rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-3 text-sm text-[var(--text-secondary)] shadow-[var(--shadow-soft)]"

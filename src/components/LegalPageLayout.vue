@@ -113,7 +113,7 @@ const showSidebarColumn = computed(() => navigationSections.value.length > 0 || 
 <template>
   <section class="min-h-screen bg-[var(--app-bg)] text-[var(--text-primary)]">
     <header class="border-b border-[color:var(--border-soft)] bg-[var(--surface-primary)]">
-      <div class="flex w-full flex-col items-center px-4 py-10 text-center sm:px-6 lg:px-10 xl:px-12 2xl:px-16 lg:py-14">
+      <div class="flex w-full flex-col items-center py-10 text-center sm:px-6 lg:px-10 xl:px-12 2xl:px-16 lg:py-14">
         <RouterLink to="/" class="inline-flex items-center justify-center">
           <img loading="eager" decoding="async" fetchpriority="high" src="/logo_light.webp" alt="Skills4Export logo" class="h-12 w-auto sm:h-14" />
         </RouterLink>
@@ -128,7 +128,7 @@ const showSidebarColumn = computed(() => navigationSections.value.length > 0 || 
       </div>
     </header>
 
-    <main class="w-full px-4 py-8 sm:px-6 lg:px-10 xl:px-12 2xl:px-16 lg:py-12">
+    <main class="w-full py-8 sm:px-6 lg:px-10 xl:px-12 2xl:px-16 lg:py-12">
       <div
         class="grid gap-6 lg:gap-8"
         :class="showSidebarColumn ? 'lg:grid-cols-[18rem_minmax(0,1fr)]' : 'lg:grid-cols-1'"

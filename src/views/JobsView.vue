@@ -105,14 +105,14 @@ onMounted(() => {
 
 <template>
   <section class="space-y-5">
-    <div class="space-y-3 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
+    <div class="space-y-3 sm:px-1">
+      <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-[var(--text-secondary)]">
         <RouterLink to="/feed" class="transition hover:text-[var(--accent-strong)]">Home</RouterLink>
         <span>/</span>
         <RouterLink to="/jobs/feed" class="transition hover:text-[var(--accent-strong)]">Jobs</RouterLink>
         <span>/</span>
         <span class="font-medium text-[var(--accent-strong)]">Manage Jobs</span>
-      </div>
+      </div> -->
       <div>
         <h1 class="text-[1.55rem] font-semibold leading-tight text-[var(--text-primary)] sm:text-[1.85rem] lg:text-[2rem]">
           Manage your jobs

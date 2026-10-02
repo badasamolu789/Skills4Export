@@ -817,7 +817,7 @@ onMounted(() => {
       </h1>
     </div>
 
-    <nav class="flex gap-5 overflow-x-auto border-b border-[color:var(--border-soft)]" aria-label="Activity sections">
+    <nav class="sticky top-[7.8rem] z-30 flex gap-5 overflow-x-auto border-b border-[color:var(--border-soft)] pt-2 sm:top-[8.35rem] md:top-[4.1rem] lg:top-0" style="background: var(--app-bg); background-attachment: fixed" aria-label="Activity sections">
       <button
         v-for="tab in tabs"
         :key="tab.id"

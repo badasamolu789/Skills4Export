@@ -71,14 +71,14 @@ onMounted(() => {
 
 <template>
   <section class="space-y-6">
-    <div class="space-y-3 px-1">
-      <div class="flex flex-wrap items-center gap-2 text-sm text-(--text-secondary)">
+    <div class="space-y-3 sm:px-1">
+      <!-- <div class="flex flex-wrap items-center gap-2 text-sm text-(--text-secondary)">
         <RouterLink to="/feed" class="transition hover:text-(--accent-strong)">Home</RouterLink>
         <span>/</span>
         <RouterLink to="/profile" class="transition hover:text-(--accent-strong)">Profile</RouterLink>
         <span>/</span>
         <span class="font-medium text-(--accent-strong)">Login History</span>
-      </div>
+      </div> -->
 
       <div>
         <h1 class="text-[1.65rem] font-semibold leading-tight text-(--text-primary) sm:text-[1.95rem] lg:text-[2.1rem]">

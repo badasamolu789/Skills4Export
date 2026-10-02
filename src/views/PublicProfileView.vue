@@ -519,7 +519,7 @@ watch(
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8">
+  <section class="mx-auto max-w-6xl space-y-6 sm:px-6 lg:px-8">
     <div v-if="loadError && !isLoadingProfile" class="rounded-[1.35rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-5 text-center shadow-[var(--shadow-elevated)] sm:p-8">
       <p class="text-lg font-semibold text-[var(--text-primary)]">Profile unavailable</p>
       <p class="mt-2 text-sm text-[var(--text-secondary)]">{{ loadError }}</p>
