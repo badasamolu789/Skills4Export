@@ -498,7 +498,7 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      v-else-if="!feedItems.length"
+      v-else-if="!feedItems.length && !feedError"
       class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-10 text-center"
     >
       <h2 class="text-base font-semibold text-[var(--text-primary)]">No posts yet</h2>

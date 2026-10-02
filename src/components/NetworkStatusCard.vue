@@ -43,12 +43,12 @@ const footnote = computed(() => {
 
 <template>
   <section
-    class="rounded-[0.95rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-4 py-4"
+    class="rounded-[0.95rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-5 py-6 text-center"
     role="status"
     aria-live="polite"
   >
-    <div class="flex items-start gap-3">
-      <div class="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+    <div class="flex flex-col items-center gap-3">
+      <div class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]">
         <WifiOff class="h-5 w-5" />
       </div>
       <div class="min-w-0 flex-1">
@@ -56,7 +56,7 @@ const footnote = computed(() => {
         <p class="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
           {{ description }}
         </p>
-        <div class="mt-3 flex flex-wrap items-center gap-2">
+        <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
             class="inline-flex h-9 items-center gap-2 rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-secondary)] px-3 text-sm font-semibold text-[var(--text-secondary)] transition hover:text-[var(--accent-strong)]"

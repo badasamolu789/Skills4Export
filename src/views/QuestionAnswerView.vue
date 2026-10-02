@@ -174,7 +174,7 @@ onMounted(() => {
         {{ isLoadingMoreQuestions ? 'Loading more questions...' : 'Scroll for more questions' }}
       </div>
       <div
-        v-if="hasLoadedApiQuestions && !questions.length"
+        v-if="hasLoadedApiQuestions && !questions.length && !questionsError"
         class="rounded-[0.9rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] p-6 text-center"
       >
         <p class="text-sm font-semibold text-[var(--text-primary)]">No questions yet.</p>

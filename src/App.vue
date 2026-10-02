@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { RefreshCw, WifiOff } from 'lucide-vue-next'
+import { Check, Info, LoaderCircle, RefreshCw, TriangleAlert, WifiOff, X } from 'lucide-vue-next'
 import { Toaster } from 'vue-sonner'
 import { toast } from 'vue-sonner'
 import AppHeader from '@/components/AppHeader.vue'
@@ -71,6 +71,12 @@ let currentUserProfileHydratedAt = 0
 const CURRENT_USER_PROFILE_TTL_MS = 2 * 60 * 1000
 
 const toasterTheme = computed(() => resolvedTheme.value)
+const toastPosition = ref<'bottom-center' | 'bottom-right'>('bottom-right')
+let toastPositionMedia: MediaQueryList | null = null
+const syncToastPosition = () => {
+  toastPosition.value = toastPositionMedia?.matches ? 'bottom-right' : 'bottom-center'
+}
+const toastIcons = { success: Check, info: Info, warning: TriangleAlert, error: X, loading: LoaderCircle, close: X }
 const toasterOptions = {
   class: 'skills-toast',
   descriptionClass: 'skills-toast__description',
@@ -270,6 +276,9 @@ const reloadCurrentRoute = async () => {
 }
 
 onMounted(() => {
+  toastPositionMedia = window.matchMedia('(min-width: 1024px)')
+  syncToastPosition()
+  toastPositionMedia.addEventListener('change', syncToastPosition)
   syncBrowserNetworkState()
   window.addEventListener('offline', handleOffline)
   window.addEventListener('online', handleOnline)
@@ -278,6 +287,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  toastPositionMedia?.removeEventListener('change', syncToastPosition)
   clearGuestPromptTimer()
   clearDeferredAuthSyncTimer()
   clearDeferredNotificationSyncTimer()
@@ -454,14 +464,15 @@ const handleMenuAction = async (action: 'logout') => {
           "
         >
           <div :class="showWorkspaceShell ? 'lg:pt-3' : ''">
-            <NetworkStatusCard
-              v-if="showNetworkOverlay"
-              class="mb-4"
-              :offline="appStore.networkStatus.offline"
-              :last-issue-at="appStore.networkStatus.lastIssueAt"
-              @retry="reloadCurrentRoute"
-            />
-            <RouterView />
+            <div v-if="showNetworkOverlay" class="network-status-center">
+              <NetworkStatusCard
+                class="w-full max-w-lg"
+                :offline="appStore.networkStatus.offline"
+                :last-issue-at="appStore.networkStatus.lastIssueAt"
+                @retry="reloadCurrentRoute"
+              />
+            </div>
+            <RouterView v-else />
           </div>
         </div>
         <div
@@ -501,9 +512,10 @@ const handleMenuAction = async (action: 'logout') => {
   </ResponsiveOverlay>
 
   <Toaster
-    rich-colors
     close-button
-    position="bottom-right"
+    close-button-position="top-right"
+    :icons="toastIcons"
+    :position="toastPosition"
     :theme="toasterTheme"
     class="skills-toaster"
     :offset="20"
