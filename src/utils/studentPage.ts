@@ -25,7 +25,6 @@ export const ensureStudentPageFromSignup = async (authStore: AuthStore, pagesSto
   const university = authStore.signUpDraft.university.trim()
   const courseOfStudy = authStore.signUpDraft.courseOfStudy.trim()
   const yearStarted = authStore.signUpDraft.yearStarted.trim()
-  const displayTitle = [courseOfStudy, university].filter(Boolean).join(' | ')
   const description = [
     courseOfStudy ? `Studying ${courseOfStudy}` : '',
     university ? `at ${university}` : '',
@@ -37,13 +36,13 @@ export const ensureStudentPageFromSignup = async (authStore: AuthStore, pagesSto
     name: authStore.signUpDraft.name.trim(),
     slug: slugify(authStore.signUpDraft.name),
     description,
+    courseOfStudy,
+    university,
     metadata: {
       email: authStore.signUpDraft.email.trim(),
       university,
       yearStarted,
       courseOfStudy,
-      displayTitle,
-      display_title: displayTitle,
       graduationDate: yearStarted,
       skills: courseOfStudy ? [courseOfStudy] : [],
     },

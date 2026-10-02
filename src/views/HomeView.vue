@@ -36,7 +36,7 @@ const LOAD_BATCH_SIZE = 5
 const FEED_PAGE_SIZE = 5
 const MAX_RESTORED_POST_COUNT = FEED_PAGE_SIZE
 const FEED_CACHE_TTL_MS = 5 * 60 * 1000
-const FEED_CACHE_VERSION = 5
+const FEED_CACHE_VERSION = 6
 const POST_CREATED_EVENT = 'skills4export:post-created'
 
 const loadMoreTrigger = ref<HTMLElement | null>(null)
@@ -441,6 +441,8 @@ onMounted(() => {
   const restoredFeed = restoreCachedFeed()
   if (!restoredFeed) {
     void loadFeed()
+  } else {
+    void loadFeed({ background: true })
   }
   setupObserver()
   window.addEventListener(POST_CREATED_EVENT, handlePostCreated)

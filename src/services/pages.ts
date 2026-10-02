@@ -70,6 +70,7 @@ export type CreatePageRequest = {
   email?: string
   phone?: string
   courseOfStudy?: string
+  university?: string
   graduationDate?: string
   skills?: string[] | string
   metadata?: Record<string, unknown> | null
@@ -123,6 +124,7 @@ export type PagePrefillRecord = {
   email?: string | null
   phone?: string | null
   courseOfStudy?: string | null
+  university?: string | null
   skills?: string[] | null
   contactEmail?: string | null
   website?: string | null
@@ -139,6 +141,7 @@ const PAGE_METADATA_KEYS = [
   'email',
   'phone',
   'courseOfStudy',
+  'university',
   'graduationDate',
   'skills',
 ] as const

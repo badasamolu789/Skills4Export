@@ -14,8 +14,9 @@ registerHooks({
 
 const { mapCompactFeedItemToFeedPost } = await import('./src/utils/feedMapper.ts')
 const { mapApiPostToFeedPost } = await import('./src/utils/postMapper.ts')
+const { mapApiQuestionToFeedPost } = await import('./src/utils/questionMapper.ts')
 
-test('page posts do not use embedded user, page, or author title', () => {
+test('page posts use the backend user title, not page or author metadata', () => {
   const post = mapCompactFeedItemToFeedPost({
     id: 'post-1',
     type: 'POST',
@@ -28,7 +29,7 @@ test('page posts do not use embedded user, page, or author title', () => {
   })
 
   assert.equal(post.author.name, 'Garden Page')
-  assert.equal(post.author.tag, '')
+  assert.equal(post.author.tag, 'Agronomy at Lagos University')
   assert.equal(post.userId, 'user-1')
 })
 
@@ -47,7 +48,7 @@ test('a page title is never substituted for a missing user display title', () =>
   assert.equal(post.author.tag, '')
 })
 
-test('personal posts wait for the author profile title', () => {
+test('personal posts use the backend user title', () => {
   const post = mapCompactFeedItemToFeedPost({
     id: 'post-3',
     type: 'POST',
@@ -56,10 +57,10 @@ test('personal posts wait for the author profile title', () => {
     media: [],
   })
 
-  assert.equal(post.author.tag, '')
+  assert.equal(post.author.tag, 'Engineer at Acme')
 })
 
-test('community posts wait for the author profile title', () => {
+test('community posts use the backend user title', () => {
   const post = mapCompactFeedItemToFeedPost({
     id: 'post-4',
     type: 'POST',
@@ -70,10 +71,52 @@ test('community posts wait for the author profile title', () => {
     media: [],
   })
 
+  assert.equal(post.author.tag, 'Researcher at Field Labs')
+})
+
+test('compact feed uses a user author title when user is not embedded', () => {
+  const post = mapCompactFeedItemToFeedPost({
+    id: 'post-author-only',
+    type: 'POST',
+    title: 'Solar Power',
+    userId: 'user-4',
+    author: { id: 'user-4', name: 'Bada Samuel', display_title: 'AI Engineer at Anthropic' },
+    media: [],
+  })
+
+  assert.equal(post.author.tag, 'AI Engineer at Anthropic')
+})
+
+test('compact feed prefers the user title over an older author title', () => {
+  const post = mapCompactFeedItemToFeedPost({
+    id: 'post-two-titles',
+    type: 'POST',
+    title: 'Solar Power',
+    userId: 'user-4',
+    user: { id: 'user-4', name: 'Bada Samuel', display_title: 'AI Engineer at Anthropic' },
+    author: { id: 'user-4', name: 'Bada Samuel', display_title: 'Old title' },
+    media: [],
+  })
+
+  assert.equal(post.author.tag, 'AI Engineer at Anthropic')
+})
+
+test('compact feed never uses a page author title as a user title', () => {
+  const post = mapCompactFeedItemToFeedPost({
+    id: 'page-post-author-only',
+    type: 'POST',
+    title: 'Page update',
+    userId: 'user-4',
+    pageId: 'page-1',
+    page: { id: 'page-1', name: 'Student Page' },
+    author: { id: 'page-1', name: 'Student Page', display_title: 'Page course' },
+    media: [],
+  })
+
   assert.equal(post.author.tag, '')
 })
 
-test('post detail uses only the author profile display title', () => {
+test('post detail ignores a stale author profile title', () => {
   const record = {
     id: 'post-5',
     title: 'Solar Power',
@@ -86,9 +129,27 @@ test('post detail uses only the author profile display title', () => {
     user: { id: 'user-4', name: 'Bada Samuel', display_title: 'Metrulugical Engineering' },
   }
 
-  assert.equal(mapApiPostToFeedPost(record, [], { profile: { display_title: null } }).author.tag, '')
+  assert.equal(mapApiPostToFeedPost(record, [], { profile: { display_title: null } }).author.tag, 'Metrulugical Engineering')
   assert.equal(
     mapApiPostToFeedPost(record, [], { profile: { display_title: 'Product Designer at Google' } }).author.tag,
-    'Product Designer at Google',
+    'Metrulugical Engineering',
   )
+})
+
+test('question detail uses the backend user title', () => {
+  const question = mapApiQuestionToFeedPost({
+    id: 'question-1',
+    userId: 'user-4',
+    communityId: null,
+    title: 'What is solar power?',
+    body: 'Question body',
+    visibility: 'public',
+    isClosed: false,
+    acceptedAnswerId: null,
+    createdAt: '2026-09-29T08:06:33.000Z',
+    updatedAt: '2026-09-29T08:06:33.000Z',
+    user: { id: 'user-4', name: 'Bada Samuel', display_title: 'Metallurgical Engineering at University Name' },
+  }, { profile: { display_title: 'Old title' } })
+
+  assert.equal(question.tag, 'Metallurgical Engineering at University Name')
 })

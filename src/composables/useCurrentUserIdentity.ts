@@ -111,12 +111,12 @@ export const useCurrentUserIdentity = () => {
       getRecordString(authStore.currentUser, workplaceKeys),
     ), { keepSmallWords: true }),
   )
-  const isStudent = computed(() =>
-    authStore.accountType === 'student' ||
-    authStore.signUpDraft.accountType === 'student' ||
-    getRecordString(authStore.userProfile, ['accountType', 'account_type']).toLowerCase() === 'student' ||
-    Boolean(authStore.signUpDraft.university || authStore.signUpDraft.courseOfStudy),
-  )
+  const isStudent = computed(() => {
+    const profileType = getRecordString(authStore.userProfile, ['accountType', 'account_type']).toLowerCase()
+    if (profileType === 'student' || profileType === 'default') return profileType === 'student'
+    if (authStore.accountType) return authStore.accountType === 'student'
+    return authStore.signUpDraft.accountType === 'student'
+  })
   const studentInstitution = computed(() =>
     toInitialCaps(getFirstFilled(
       authStore.signUpDraft.university,

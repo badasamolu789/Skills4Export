@@ -13,7 +13,6 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { getDisplayName, toInitialCaps } from '@/utils/displayName'
 import { optimizeImageFile } from '@/utils/imageOptimization'
 import { richTextToPlainText } from '@/utils/richText'
-import { publishAuthorProfileTitle } from '@/utils/authorProfileTitle'
 import { buildDisplayTitle, getCourseFromDisplayTitle } from '@/utils/displayTitle'
 import type { MyProfileData, UserSkill, UserPortfolio, UserCertification, UserEducation, UserExperience, UserFollower, UserProfile } from '@/services/users'
 
@@ -759,20 +758,8 @@ const isStudentProfile = computed(() => {
     getStringField(settings, ['accountType', 'account_type'])
 
   if (backendType === 'student' || backendType === 'default') return backendType === 'student'
-  if (authStore.accountType) return authStore.accountType === 'student'
-  if (authStore.signUpDraft.accountType === 'student') return true
-
-  const education = getPrimaryEducation(profileResponseData.value)
-  const displayTitle = getStudentProfileField(profileData, profileResponseData.value, ['displayTitle', 'display_title'])
-  const studentTitles = [
-    buildStudentDisplayTitle(education?.school || '', education?.field || ''),
-    [education?.field, education?.school].filter(Boolean).join(' | '),
-  ]
-  return Boolean(
-    education?.field && education.school &&
-    (studentTitles.some((title) => displayTitle.toLowerCase() === title.toLowerCase()) ||
-      Boolean(getCourseFromDisplayTitle(displayTitle, education.school))),
-  )
+  return authStore.accountType === 'student' ||
+    (authStore.accountType === null && authStore.signUpDraft.accountType === 'student')
 })
 
 const buildStudentDisplayTitle = (institution: string, course: string) =>
@@ -1127,11 +1114,11 @@ const openProfileDetailsModal = async () => {
     }
     prefillProfileDetailsForm(data)
   } catch (error) {
+    prefillProfileDetailsForm(profileResponseData.value)
     toast.error('Unable to refresh profile details', {
       description: getErrorMessage(error, 'Using the most recently loaded profile information.'),
     })
   } finally {
-    prefillProfileDetailsForm(profileResponseData.value)
     isProfileDetailsModalOpen.value = true
     isLoadingProfileDetails.value = false
   }
@@ -1248,8 +1235,6 @@ const saveProfileDetails = async () => {
       display_title: displayTitle,
       ...(isStudent
         ? {
-            accountType: 'student',
-            account_type: 'student',
             institutionOfStudy,
             institution_of_study: institutionOfStudy,
             university: institutionOfStudy,
@@ -1277,16 +1262,24 @@ const saveProfileDetails = async () => {
         )
       : null
 
-    const profileResponse = await usersService.saveUserProfile(
+    await usersService.saveUserProfile(
       authStore.userId,
       profilePayload,
       Boolean(authStore.userProfile?.id),
       authStore.authToken,
     )
-    const responseProfile = asRecord(profileResponse.data)?.profile
-    const savedProfile = asRecord(responseProfile)
-      ? responseProfile as UserProfile
-      : (profileResponse.data as UserProfile | null) ?? authStore.userProfile
+    const [myProfileResponse, publicProfileResponse] = await Promise.all([
+      usersService.getMyProfile(authStore.authToken),
+      usersService.getUserProfile(authStore.userId, authStore.authToken),
+    ])
+    const confirmedProfile = myProfileResponse.data?.profile
+    const confirmedPublicProfile = publicProfileResponse.data?.profile
+    if (
+      confirmedProfile?.display_title?.trim() !== displayTitle ||
+      confirmedPublicProfile?.display_title?.trim() !== displayTitle
+    ) {
+      throw new Error('Your display title could not be confirmed. Please try again.')
+    }
 
     if (!isStudent) {
       try {
@@ -1321,44 +1314,14 @@ const saveProfileDetails = async () => {
       authStore.signUpDraft.jobTitle = currentJobTitle
       authStore.signUpDraft.workplace = currentWorkspace
     }
-    authStore.setAccountType(isStudent ? 'student' : 'default')
     if (isStudent) {
-      authStore.signUpDraft.accountType = 'student'
       authStore.signUpDraft.university = institutionOfStudy
       authStore.signUpDraft.yearStarted = graduationYear
       authStore.signUpDraft.courseOfStudy = courseOfStudy
     }
-    if (userResponse?.data?.user) {
-      authStore.setCurrentUser(userResponse.data.user)
-    }
-    authStore.setUserProfileOverride({
-      ...(userResponse?.data?.profile ?? savedProfile ?? {}),
-      displayName,
-      displayTitle,
-      display_title: displayTitle,
-      bio,
-      location,
-      ...(isStudent
-        ? {
-            accountType: 'student',
-            account_type: 'student',
-            institutionOfStudy,
-            institution_of_study: institutionOfStudy,
-            university: institutionOfStudy,
-            yearStarted: graduationYear,
-            year_started: graduationYear,
-            graduationDate: graduationYear,
-            graduation_date: graduationYear,
-            courseOfStudy,
-            course_of_study: courseOfStudy,
-          }
-        : {
-            ...(currentJobTitle ? { currentJobTitle } : {}),
-            ...(currentWorkspace ? { currentWorkspace } : {}),
-          }),
-    })
-
-    publishAuthorProfileTitle(authStore.userId, displayTitle)
+    profileResponseData.value = myProfileResponse.data ?? null
+    authStore.setCurrentUser(myProfileResponse.data?.user ?? userResponse?.data?.user ?? null)
+    authStore.setVerifiedUserProfile(confirmedProfile)
 
     isProfileDetailsModalOpen.value = false
   } catch (error) {

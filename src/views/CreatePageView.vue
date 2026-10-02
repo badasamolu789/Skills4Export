@@ -69,6 +69,7 @@ const studentForm = ref({
   email: '',
   phone: '',
   courseOfStudy: '',
+  university: '',
   graduationDate: '',
   skills: '',
   about: '',
@@ -255,6 +256,11 @@ const applyPagePrefill = (type: PageCategory, prefill: PagePrefillRecord) => {
     prefill.courseOfStudy,
     (value) => { studentForm.value.courseOfStudy = value },
   )
+  fillIfEmpty(
+    studentForm.value.university,
+    readFirstValue(authStore.signUpDraft.university, prefill.university),
+    (value) => { studentForm.value.university = value },
+  )
 
   if (!studentForm.value.skills.trim() && Array.isArray(prefill.skills)) {
     studentForm.value.skills = prefill.skills.map((skill) => skill.trim()).filter(Boolean).join(', ')
@@ -427,6 +433,7 @@ const getStudentMetadata = () => ({
   email: studentForm.value.email.trim(),
   phone: studentForm.value.phone.trim(),
   courseOfStudy: studentForm.value.courseOfStudy.trim(),
+  university: studentForm.value.university.trim(),
   graduationDate: studentForm.value.graduationDate,
   skills: studentForm.value.skills
     .split(',')
@@ -486,8 +493,8 @@ const validateCurrentForm = () => {
       return false
     }
 
-    if (!studentForm.value.courseOfStudy.trim() || !studentForm.value.graduationDate) {
-      toast.error('Course of study and graduation date are required.')
+    if (!studentForm.value.courseOfStudy.trim() || !studentForm.value.university.trim() || !studentForm.value.graduationDate) {
+      toast.error('Course, institution, and graduation date are required.')
       return false
     }
 
@@ -572,6 +579,10 @@ const submitPage = async () => {
         name,
         slug,
         description,
+        ...(selectedPageType.value === 'student' ? {
+          courseOfStudy: studentForm.value.courseOfStudy.trim(),
+          university: studentForm.value.university.trim(),
+        } : {}),
         avatar: avatarFile.value ? undefined : prefilledAvatarUrl.value || undefined,
         metadata,
       })
@@ -837,6 +848,11 @@ onMounted(() => {
             <label class="space-y-2">
               <span class="text-sm font-semibold text-[var(--text-primary)]">Course of study<span class="text-[var(--danger)]">*</span></span>
               <input v-model="studentForm.courseOfStudy" required class="s4e-page-input" placeholder="e.g. Mass Communication" />
+            </label>
+
+            <label class="space-y-2">
+              <span class="text-sm font-semibold text-[var(--text-primary)]">Institution<span class="text-[var(--danger)]">*</span></span>
+              <input v-model="studentForm.university" required class="s4e-page-input" placeholder="e.g. Rhema University" />
             </label>
 
             <label class="space-y-2">

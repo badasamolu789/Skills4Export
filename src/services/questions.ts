@@ -255,7 +255,7 @@ export const questionsService = {
     return api.post<ApiSuccessResponse<QuestionRecord>>(QUESTION_ROUTES.questions, payload, { token })
   },
 
-  listQuestions(params: ListQuestionsParams = {}, token?: string | null) {
+  listQuestions(params: ListQuestionsParams = {}, token?: string | null, options: { force?: boolean } = {}) {
     const normalizedParams = normalizeFeedQueryParams(params)
 
     return questionListRequests.run(
@@ -263,6 +263,7 @@ export const questionsService = {
       () => api.get<PaginatorPayload<QuestionRecord>>(withQuery(QUESTION_ROUTES.questions, normalizedParams), {
         token,
       }),
+      options,
     )
   },
 

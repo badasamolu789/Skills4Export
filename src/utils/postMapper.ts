@@ -5,7 +5,6 @@ import type { PostMediaRecord, PostRecord } from '@/services/posts'
 import type { MyProfileData } from '@/services/users'
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
-import { getAuthorProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const formatPostTime = (value: string) => {
   const date = new Date(value)
@@ -102,7 +101,7 @@ const getAuthorName = (post: PostRecord, author?: MyProfileData | null) => {
   )
 }
 
-const getAuthorTag = (author?: MyProfileData | null) => getAuthorProfileDisplayTitle(author)
+const getAuthorTag = (post: PostRecord) => getStringValue(post.user, ['display_title'])
 
 const getAuthorAvatar = (post: PostRecord, author?: MyProfileData | null) => {
   const authorRecord = isRecord(author) ? author : null
@@ -274,7 +273,7 @@ export const mapApiPostToFeedPost = (
       ? getStringValue(resolvedPage, ['avatar', 'avatarUrl', 'avatar_url', 'logo', 'logoUrl', 'logo_url']) || null
       : getAuthorAvatar(post, author),
   }
-  const authorTag = getAuthorTag(author)
+  const authorTag = getAuthorTag(post)
   const isFollowingAuthor = postPageId
     ? readFollowState(resolvedPage)
     : readFollowState(post, post.user, author)

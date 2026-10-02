@@ -37,7 +37,6 @@ import { useSocialActionsStore } from '@/stores/socialActions'
 import { isPrivateCommunity } from '@/utils/communityFilters'
 import { getOptionalCount, getPostUserId, isVideoPostMedia, mapApiPostToFeedPost } from '@/utils/postMapper'
 import { getAuthorProfileDisplayTitle } from '@/utils/profileContextTag'
-import { AUTHOR_PROFILE_TITLE_UPDATED, loadAuthorProfileTitle } from '@/utils/authorProfileTitle'
 import { resolveFeedRelationshipTarget, type RelationshipTarget } from '@/utils/relationshipTarget'
 import { richTextToPlainText } from '@/utils/richText'
 type PostComment = {
@@ -81,32 +80,6 @@ const authStore = useAuthStore()
 const router = useRouter()
 const socialActionsStore = useSocialActionsStore()
 const currentUser = useCurrentUserIdentity()
-const authorProfileTitle = ref('')
-let authorTitleVersion = 0
-
-const handleAuthorProfileTitleUpdated = (event: Event) => {
-  const detail = (event as CustomEvent<{ userId: string; title: string }>).detail
-  if (detail.userId === props.post.userId) {
-    authorTitleVersion += 1
-    authorProfileTitle.value = detail.title
-  }
-}
-
-watch(
-  () => props.post.userId,
-  async (userId) => {
-    const requestVersion = ++authorTitleVersion
-    authorProfileTitle.value = ''
-    if (!userId) return
-    try {
-      const title = await loadAuthorProfileTitle(userId, authStore.authToken)
-      if (requestVersion === authorTitleVersion && props.post.userId === userId) authorProfileTitle.value = title
-    } catch {
-      // A missing profile title must not be replaced by post or page metadata.
-    }
-  },
-  { immediate: true },
-)
 const localFollowing = ref(props.post.isFollowing ?? false)
 const isSaved = ref(props.post.isSaved ?? false)
 const localScored = ref(props.post.isScored ?? false)
@@ -543,7 +516,7 @@ const hasStoredCommunityFollow = (communityId?: string | null) => {
   return getStoredCommunityFollows()[authStore.userId]?.includes(communityId) ?? false
 }
 
-const cardAuthorTag = computed(() => authorProfileTitle.value)
+const cardAuthorTag = computed(() => props.post.type === 'question' ? props.post.tag : props.post.author.tag)
 
 const authorProfileDetails = computed(() => {
   const tag = cardAuthorTag.value
@@ -822,7 +795,6 @@ const handleDocumentPointerDown = (event: PointerEvent) => {
 }
 
 onMounted(() => {
-  window.addEventListener(AUTHOR_PROFILE_TITLE_UPDATED, handleAuthorProfileTitleUpdated)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   if (props.syncToGlobalFeed !== false) {
     socialActionsStore.upsertFeedItem(props.post, { prepend: false })
@@ -833,7 +805,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener(AUTHOR_PROFILE_TITLE_UPDATED, handleAuthorProfileTitleUpdated)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   answerAttachmentPreviews.value.forEach((item) => URL.revokeObjectURL(item.url))
   if (copyFeedbackTimer) clearTimeout(copyFeedbackTimer)

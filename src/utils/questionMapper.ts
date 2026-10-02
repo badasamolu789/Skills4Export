@@ -7,7 +7,6 @@ import { getOptionalCount } from '@/utils/postMapper'
 import { getDisplayName } from '@/utils/displayName'
 import { readFollowState } from '@/utils/followState'
 import { getCommunityLineAwesomeClass } from '@/utils/communityIcon'
-import { getAuthorProfileDisplayTitle } from '@/utils/profileContextTag'
 
 const getStringValue = (...values: Array<string | null | undefined>) =>
   values.find((value) => typeof value === 'string' && value.trim())?.trim() ?? ''
@@ -109,7 +108,7 @@ const getAuthorName = (question: QuestionRecord, author?: MyProfileData | null) 
   return profileName || userName
 }
 
-const getAuthorTag = (author?: MyProfileData | null) => getAuthorProfileDisplayTitle(author)
+const getAuthorTag = (question: QuestionRecord) => readString(question.user, ['display_title'])
 
 export const mapApiQuestionToFeedPost = (
   question: QuestionRecord,
@@ -161,7 +160,7 @@ export const mapApiQuestionToFeedPost = (
     authorName,
     authorTo: userId ? `/profile/view/${userId}` : '/profile',
     authorAvatarSrc: author?.profile?.avatar ?? null,
-    tag: getAuthorTag(author),
+    tag: getAuthorTag(question),
     answers: answerCount,
     score: getOptionalCount(
       question.score,

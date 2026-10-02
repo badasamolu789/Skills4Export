@@ -23,6 +23,7 @@ const PAGE_METADATA_KEYS = [
   'email',
   'phone',
   'courseOfStudy',
+  'university',
   'graduationDate',
   'skills',
 ] as const

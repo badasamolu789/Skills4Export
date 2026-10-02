@@ -97,6 +97,10 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
     null
   const communityId = item.communityId || item.community_id || item.community?.id || null
   const pageId = item.pageId || item.page_id || item.page?.id || null
+  const userTitle = readString(item.user, ['display_title', 'displayTitle']) ||
+    (!pageId && (!author?.id || author.id === userId)
+      ? readString(author, ['display_title', 'displayTitle'])
+      : '')
   const title = item.title || ''
   const media = (item.media ?? [])
     .map((mediaItem, index) => normalizeMediaItem(mediaItem, id, index))
@@ -130,7 +134,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       authorName,
       authorTo: userId ? `/profile/view/${userId}` : '/profile',
       authorAvatarSrc: readString(author, ['avatar', 'avatarUrl', 'avatar_url']) || null,
-      tag: '',
+      tag: userTitle,
       answers: getOptionalCount(item.answersCount, item.answers_count, item.answer_count),
       score: getOptionalCount(item.score),
       ...(readFollowState(viewerState, item, author) !== undefined
@@ -167,7 +171,7 @@ export const mapCompactFeedItemToFeedPost = (item: CompactFeedRecord): FeedPost 
       to: pageId ? `/pages/${item.page?.slug || pageId}/public` : `/profile/view/${userId}`,
       avatarText: getInitials(authorName || 'Community member'),
       avatarSrc,
-      tag: '',
+      tag: userTitle,
     },
     time: formatFeedTime(createdAt),
     title,

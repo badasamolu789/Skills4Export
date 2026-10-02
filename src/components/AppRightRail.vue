@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ArrowUpRight, BadgeHelp, Megaphone } from 'lucide-vue-next'
 import { advertsService, type AdvertRecord } from '@/services/adverts'
 import { questionsService, type QuestionRecord } from '@/services/questions'
+import { useAuthStore } from '@/stores/auth'
 import { getDisplayName } from '@/utils/displayName'
 import { getQuestionUserId } from '@/utils/questionMapper'
 
@@ -18,6 +19,8 @@ const props = withDefaults(
     hideAdverts: false,
   },
 )
+const authStore = useAuthStore()
+const QUESTION_CREATED_EVENT = 'skills4export:question-created'
 
 type TrendingQuestion = {
   id: string
@@ -122,7 +125,9 @@ const loadTrendingQuestions = async (options: { background?: boolean } = {}) => 
 
   try {
     const response = await questionsService.listQuestions(
-      { per_page: 4, 'sort[field]': 'created_at', 'sort[direction]': 'desc' },
+      { page: 1, per_page: 4, 'sort[field]': 'created_at', 'sort[direction]': 'desc' },
+      authStore.authToken,
+      { force: true },
     )
     questions.value = response.data ?? []
     questionAuthors.value = new Map()
@@ -136,6 +141,10 @@ const loadTrendingQuestions = async (options: { background?: boolean } = {}) => 
       isLoadingQuestions.value = false
     }
   }
+}
+
+const refreshQuestions = () => {
+  void loadTrendingQuestions({ background: true })
 }
 
 const loadAdverts = async () => {
@@ -159,6 +168,7 @@ const loadAdverts = async () => {
 onMounted(() => {
   if (!props.hideTrendingQuestions) {
     void loadTrendingQuestions()
+    window.addEventListener(QUESTION_CREATED_EVENT, refreshQuestions)
   }
 
   if (!props.hideAdverts) {
@@ -177,6 +187,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener(QUESTION_CREATED_EVENT, refreshQuestions)
   if (realtimeTimer) {
     window.clearInterval(realtimeTimer)
   }

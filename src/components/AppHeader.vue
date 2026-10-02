@@ -532,6 +532,7 @@ const submitQuestion = async () => {
         community,
       ),
     )
+    window.dispatchEvent(new Event('skills4export:question-created'))
 
     toast.success('Question posted', {
       description: 'Your question is now live.',

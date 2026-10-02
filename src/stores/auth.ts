@@ -335,6 +335,28 @@ export const useAuthStore = defineStore('auth', () => {
     })
   }
 
+  const setVerifiedUserProfile = (profile: UserProfile) => {
+    if (userId.value) {
+      const overrides = getProfileOverrides()
+      const override = overrides[userId.value]
+      if (override) {
+        for (const key of [
+          'displayTitle', 'display_title',
+          'accountType', 'account_type',
+          'currentJobTitle', 'current_job_title',
+          'currentWorkspace', 'current_workspace',
+          'courseOfStudy', 'course_of_study',
+          'institutionOfStudy', 'institution_of_study', 'university',
+        ]) {
+          delete override[key]
+        }
+        overrides[userId.value] = override
+      }
+      setProfileOverrides(overrides)
+    }
+    setUserProfile(profile)
+  }
+
   const toggleAuth = () => {
     if (isAuthenticated.value) {
       clearAuthenticatedSession()
@@ -393,6 +415,7 @@ export const useAuthStore = defineStore('auth', () => {
     setCurrentUser,
     setUserProfile,
     setUserProfileOverride,
+    setVerifiedUserProfile,
     setOnboardingRequired,
     setAccountType,
     toggleAuth,

@@ -268,7 +268,6 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
     const topLevelBio = getStringFromRecord(record, ['bio', 'description', 'about', 'aboutMe', 'about_me'])
     const topLevelLocation = getStringFromRecord(record, ['location'])
     const topLevelDisplayName = getStringFromRecord(record, ['displayName', 'display_name', 'name'])
-    const topLevelDisplayTitle = getStringFromRecord(record, ['displayTitle', 'display_title'])
     const topLevelJobTitle = getStringFromRecord(record, ['currentJobTitle', 'current_job_title'])
     const topLevelWorkspace = getStringFromRecord(record, ['currentWorkspace', 'current_workspace'])
     const topLevelAvatar = getStringFromRecord(record, ['avatar', 'profile_image', 'profileImage'])
@@ -278,7 +277,6 @@ const getProfileFromProfileData = (data?: MyProfileData | null): UserProfile | n
       ...(topLevelBio ? { bio: topLevelBio } : {}),
       ...(topLevelLocation ? { location: topLevelLocation } : {}),
       ...(topLevelDisplayName ? { displayName: topLevelDisplayName } : {}),
-      ...(topLevelDisplayTitle ? { displayTitle: topLevelDisplayTitle, display_title: topLevelDisplayTitle } : {}),
       ...(topLevelJobTitle
         ? { currentJobTitle: topLevelJobTitle, current_job_title: topLevelJobTitle }
         : {}),

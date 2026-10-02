@@ -142,6 +142,7 @@ const editStudentForm = ref({
   email: '',
   phone: '',
   courseOfStudy: '',
+  university: '',
   graduationDate: '',
   skills: '',
   about: '',
@@ -253,6 +254,7 @@ const aboutRows = computed(() => {
       ['Email', getMetadataString('email')],
       ['Phone Number', getMetadataString('phone')],
       ['Course Of Study', getMetadataString('courseOfStudy')],
+      ['Institution', getMetadataString('university')],
       ['Graduation Date', getMetadataString('graduationDate')],
       ['Skills', pageSkills.value.join(', ')],
     ]
@@ -328,7 +330,7 @@ const pageFeedPosts = computed<FeedPost[]>(() =>
         to: publicDisplayTarget.value,
         avatarText: pageInitials.value,
         avatarSrc: pageImage.value || null,
-        tag: '',
+        tag: typeof item.record.user?.display_title === 'string' ? item.record.user.display_title : '',
       },
       time: formatPostTime(item.record.created_at),
       title: item.record.title,
@@ -684,6 +686,7 @@ const openEditPageModal = async () => {
       email: getMetadataString('email'),
       phone: getMetadataString('phone'),
       courseOfStudy: getMetadataString('courseOfStudy'),
+      university: getMetadataString('university'),
       graduationDate: getMetadataString('graduationDate'),
       skills: pageSkills.value.join(', '),
       about: page.value.description,
@@ -755,6 +758,7 @@ const getEditMetadata = () => {
     email: editStudentForm.value.email.trim(),
     phone: editStudentForm.value.phone.trim(),
     courseOfStudy: editStudentForm.value.courseOfStudy.trim(),
+    university: editStudentForm.value.university.trim(),
     graduationDate: editStudentForm.value.graduationDate,
     skills: editStudentForm.value.skills
       .split(',')
@@ -966,11 +970,18 @@ const savePageEdit = async () => {
       name,
       slug: page.value.slug,
       description,
+      ...(!isBusiness ? {
+        courseOfStudy: editStudentForm.value.courseOfStudy.trim(),
+        university: editStudentForm.value.university.trim(),
+      } : {}),
       metadata: {
         ...page.value.metadata,
         ...metadata,
       },
     })
+    if (!isBusiness) {
+      await loadPagePosts()
+    }
 
     if (editAvatarFile.value) {
       toast.loading('Uploading page image...', { id: toastId })
@@ -1966,6 +1977,10 @@ watch(pagePostFile, (file, previousFile) => {
         <label>
           <span class="text-sm font-semibold text-[var(--text-primary)]">Course of study</span>
           <input v-model="editStudentForm.courseOfStudy" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
+        </label>
+        <label>
+          <span class="text-sm font-semibold text-[var(--text-primary)]">Institution</span>
+          <input v-model="editStudentForm.university" class="mt-2 h-11 w-full rounded-[0.75rem] border border-[color:var(--border-soft)] bg-[var(--surface-primary)] px-3 text-sm outline-none focus:border-[color:var(--accent-soft)]" />
         </label>
         <label>
           <span class="text-sm font-semibold text-[var(--text-primary)]">Graduation date</span>
